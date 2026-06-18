@@ -10,6 +10,7 @@
   const DISTRACTOR_PROBLEM_COUNT = 6;
   const RATING_SCALE_MAX = 9;
   const DEFAULT_PROLIFIC_COMPLETION_CODE = "CONTACT_RESEARCHER";
+  const ONBOARDING_STEPS = ["identity", "familiarity", "instructions", "ready"];
   const SERVER_SAVE_REQUIRED = new URLSearchParams(window.location.search).get("local") !== "1";
   const COUNTERBALANCE_ENABLED = new URLSearchParams(window.location.search).get("manual") !== "1";
   const PARTICIPANT_MODE = COUNTERBALANCE_ENABLED;
@@ -90,7 +91,14 @@
     statusTargets: document.getElementById("status-targets"),
     statusManifest: document.getElementById("status-manifest"),
     statusMode: document.getElementById("status-mode"),
+    onboardingControls: document.getElementById("onboarding-controls"),
+    onboardingBackBtn: document.getElementById("onboarding-back-btn"),
+    onboardingNextBtn: document.getElementById("onboarding-next-btn"),
+    readyBackBtn: document.getElementById("ready-back-btn"),
+    onboardingSteps: Array.from(document.querySelectorAll("[data-onboarding-step]")),
+    stepChips: Array.from(document.querySelectorAll("[data-step-chip]")),
     participantIdField: document.getElementById("participant-id-field"),
+    prolificDetectedNote: document.getElementById("prolific-detected-note"),
     raterId: document.getElementById("rater-id"),
     sessionId: document.getElementById("session-id"),
     seed: document.getElementById("seed"),
@@ -176,6 +184,7 @@
     serverSessionToken: "",
     serverSaveFailed: false,
     productionMode: false,
+    onboardingStep: "identity",
     securityConfigLoaded: false,
     turnstileSiteKey: "",
     turnstileToken: "",
@@ -238,6 +247,7 @@
     } else {
       setSetupStatus("Waiting for audio");
     }
+    renderOnboarding();
   }
 
   function showOnly(panel) {
@@ -267,6 +277,9 @@
     }
     if (prolific.prolific_pid && els.participantIdField) {
       els.participantIdField.classList.add("hidden");
+    }
+    if (prolific.prolific_pid && els.prolificDetectedNote) {
+      els.prolificDetectedNote.classList.remove("hidden");
     }
   }
 
@@ -299,6 +312,90 @@
     return Boolean(values.japanese_familiarity_1_6 && values.chinese_familiarity_1_6);
   }
 
+  function participantIdComplete() {
+    return Boolean(els.raterId.value.trim());
+  }
+
+  function currentOnboardingIndex() {
+    const index = ONBOARDING_STEPS.indexOf(state.onboardingStep);
+    return index >= 0 ? index : 0;
+  }
+
+  function onboardingStepComplete(step) {
+    if (step === "identity") return participantIdComplete();
+    if (step === "familiarity") return familiarityComplete();
+    if (step === "instructions") return true;
+    if (step === "ready") return participantIdComplete() && familiarityComplete();
+    return false;
+  }
+
+  function focusCurrentOnboardingRequirement() {
+    if (state.onboardingStep === "identity") {
+      els.raterId.focus();
+      return;
+    }
+    if (state.onboardingStep === "familiarity") {
+      const missingName = selectedRadioValue("japanese-familiarity")
+        ? "chinese-familiarity"
+        : "japanese-familiarity";
+      const firstRadio = document.querySelector(`input[name="${missingName}"]`);
+      firstRadio?.focus();
+    }
+  }
+
+  function renderOnboarding() {
+    if (!PARTICIPANT_MODE) return;
+    let activeIndex = currentOnboardingIndex();
+    if (!participantIdComplete() && activeIndex > 0) {
+      state.onboardingStep = "identity";
+      activeIndex = 0;
+    } else if (!familiarityComplete() && activeIndex > 1) {
+      state.onboardingStep = "familiarity";
+      activeIndex = 1;
+    }
+    els.onboardingSteps.forEach((stepEl) => {
+      const step = stepEl.dataset.onboardingStep;
+      stepEl.classList.toggle("active", step === state.onboardingStep);
+    });
+    els.stepChips.forEach((chip) => {
+      const step = chip.dataset.stepChip;
+      const stepIndex = ONBOARDING_STEPS.indexOf(step);
+      chip.classList.toggle("active", step === state.onboardingStep);
+      chip.classList.toggle("complete", stepIndex >= 0 && stepIndex < activeIndex);
+    });
+    if (els.onboardingBackBtn) {
+      els.onboardingBackBtn.disabled = activeIndex === 0;
+    }
+    if (els.onboardingControls) {
+      els.onboardingControls.classList.toggle("hidden", state.onboardingStep === "ready");
+    }
+    if (els.onboardingNextBtn) {
+      const isReadyStep = state.onboardingStep === "ready";
+      els.onboardingNextBtn.classList.toggle("hidden", isReadyStep);
+      els.onboardingNextBtn.disabled = isReadyStep || !onboardingStepComplete(state.onboardingStep);
+    }
+  }
+
+  function setOnboardingStep(step) {
+    if (!PARTICIPANT_MODE || !ONBOARDING_STEPS.includes(step)) return;
+    state.onboardingStep = step;
+    renderOnboarding();
+  }
+
+  function advanceOnboarding() {
+    if (!onboardingStepComplete(state.onboardingStep)) {
+      focusCurrentOnboardingRequirement();
+      return;
+    }
+    const nextIndex = Math.min(currentOnboardingIndex() + 1, ONBOARDING_STEPS.length - 1);
+    setOnboardingStep(ONBOARDING_STEPS[nextIndex]);
+  }
+
+  function retreatOnboarding() {
+    const previousIndex = Math.max(currentOnboardingIndex() - 1, 0);
+    setOnboardingStep(ONBOARDING_STEPS[previousIndex]);
+  }
+
   function setPreparedStartState(readyLabel = "Ready") {
     const participantReady = Boolean(els.raterId.value.trim());
     const familiarityReady = familiarityComplete();
@@ -312,6 +409,7 @@
       ready,
     );
     els.startBtn.disabled = !ready;
+    renderOnboarding();
     return ready;
   }
 
@@ -1475,18 +1573,21 @@
     if (!els.raterId.value.trim()) {
       setSetupStatus("Participant ID needed");
       setLog("Enter a participant ID before starting.");
+      setOnboardingStep("identity");
       els.startBtn.disabled = false;
       return;
     }
     if (!familiarityComplete()) {
       setSetupStatus("Familiarity needed");
       setLog("Answer both familiarity questions before starting.");
+      setOnboardingStep("familiarity");
       updateSelectedMaterialSummary();
       return;
     }
     if (!state.counterbalance.enabled && !state.items.length && !state.mainTrials.length) {
       setSetupStatus("Audio needed");
       setLog("Load or prepare the rating materials before starting.");
+      setOnboardingStep("ready");
       els.startBtn.disabled = false;
       return;
     }
@@ -2315,6 +2416,7 @@
     cleanupAudio();
     logServerEvent("session_paused", { completed: state.rows.length, total: state.trials.length });
     showOnly(els.setupPanel);
+    setOnboardingStep("ready");
     els.startBtn.disabled = false;
     els.downloadBtn.disabled = state.rows.length === 0;
     setLog(`Paused after ${state.rows.length} of ${state.trials.length} samples.\nDownload partial results before closing the browser.`);
@@ -2354,6 +2456,7 @@
     updateSetupSummary(0, 0, 0);
     setSetupStatus("Waiting for audio");
     showOnly(els.setupPanel);
+    setOnboardingStep("identity");
   }
 
   function sanitizeName(value) {
@@ -2402,6 +2505,9 @@
     updateRemoteParticipantActions();
   });
   els.prepareRemoteBtn.addEventListener("click", prepareSelectedRemoteParticipant);
+  if (els.onboardingBackBtn) els.onboardingBackBtn.addEventListener("click", retreatOnboarding);
+  if (els.onboardingNextBtn) els.onboardingNextBtn.addEventListener("click", advanceOnboarding);
+  if (els.readyBackBtn) els.readyBackBtn.addEventListener("click", retreatOnboarding);
   els.raterId.addEventListener("input", updateSelectedMaterialSummary);
   els.sessionId.addEventListener("input", updateSelectedMaterialSummary);
   els.loadPracticeBtn.addEventListener("click", () => {

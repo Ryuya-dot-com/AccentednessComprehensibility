@@ -20,9 +20,28 @@
         <div class="panel-heading">
           <div>
             <h2>Before you start</h2>
-            <p>You will listen to English words and answer a few short questions about each word.</p>
+            <p>Complete each step, then begin with practice.</p>
           </div>
           <div class="setup-status" id="setup-status">Loading task</div>
+        </div>
+
+        <div class="onboarding-progress participant-only" aria-label="Setup progress">
+          <div class="onboarding-step-chip" data-step-chip="identity">
+            <span>1</span>
+            <strong>ID</strong>
+          </div>
+          <div class="onboarding-step-chip" data-step-chip="familiarity">
+            <span>2</span>
+            <strong>Background</strong>
+          </div>
+          <div class="onboarding-step-chip" data-step-chip="instructions">
+            <span>3</span>
+            <strong>Instructions</strong>
+          </div>
+          <div class="onboarding-step-chip" data-step-chip="ready">
+            <span>4</span>
+            <strong>Start</strong>
+          </div>
         </div>
 
         <div class="status-grid researcher-only" aria-live="polite">
@@ -45,19 +64,11 @@
         </div>
 
         <div class="setup-layout">
-          <section class="setup-section">
-            <h3>Task instructions</h3>
-            <div class="participant-instructions">
-              <p>Please use headphones or earphones and sit in a quiet place.</p>
-              <ol>
-                <li>Press <strong>Play audio</strong>. Use <strong>Play again</strong> only if needed.</li>
-                <li>Type the English word you heard.</li>
-                <li>Rate how easy the word was to understand.</li>
-                <li>Rate how strong the speaker's accent sounded.</li>
-              </ol>
-              <p>The task begins with practice. Feedback is shown during practice only. During the main task, short calculation questions appear between parts.</p>
-            </div>
-            <div id="turnstile-widget" class="turnstile-widget hidden" aria-label="Security check"></div>
+          <section class="setup-section setup-step active" data-onboarding-step="identity">
+            <p class="step-kicker participant-only">Step 1 of 4</p>
+            <h3>Participant ID</h3>
+            <p class="step-copy participant-only">Enter the ID provided for this study.</p>
+            <p class="prolific-detected-note participant-only hidden" id="prolific-detected-note">Your study ID has been detected.</p>
             <div class="form-grid">
               <label id="participant-id-field">
                 Participant ID
@@ -84,6 +95,12 @@
                 <input id="break-interval" type="number" min="0" max="200" value="40" />
               </label>
             </div>
+          </section>
+
+          <section class="setup-section setup-step" data-onboarding-step="familiarity">
+            <p class="step-kicker participant-only">Step 2 of 4</p>
+            <h3>Language familiarity</h3>
+            <p class="step-copy participant-only">Answer both questions before continuing.</p>
             <div class="familiarity-grid">
               <fieldset class="familiarity-field">
                 <legend>How familiar are you with Japanese in daily life?</legend>
@@ -115,6 +132,63 @@
                   <span>Very familiar</span>
                 </div>
               </fieldset>
+            </div>
+          </section>
+
+          <section class="setup-section setup-step" data-onboarding-step="instructions">
+            <p class="step-kicker participant-only">Step 3 of 4</p>
+            <h3>Task instructions</h3>
+            <div class="participant-instructions">
+              <p>Please use headphones or earphones and sit in a quiet place.</p>
+              <ol>
+                <li>Press <strong>Play audio</strong>.</li>
+                <li>Type the English word you heard.</li>
+                <li>Rate how easy the word was to understand.</li>
+                <li>Rate how strong the speaker's accent sounded.</li>
+              </ol>
+              <p>Use <strong>Play again</strong> only when needed. Practice comes first.</p>
+            </div>
+            <div class="scale-summary-grid">
+              <div>
+                <span>Ease of understanding</span>
+                <strong>1 = very easy; 9 = very difficult</strong>
+              </div>
+              <div>
+                <span>Accent strength</span>
+                <strong>1 = no noticeable accent; 9 = very strong accent</strong>
+              </div>
+              <div>
+                <span>Word typing</span>
+                <strong>Type the English word you hear.</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="setup-section setup-step" data-onboarding-step="ready">
+            <p class="step-kicker participant-only">Step 4 of 4</p>
+            <h3>Ready to begin</h3>
+            <p class="step-copy participant-only">The task starts with practice. Feedback appears during practice only.</p>
+            <div class="ready-summary">
+              <div>
+                <span>Practice</span>
+                <strong>First</strong>
+              </div>
+              <div>
+                <span>Main task</span>
+                <strong>After practice</strong>
+              </div>
+              <div>
+                <span>Short calculations</span>
+                <strong>Between parts</strong>
+              </div>
+            </div>
+            <div id="turnstile-widget" class="turnstile-widget hidden" aria-label="Security check"></div>
+            <div class="actions">
+              <button id="load-practice-btn" class="secondary researcher-only">Load demo materials</button>
+              <button id="prepare-btn" class="researcher-only">Prepare trials</button>
+              <button id="ready-back-btn" class="secondary participant-only" type="button">Back</button>
+              <button id="start-btn" disabled>Start practice</button>
+              <button id="download-btn" class="secondary researcher-only" disabled>Download results</button>
             </div>
           </section>
 
@@ -166,7 +240,12 @@
           </section>
         </div>
 
-        <details class="scale-details">
+        <div class="onboarding-controls participant-only" id="onboarding-controls">
+          <button id="onboarding-back-btn" class="secondary" type="button">Back</button>
+          <button id="onboarding-next-btn" type="button">Continue</button>
+        </div>
+
+        <details class="scale-details researcher-only">
           <summary>Rating scales</summary>
           <div class="anchor-grid">
             <div>
@@ -188,13 +267,6 @@
             </div>
           </div>
         </details>
-
-        <div class="actions">
-          <button id="load-practice-btn" class="secondary researcher-only">Load demo materials</button>
-          <button id="prepare-btn" class="researcher-only">Prepare trials</button>
-          <button id="start-btn" disabled>Start practice</button>
-          <button id="download-btn" class="secondary researcher-only" disabled>Download results</button>
-        </div>
 
         <pre id="setup-log" class="log researcher-only" aria-live="polite"></pre>
       </section>

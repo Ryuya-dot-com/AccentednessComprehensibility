@@ -257,6 +257,10 @@ body.participant-mode .researcher-only {
   display: none !important;
 }
 
+body:not(.participant-mode) .participant-only {
+  display: none !important;
+}
+
 body.participant-mode .app-shell {
   max-width: 920px;
 }
@@ -269,6 +273,14 @@ body.participant-mode #participant-id-field.hidden {
   display: none !important;
 }
 
+body.participant-mode .setup-step {
+  display: none;
+}
+
+body.participant-mode .setup-step.active {
+  display: block;
+}
+
 body.participant-mode .rating-workspace {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -276,6 +288,138 @@ body.participant-mode .rating-workspace {
 body.participant-mode .trial-rail,
 body.participant-mode #pause-btn {
   display: none !important;
+}
+
+.onboarding-progress {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 22px;
+}
+
+.onboarding-step-chip {
+  align-items: center;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  display: flex;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px;
+}
+
+.onboarding-step-chip span {
+  align-items: center;
+  background: #e8edf2;
+  border-radius: 999px;
+  color: #24313f;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 900;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.onboarding-step-chip strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.onboarding-step-chip.active {
+  background: #eef8f8;
+  border-color: #9fc9cc;
+  color: var(--accent-strong);
+}
+
+.onboarding-step-chip.active span,
+.onboarding-step-chip.complete span {
+  background: var(--accent);
+  color: white;
+}
+
+.onboarding-step-chip.complete {
+  border-color: #bdd7d9;
+  color: #2f3b48;
+}
+
+.step-kicker {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.step-copy {
+  color: var(--ink-muted);
+  margin: -4px 0 16px;
+}
+
+.prolific-detected-note {
+  background: #eaf7ef;
+  border: 1px solid #bde1cb;
+  border-radius: 8px;
+  color: var(--green);
+  font-weight: 800;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+}
+
+.scale-summary-grid,
+.ready-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.scale-summary-grid div,
+.ready-summary div {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 88px;
+  padding: 14px;
+}
+
+.scale-summary-grid span,
+.ready-summary span {
+  color: var(--ink-muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.scale-summary-grid strong,
+.ready-summary strong {
+  color: #24313f;
+  display: block;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.onboarding-controls {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+body.participant-mode .setup-step[data-onboarding-step="ready"] .actions {
+  margin-top: 20px;
+}
+
+body.participant-mode .setup-step[data-onboarding-step="ready"] #start-btn {
+  min-width: 180px;
 }
 
 .familiarity-grid {
@@ -876,8 +1020,11 @@ label {
   .form-grid,
   .upload-grid,
   .participant-grid,
+    .onboarding-progress,
     .anchor-grid,
     .familiarity-grid,
+    .scale-summary-grid,
+    .ready-summary,
     .status-grid,
     .distractor-problems,
     .rating-workspace {

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 
 # Cloudflare local/config secrets
+.wrangler/
 wrangler.toml
 .dev.vars
 .env

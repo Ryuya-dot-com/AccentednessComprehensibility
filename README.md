@@ -392,6 +392,8 @@ The researcher export page is:
 /admin/
 ```
 
+Use `Download all CSVs ZIP` for routine exports. It downloads every CSV below in one archive while preserving the individual long-format CSV files for analysis scripts and audit checks.
+
 Available CSV exports:
 
 - `analysis.csv`: analysis-ready main-trial responses from completed sessions only. Prolific IDs are excluded and rows are labeled with `analysis_participant_id`.

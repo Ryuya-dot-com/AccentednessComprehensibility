@@ -8,6 +8,7 @@
     log: document.getElementById("admin-log"),
     refreshBtn: document.getElementById("refresh-btn"),
     finalizeStaleBtn: document.getElementById("finalize-stale-btn"),
+    bundleBtn: document.getElementById("bundle-btn"),
     analysisBtn: document.getElementById("analysis-btn"),
     qualityBtn: document.getElementById("quality-btn"),
     ratingsBtn: document.getElementById("ratings-btn"),
@@ -136,13 +137,13 @@
     ]);
   }
 
-  async function downloadCsv(dataset) {
+  async function downloadFile(path, fallbackFileName) {
     setStatus("Downloading");
-    const response = await fetchAdmin(`/api/admin/export/${dataset}.csv`);
+    const response = await fetchAdmin(path);
     const blob = await response.blob();
     const disposition = response.headers.get("content-disposition") || "";
     const match = disposition.match(/filename="([^"]+)"/);
-    const fileName = match ? match[1] : `${dataset}.csv`;
+    const fileName = match ? match[1] : fallbackFileName;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -154,6 +155,14 @@
     setStatus("Downloaded", true);
   }
 
+  async function downloadCsv(dataset) {
+    return downloadFile(`/api/admin/export/${dataset}.csv`, `${dataset}.csv`);
+  }
+
+  async function downloadBundle() {
+    return downloadFile("/api/admin/export/all.zip", "rating_platform_exports.zip");
+  }
+
   els.refreshBtn.addEventListener("click", () => {
     refreshSummary().catch((error) => {
       setStatus("Failed");
@@ -162,6 +171,12 @@
   });
   els.finalizeStaleBtn.addEventListener("click", () => {
     finalizeStaleSessions().catch((error) => {
+      setStatus("Failed");
+      setLog(error.message);
+    });
+  });
+  els.bundleBtn.addEventListener("click", () => {
+    downloadBundle().catch((error) => {
       setStatus("Failed");
       setLog(error.message);
     });
