@@ -265,6 +265,19 @@
     };
   }
 
+  function hasRequiredProlificParams() {
+    const prolific = prolificParams();
+    return Boolean(
+      prolific.prolific_pid &&
+        prolific.prolific_study_id &&
+        prolific.prolific_session_id,
+    );
+  }
+
+  function productionProlificLinkMissing() {
+    return PARTICIPANT_MODE && state.productionMode && !hasRequiredProlificParams();
+  }
+
   function initializeParticipantMode() {
     if (!PARTICIPANT_MODE) return;
     document.body.classList.add("participant-mode");
@@ -322,6 +335,7 @@
   }
 
   function onboardingStepComplete(step) {
+    if (productionProlificLinkMissing()) return false;
     if (step === "identity") return participantIdComplete();
     if (step === "familiarity") return familiarityComplete();
     if (step === "instructions") return true;
@@ -346,7 +360,10 @@
   function renderOnboarding() {
     if (!PARTICIPANT_MODE) return;
     let activeIndex = currentOnboardingIndex();
-    if (!participantIdComplete() && activeIndex > 0) {
+    if (productionProlificLinkMissing() && activeIndex > 0) {
+      state.onboardingStep = "identity";
+      activeIndex = 0;
+    } else if (!participantIdComplete() && activeIndex > 0) {
       state.onboardingStep = "identity";
       activeIndex = 0;
     } else if (!familiarityComplete() && activeIndex > 1) {
@@ -399,15 +416,17 @@
   function setPreparedStartState(readyLabel = "Ready") {
     const participantReady = Boolean(els.raterId.value.trim());
     const familiarityReady = familiarityComplete();
-    const ready = participantReady && familiarityReady;
-    setSetupStatus(
-      participantReady
+    const prolificReady = !productionProlificLinkMissing();
+    const ready = participantReady && familiarityReady && prolificReady;
+    let status = "Open from Prolific";
+    if (prolificReady) {
+      status = participantReady
         ? familiarityReady
           ? readyLabel
           : "Familiarity needed"
-        : "Participant ID needed",
-      ready,
-    );
+        : "Participant ID needed";
+    }
+    setSetupStatus(status, ready);
     els.startBtn.disabled = !ready;
     renderOnboarding();
     return ready;
@@ -702,6 +721,7 @@
       console.warn("security config could not be loaded", error);
     } finally {
       state.securityConfigLoaded = true;
+      updateSelectedMaterialSummary();
     }
   }
 
@@ -1568,6 +1588,13 @@
         ? "The task could not start. Please contact the researcher."
         : "Production mode does not allow local or manual participant workflows.");
       els.startBtn.disabled = false;
+      return;
+    }
+    if (productionProlificLinkMissing()) {
+      setSetupStatus("Open from Prolific");
+      setLog("Please open this task from your Prolific study page.");
+      setOnboardingStep("identity");
+      els.startBtn.disabled = true;
       return;
     }
     if (!els.raterId.value.trim()) {
