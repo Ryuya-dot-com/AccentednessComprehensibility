@@ -24,6 +24,7 @@ import {
   allocateCounterbalance,
   buildCounterbalancedAssignment,
   counterbalancePayload,
+  dryRunPlaceholderCounterbalanceMaterials,
   loadCounterbalanceMaterials,
   safeMaterialsJson,
 } from "../_counterbalance.js";
@@ -209,6 +210,10 @@ async function cleanupFailedStart(db, sessionId, allocationId) {
   await db.batch(statements);
 }
 
+function canUseDryRunPlaceholder(error) {
+  return /Missing counterbalance materials/i.test(String(error?.message || error));
+}
+
 async function insertEventBestEffort(db, event) {
   try {
     await insertEvent(db, event);
@@ -271,7 +276,7 @@ export async function onRequestPost(context) {
     let manifestSummary = null;
 
     if (counterbalanceEnabled) {
-      const loadedManifest = await loadCounterbalanceMaterials(context);
+      let loadedManifest = await loadCounterbalanceMaterials(context);
       manifestSummary = loadedManifest.summary;
       counterbalance = await allocateCounterbalance(db, sessionId, startedAt, { dryRun });
       try {
@@ -281,11 +286,28 @@ export async function onRequestPost(context) {
           `${seed}:${sessionId}`,
         );
       } catch (error) {
-        await db
-          .prepare("DELETE FROM counterbalance_allocations WHERE id = ?")
-          .bind(counterbalance.allocation_id)
-          .run();
-        throw error;
+        if (!dryRun || !canUseDryRunPlaceholder(error)) {
+          await db
+            .prepare("DELETE FROM counterbalance_allocations WHERE id = ?")
+            .bind(counterbalance.allocation_id)
+            .run();
+          throw error;
+        }
+        loadedManifest = dryRunPlaceholderCounterbalanceMaterials(context, error.message);
+        manifestSummary = loadedManifest.summary;
+        try {
+          mainAssignment = buildCounterbalancedAssignment(
+            loadedManifest.materials,
+            counterbalance,
+            `${seed}:${sessionId}`,
+          );
+        } catch (fallbackError) {
+          await db
+            .prepare("DELETE FROM counterbalance_allocations WHERE id = ?")
+            .bind(counterbalance.allocation_id)
+            .run();
+          throw fallbackError;
+        }
       }
       assignment = [...practiceAssignment, ...mainAssignment];
     }

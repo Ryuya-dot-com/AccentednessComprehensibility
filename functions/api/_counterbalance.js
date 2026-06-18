@@ -18,6 +18,26 @@ const LIST_COMBINATIONS = [
 const DEFAULT_COUNTERBALANCE_MANIFEST = "remote_manifest.csv";
 const MANIFEST_FILE_COLUMNS = ["audio_file", "file", "filename", "path"];
 const MANIFEST_URL_COLUMNS = ["audio_url", "url", "source_url", "raw_url"];
+const DRY_RUN_PLACEHOLDER_AUDIO = {
+  AME: [
+    "practice_audio/english/chocolate.wav",
+    "practice_audio/english/coffee.wav",
+    "practice_audio/english/pizza.wav",
+    "practice_audio/english/sofa.wav",
+  ],
+  JPN: [
+    "practice_audio/japanese/chocolate.wav",
+    "practice_audio/japanese/coffee.wav",
+    "practice_audio/japanese/pizza.wav",
+    "practice_audio/japanese/sofa.wav",
+  ],
+  CHN: [
+    "practice_audio/chinese/chocolate.wav",
+    "practice_audio/chinese/coffee.wav",
+    "practice_audio/chinese/pizza.wav",
+    "practice_audio/chinese/sofa.wav",
+  ],
+};
 
 const LIST_SPECS = {
   A: { AME: range(1, 5), JPN: range(6, 15), CHN: range(16, 25) },
@@ -473,6 +493,59 @@ export async function loadCounterbalanceMaterials(context) {
       source: configuredSource ? "COUNTERBALANCE_MANIFEST_URL" : DEFAULT_COUNTERBALANCE_MANIFEST,
       row_count: rows.length,
       material_count: materials.length,
+    },
+  };
+}
+
+function dryRunPlaceholderAudio(l1, wordNumber) {
+  const pool = DRY_RUN_PLACEHOLDER_AUDIO[l1] || DRY_RUN_PLACEHOLDER_AUDIO.AME;
+  return pool[(wordNumber - 1) % pool.length];
+}
+
+export function dryRunPlaceholderCounterbalanceMaterials(context, fallbackReason = "") {
+  const origin = new URL(context.request.url).origin;
+  const materials = [];
+  for (const [stimulusList, spec] of Object.entries(LIST_SPECS)) {
+    for (const l1 of L1_ORDER) {
+      const wordNumbers = spec[l1] || [];
+      for (const wordNumber of wordNumbers) {
+        const pronunciations = l1 === "AME" ? ["natural"] : ["natural", "accented"];
+        for (const pronunciation of pronunciations) {
+          const audioPath = dryRunPlaceholderAudio(l1, wordNumber);
+          const targetWord = `dryrun_${stimulusList.toLowerCase()}_${l1.toLowerCase()}_${wordNumber}_${pronunciation}`;
+          materials.push({
+            id: materials.length + 1,
+            source_path: audioPath,
+            audio_url: new URL(audioPath, origin).toString(),
+            file_name: fileNameFromPath(audioPath, `dry_run_${materials.length + 1}.wav`),
+            target_word: targetWord,
+            participant_id: `dryrun_${l1.toLowerCase()}`,
+            native_language: l1,
+            l1_condition: l1,
+            pronunciation_condition: pronunciation,
+            accent_condition: pronunciation,
+            condition: "dry_run_placeholder",
+            talker: `dryrun_${l1.toLowerCase()}`,
+            pass_number: "",
+            word_number: String(wordNumber),
+            trial_number: String(wordNumber),
+            take_number: "",
+            spoken_form: targetWord,
+            practice_note: "Dry-run placeholder stimulus",
+            source_format: "dry_run_placeholder",
+            stimulus_list: stimulusList,
+          });
+        }
+      }
+    }
+  }
+  return {
+    materials,
+    summary: {
+      source: "dry_run_placeholder",
+      row_count: materials.length,
+      material_count: materials.length,
+      fallback_reason: cleanText(fallbackReason),
     },
   };
 }
