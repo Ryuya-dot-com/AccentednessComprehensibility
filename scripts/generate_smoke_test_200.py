@@ -258,9 +258,9 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "session_id": session_id,
             "phase": "practice",
             "trial_index": index,
-            "source_path": f"practice_training_audio/smoke_{word}.wav",
-            "audio_url": f"practice_training_audio/smoke_{word}.wav",
-            "file_name": f"practice_smoke_{index:02d}_{word}.wav",
+            "source_path": f"practice_training_audio/smoke_{word}.mp3",
+            "audio_url": f"practice_training_audio/smoke_{word}.mp3",
+            "file_name": f"practice_smoke_{index:02d}_{word}.mp3",
             "target_word": word,
             "participant_id": "PRACTICE",
             "native_language": "",
@@ -304,7 +304,7 @@ def build_main_assignment(session_id: str, cell_id: int, list_comb: str, style: 
             word = word_label(item["word"])
             l1 = item["l1"]
             pron = item["pron"]
-            file_name = f"{l1.lower()}_{pron}_{block_list}_{word}.wav"
+            file_name = f"{l1.lower()}_{pron}_{block_list}_{word}.mp3"
             rows.append({
                 "id": f"{session_id}:main:{trial_index}",
                 "session_id": session_id,

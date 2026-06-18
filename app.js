@@ -26,8 +26,8 @@
       practice_kind: "combined",
       practice_group: "natural",
       word: "lantern",
-      file_name: "practice_rating_natural_01_lantern.wav",
-      audio_url: "practice_training_audio/rating_natural_01_lantern.wav",
+      file_name: "practice_rating_natural_01_lantern.mp3",
+      audio_url: "practice_training_audio/rating_natural_01_lantern.mp3",
       expert_comprehensibility_1_9: 1,
       expert_accentedness_1_9: 1,
       placeholder_audio: true,
@@ -36,8 +36,8 @@
       practice_kind: "combined",
       practice_group: "natural",
       word: "velvet",
-      file_name: "practice_rating_natural_02_velvet.wav",
-      audio_url: "practice_training_audio/rating_natural_02_velvet.wav",
+      file_name: "practice_rating_natural_02_velvet.mp3",
+      audio_url: "practice_training_audio/rating_natural_02_velvet.mp3",
       expert_comprehensibility_1_9: 2,
       expert_accentedness_1_9: 1,
       placeholder_audio: true,
@@ -46,8 +46,8 @@
       practice_kind: "combined",
       practice_group: "strong_accent",
       word: "kettle",
-      file_name: "practice_rating_strong_01_kettle.wav",
-      audio_url: "practice_training_audio/rating_strong_01_kettle.wav",
+      file_name: "practice_rating_strong_01_kettle.mp3",
+      audio_url: "practice_training_audio/rating_strong_01_kettle.mp3",
       expert_comprehensibility_1_9: 8,
       expert_accentedness_1_9: 9,
       placeholder_audio: true,
@@ -56,8 +56,8 @@
       practice_kind: "combined",
       practice_group: "strong_accent",
       word: "marble",
-      file_name: "practice_rating_strong_02_marble.wav",
-      audio_url: "practice_training_audio/rating_strong_02_marble.wav",
+      file_name: "practice_rating_strong_02_marble.mp3",
+      audio_url: "practice_training_audio/rating_strong_02_marble.mp3",
       expert_comprehensibility_1_9: 9,
       expert_accentedness_1_9: 8,
       placeholder_audio: true,
@@ -66,8 +66,8 @@
       practice_kind: "combined",
       practice_group: "mild_accent",
       word: "compass",
-      file_name: "practice_rating_mild_01_compass.wav",
-      audio_url: "practice_training_audio/rating_mild_01_compass.wav",
+      file_name: "practice_rating_mild_01_compass.mp3",
+      audio_url: "practice_training_audio/rating_mild_01_compass.mp3",
       expert_comprehensibility_1_9: 4,
       expert_accentedness_1_9: 4,
       placeholder_audio: true,
@@ -76,8 +76,8 @@
       practice_kind: "combined",
       practice_group: "mild_accent",
       word: "meadow",
-      file_name: "practice_rating_mild_02_meadow.wav",
-      audio_url: "practice_training_audio/rating_mild_02_meadow.wav",
+      file_name: "practice_rating_mild_02_meadow.mp3",
+      audio_url: "practice_training_audio/rating_mild_02_meadow.mp3",
       expert_comprehensibility_1_9: 5,
       expert_accentedness_1_9: 5,
       placeholder_audio: true,
@@ -1038,7 +1038,7 @@
     return Boolean(wordNumber && l1 && pronunciationReady);
   }
 
-  function displayFileNameFromSource(sourcePath, fallback = "audio.wav") {
+  function displayFileNameFromSource(sourcePath, fallback = "audio.mp3") {
     const key = fileKey(sourcePath);
     return key || fallback;
   }
@@ -1157,7 +1157,7 @@
   function remoteRowToItem(row, manifestUrl, index, participantId = "") {
     const audioUrl = remoteAudioUrlFromRow(row, manifestUrl);
     const sourcePath = valueFrom(row, REQUIRED_MANIFEST_FILE_COLUMNS) || audioUrl;
-    const fileName = displayFileNameFromSource(sourcePath || audioUrl, `remote_${String(index + 1).padStart(3, "0")}.wav`);
+    const fileName = displayFileNameFromSource(sourcePath || audioUrl, `remote_${String(index + 1).padStart(3, "0")}.mp3`);
     const parsed = parseRecordingName(fileName);
     const targetWord = valueFrom(row, ["target_word", "word", "item", "expected_word"]) || parsed.target_word || "";
     const l1Raw = valueFrom(row, ["l1_condition", "l1", "native_language", "native", "speaker_l1"]) || parsed.native_language || "";
@@ -2443,7 +2443,8 @@
         throw new Error(`Could not load ${audioPath} (${response.status})`);
       }
       const blob = await response.blob();
-      const file = new File([blob], fileKey(audioPath), { type: blob.type || "audio/wav" });
+      const fallbackType = audioPath.toLowerCase().endsWith(".mp3") ? "audio/mpeg" : "audio/wav";
+      const file = new File([blob], fileKey(audioPath), { type: blob.type || fallbackType });
       fileRecords.push({ file, sourcePath: audioPath });
     }
 

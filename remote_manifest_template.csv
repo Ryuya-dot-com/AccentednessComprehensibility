@@ -1,5 +1,5 @@
 audio_file,audio_url,target_word,participant_id,l1_condition,pronunciation_condition,stimulus_list,word_number,condition,talker,take_number,spoken_form,practice_note
-recordings/jpn/natural/list_a_word_006_icicle.wav,,icicle,JPN_S01,JPN,natural,A,6,production,j1,1,icicle,Counterbalance-ready example row
-recordings/jpn/accented/list_a_word_007_acorn.wav,,acorn,JPN_S01,JPN,accented,A,7,production,j1,1,acorn,Counterbalance-ready example row
-recordings/chn/natural/list_a_word_016_paper.wav,,paper,CHN_S01,CHN,natural,A,16,production,c1,1,paper,Counterbalance-ready example row
-recordings/ame/natural/list_a_word_001_candle.wav,,candle,AME_S01,AME,natural,A,1,production,a1,1,candle,American rows are native-speaker natural reference items
+recordings/jpn/natural/list_a_word_006_icicle.mp3,,icicle,JPN_S01,JPN,natural,A,6,production,j1,1,icicle,Counterbalance-ready example row
+recordings/jpn/accented/list_a_word_007_acorn.mp3,,acorn,JPN_S01,JPN,accented,A,7,production,j1,1,acorn,Counterbalance-ready example row
+recordings/chn/natural/list_a_word_016_paper.mp3,,paper,CHN_S01,CHN,natural,A,16,production,c1,1,paper,Counterbalance-ready example row
+recordings/ame/natural/list_a_word_001_candle.mp3,,candle,AME_S01,AME,natural,A,1,production,a1,1,candle,American rows are native-speaker natural reference items

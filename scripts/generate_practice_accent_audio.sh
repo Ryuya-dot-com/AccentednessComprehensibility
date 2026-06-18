@@ -20,7 +20,7 @@ mkdir -p "$OUT_DIR"/{english,japanese,chinese}
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
-write_wav() {
+write_mp3() {
   local voice="$1"
   local rate="$2"
   local text="$3"
@@ -28,7 +28,7 @@ write_wav() {
   local aiff="$tmp_dir/input.aiff"
 
   say -v "$voice" -r "$rate" -o "$aiff" -- "$text"
-  ffmpeg -hide_banner -loglevel error -y -i "$aiff" -ac 1 -ar 44100 -sample_fmt s16 "$output"
+  ffmpeg -hide_banner -loglevel error -y -i "$aiff" -codec:a libmp3lame -b:a 128k -ac 1 "$output"
 }
 
 cat > "$MANIFEST" <<'CSV'
@@ -42,13 +42,13 @@ add_item() {
   local zh_text="$4"
   local number="$5"
 
-  write_wav "Samantha" "170" "$en_text" "$OUT_DIR/english/${word}.wav"
-  write_wav "Kyoko" "150" "$ja_text" "$OUT_DIR/japanese/${word}.wav"
-  write_wav "Tingting" "150" "$zh_text" "$OUT_DIR/chinese/${word}.wav"
+  write_mp3 "Samantha" "170" "$en_text" "$OUT_DIR/english/${word}.mp3"
+  write_mp3 "Kyoko" "150" "$ja_text" "$OUT_DIR/japanese/${word}.mp3"
+  write_mp3 "Tingting" "150" "$zh_text" "$OUT_DIR/chinese/${word}.mp3"
 
-  printf 'practice_audio/english/%s.wav,%s,practice,english,practice,english,Samantha,,%s,%s,,%s,Native English TTS practice sample\n' "$word" "$word" "$number" "$number" "$en_text" >> "$MANIFEST"
-  printf 'practice_audio/japanese/%s.wav,%s,practice,japanese,practice,japanese,Kyoko,,%s,%s,,%s,Japanese katakana-shaped practice sample\n' "$word" "$word" "$number" "$number" "$ja_text" >> "$MANIFEST"
-  printf 'practice_audio/chinese/%s.wav,%s,practice,chinese,practice,chinese,Tingting,,%s,%s,,%s,Chinese cognate/loanword-shaped practice sample\n' "$word" "$word" "$number" "$number" "$zh_text" >> "$MANIFEST"
+  printf 'practice_audio/english/%s.mp3,%s,practice,english,practice,english,Samantha,,%s,%s,,%s,Native English TTS practice sample\n' "$word" "$word" "$number" "$number" "$en_text" >> "$MANIFEST"
+  printf 'practice_audio/japanese/%s.mp3,%s,practice,japanese,practice,japanese,Kyoko,,%s,%s,,%s,Japanese katakana-shaped practice sample\n' "$word" "$word" "$number" "$number" "$ja_text" >> "$MANIFEST"
+  printf 'practice_audio/chinese/%s.mp3,%s,practice,chinese,practice,chinese,Tingting,,%s,%s,,%s,Chinese cognate/loanword-shaped practice sample\n' "$word" "$word" "$number" "$number" "$zh_text" >> "$MANIFEST"
 }
 
 add_item "chocolate" "chocolate" "チョコレート" "巧克力" "1"

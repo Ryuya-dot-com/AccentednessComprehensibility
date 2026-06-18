@@ -30,7 +30,7 @@ http://127.0.0.1:8765/Rating_Platform/
 
 1. Enter a participant ID and session label.
 2. Answer the required daily-life familiarity questions for Japanese and Chinese separately on 6-point scales: 1 = not familiar, 6 = very familiar.
-3. Load the automatically loaded stimulus manifest, or upload local WAV files for manual testing.
+3. Load the automatically loaded stimulus manifest, or upload local MP3 files for manual testing.
 4. Optionally upload a local manifest CSV with metadata.
 5. In the server-backed study, the task mode is fixed to `Combined`: ratings and dictation in the same trial.
 6. Click `Prepare counterbalanced session` for server-backed stimulus-pool audio, or `Prepare trials` for local manual audio.
@@ -73,16 +73,16 @@ In this layout, `remote_manifest.csv` can use relative paths:
 
 ```csv
 audio_file,target_word,participant_id,l1_condition,pronunciation_condition,stimulus_list,word_number
-recordings/jpn/natural/list_a_word_006_icicle.wav,icicle,JPN_S01,JPN,natural,A,6
-recordings/chn/accented/list_a_word_016_paper.wav,paper,CHN_S01,CHN,accented,A,16
-recordings/ame/natural/list_a_word_001_candle.wav,candle,AME_S01,AME,natural,A,1
+recordings/jpn/natural/list_a_word_006_icicle.mp3,icicle,JPN_S01,JPN,natural,A,6
+recordings/chn/accented/list_a_word_016_paper.mp3,paper,CHN_S01,CHN,accented,A,16
+recordings/ame/natural/list_a_word_001_candle.mp3,candle,AME_S01,AME,natural,A,1
 ```
 
 You can also use an absolute `audio_url` column for raw GitHub or another static host:
 
 ```csv
 audio_url,target_word,participant_id,l1_condition,pronunciation_condition,stimulus_list,word_number
-https://example.com/recordings/jpn/natural/list_a_word_006_icicle.wav,icicle,JPN_S01,JPN,natural,A,6
+https://example.com/recordings/jpn/natural/list_a_word_006_icicle.mp3,icicle,JPN_S01,JPN,natural,A,6
 ```
 
 Manual participant-selection flow with `?manual=1`:
@@ -99,8 +99,8 @@ The downloaded CSV and assignment JSON include `audio_url`, `source_path`, and `
 The manifest is optional. The platform can infer target words from these existing filename patterns:
 
 ```text
-001_production_001_icicle.wav
-001_japanese_pass01_natural_english_word001_icicle_take01_trial0001_talker_m1_guy.wav
+001_production_001_icicle.mp3
+001_japanese_pass01_natural_english_word001_icicle_take01_trial0001_talker_m1_guy.mp3
 ```
 
 Use a manifest when filenames do not include enough metadata or when you want to preserve experimental condition labels.
@@ -224,9 +224,9 @@ bash Rating_Platform/scripts/generate_practice_accent_audio.sh
 This creates:
 
 ```text
-Rating_Platform/practice_audio/english/{chocolate,coffee,pizza,sofa}.wav
-Rating_Platform/practice_audio/japanese/{chocolate,coffee,pizza,sofa}.wav
-Rating_Platform/practice_audio/chinese/{chocolate,coffee,pizza,sofa}.wav
+Rating_Platform/practice_audio/english/{chocolate,coffee,pizza,sofa}.mp3
+Rating_Platform/practice_audio/japanese/{chocolate,coffee,pizza,sofa}.mp3
+Rating_Platform/practice_audio/chinese/{chocolate,coffee,pizza,sofa}.mp3
 Rating_Platform/practice_manifest.csv
 ```
 
@@ -247,7 +247,7 @@ Current practice audio and reference ratings are placeholders:
 - Each practice trial follows the main-task flow: play the audio, type the English word, rate ease of understanding, and rate accent strength.
 - Practice feedback shows the correct word and reference ratings. It does not ask participants to justify their ratings.
 
-Practice audio paths are placeholders under `practice_training_audio/`. Until final WAV files are supplied, the browser plays a short placeholder tone so the interface flow can be tested. Replace these placeholder paths and reference values in `app.js` before production launch.
+Practice audio paths are placeholders under `practice_training_audio/`. Until final MP3 files are supplied, the browser plays a short placeholder tone so the interface flow can be tested. Replace these placeholder paths and reference values in `app.js` before production launch.
 
 ## Output
 

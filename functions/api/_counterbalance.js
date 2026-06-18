@@ -20,22 +20,22 @@ const MANIFEST_FILE_COLUMNS = ["audio_file", "file", "filename", "path"];
 const MANIFEST_URL_COLUMNS = ["audio_url", "url", "source_url", "raw_url"];
 const DRY_RUN_PLACEHOLDER_AUDIO = {
   AME: [
-    "practice_audio/english/chocolate.wav",
-    "practice_audio/english/coffee.wav",
-    "practice_audio/english/pizza.wav",
-    "practice_audio/english/sofa.wav",
+    "practice_audio/english/chocolate.mp3",
+    "practice_audio/english/coffee.mp3",
+    "practice_audio/english/pizza.mp3",
+    "practice_audio/english/sofa.mp3",
   ],
   JPN: [
-    "practice_audio/japanese/chocolate.wav",
-    "practice_audio/japanese/coffee.wav",
-    "practice_audio/japanese/pizza.wav",
-    "practice_audio/japanese/sofa.wav",
+    "practice_audio/japanese/chocolate.mp3",
+    "practice_audio/japanese/coffee.mp3",
+    "practice_audio/japanese/pizza.mp3",
+    "practice_audio/japanese/sofa.mp3",
   ],
   CHN: [
-    "practice_audio/chinese/chocolate.wav",
-    "practice_audio/chinese/coffee.wav",
-    "practice_audio/chinese/pizza.wav",
-    "practice_audio/chinese/sofa.wav",
+    "practice_audio/chinese/chocolate.mp3",
+    "practice_audio/chinese/coffee.mp3",
+    "practice_audio/chinese/pizza.mp3",
+    "practice_audio/chinese/sofa.mp3",
   ],
 };
 
@@ -313,7 +313,7 @@ function manifestRowToMaterial(row, manifestUrl, index) {
   const l1 = normalizeL1(l1Raw) || l1Raw;
   const pronunciation = normalizePronunciation(pronunciationRaw) || pronunciationRaw;
   const sourcePath = filePath || audioUrl;
-  const fileName = fileNameFromPath(sourcePath || audioUrl, `server_manifest_${index + 1}.wav`);
+  const fileName = fileNameFromPath(sourcePath || audioUrl, `server_manifest_${index + 1}.mp3`);
 
   return {
     id: index + 1,
@@ -517,7 +517,7 @@ export function dryRunPlaceholderCounterbalanceMaterials(context, fallbackReason
             id: materials.length + 1,
             source_path: audioPath,
             audio_url: new URL(audioPath, origin).toString(),
-            file_name: fileNameFromPath(audioPath, `dry_run_${materials.length + 1}.wav`),
+            file_name: fileNameFromPath(audioPath, `dry_run_${materials.length + 1}.mp3`),
             target_word: targetWord,
             participant_id: `dryrun_${l1.toLowerCase()}`,
             native_language: l1,

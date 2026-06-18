@@ -9,36 +9,36 @@ const materials = [];
 for (const stimulusList of lists) {
   for (let wordNumber = 1; wordNumber <= 50; wordNumber += 1) {
     materials.push({
-      audio_url: `ame/${stimulusList}/${wordNumber}.wav`,
+      audio_url: `ame/${stimulusList}/${wordNumber}.mp3`,
       target_word: `word${wordNumber}`,
       participant_id: "AME_S01",
       l1_condition: "AME",
       pronunciation_condition: "natural",
       stimulus_list: stimulusList,
       word_number: String(wordNumber),
-      file_name: `ame_${stimulusList}_${wordNumber}.wav`,
+      file_name: `ame_${stimulusList}_${wordNumber}.mp3`,
     });
 
     for (const pronunciation of ["natural", "accented"]) {
       materials.push({
-        audio_url: `jpn/${pronunciation}/${stimulusList}/${wordNumber}.wav`,
+        audio_url: `jpn/${pronunciation}/${stimulusList}/${wordNumber}.mp3`,
         target_word: `word${wordNumber}`,
         participant_id: "JPN_S01",
         l1_condition: "JPN",
         pronunciation_condition: pronunciation,
         stimulus_list: stimulusList,
         word_number: String(wordNumber),
-        file_name: `jpn_${pronunciation}_${stimulusList}_${wordNumber}.wav`,
+        file_name: `jpn_${pronunciation}_${stimulusList}_${wordNumber}.mp3`,
       });
       materials.push({
-        audio_url: `chn/${pronunciation}/${stimulusList}/${wordNumber}.wav`,
+        audio_url: `chn/${pronunciation}/${stimulusList}/${wordNumber}.mp3`,
         target_word: `word${wordNumber}`,
         participant_id: "CHN_S01",
         l1_condition: "CHN",
         pronunciation_condition: pronunciation,
         stimulus_list: stimulusList,
         word_number: String(wordNumber),
-        file_name: `chn_${pronunciation}_${stimulusList}_${wordNumber}.wav`,
+        file_name: `chn_${pronunciation}_${stimulusList}_${wordNumber}.mp3`,
       });
     }
   }
