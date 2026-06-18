@@ -165,6 +165,7 @@ Counterbalance reference files:
 - `counterbalance_table.csv`: the 20 allocation cells.
 - `counterbalance_list_specs.csv`: the A-J word-number ranges.
 - `remote_manifest_template.csv`: recommended stimulus manifest columns.
+- `TODO.md`: upcoming operational tasks for stimulus-file intake and potential questionnaire support.
 - `scripts/verify_counterbalance.mjs`: local verification for 100-trial generation and no-3-consecutive same-L1 ordering.
 - `scripts/simulate_counterbalance_design.mjs`: placeholder-material audit for cell balance, list position balance, and dropout allocation behavior.
 - `EXPERIMENTAL_DESIGN_REVIEW.md`: reviewer-facing design specification, risk register, and final-stimulus checklist.
