@@ -1,0 +1,24 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Cloudflare local/config secrets
+wrangler.toml
+.dev.vars
+.env
+.env.*
+
+# Study exports and local downloaded data
+*_pronunciation_ratings.csv
+*_pronunciation_ratings.zip
+*_assignment.json
+rating_trials.csv
+rating_assignments.csv
+sessions.csv
+event_logs.csv
+counterbalance_allocations.csv
+
+# Private production assets should live in Cloudflare R2 or approved storage.
+private_audio/
+production_audio/
+exports/

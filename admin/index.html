@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rating Platform Admin</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Accentedness project</p>
+          <h1>Rating Platform Admin</h1>
+        </div>
+        <div class="version">Server exports</div>
+      </header>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Data export</h2>
+            <p>Download analysis-ready data, quality checks, and restricted raw tables.</p>
+          </div>
+          <div class="setup-status" id="admin-status">Not loaded</div>
+        </div>
+
+        <label class="admin-token">
+          Admin token
+          <input id="admin-token" type="password" autocomplete="off" />
+        </label>
+
+        <div class="admin-maintenance">
+          <label>
+            Stale minutes
+            <input id="stale-minutes" type="number" min="1" max="10080" value="240" />
+          </label>
+          <button id="finalize-stale-btn" class="secondary">Finalize stale sessions</button>
+        </div>
+
+        <div class="admin-actions">
+          <button id="refresh-btn">Refresh summary</button>
+          <button id="analysis-btn" class="secondary">Download analysis CSV</button>
+          <button id="quality-btn" class="secondary">Download anonymized quality CSV</button>
+          <button id="ratings-btn" class="secondary">Download raw ratings CSV</button>
+          <button id="sessions-btn" class="secondary">Download raw sessions CSV</button>
+          <button id="assignments-btn" class="secondary">Download raw assignments CSV</button>
+          <button id="events-btn" class="secondary">Download raw event logs CSV</button>
+          <button id="counterbalance-btn" class="secondary">Download raw counterbalance CSV</button>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <span>Sessions</span>
+            <strong id="count-sessions">0</strong>
+          </div>
+          <div class="admin-card">
+            <span>Rating trials</span>
+            <strong id="count-trials">0</strong>
+          </div>
+          <div class="admin-card">
+            <span>Assignments</span>
+            <strong id="count-assignments">0</strong>
+          </div>
+          <div class="admin-card">
+            <span>Event logs</span>
+            <strong id="count-events">0</strong>
+          </div>
+        </div>
+
+        <pre id="admin-log" class="log" aria-live="polite"></pre>
+      </section>
+    </main>
+    <script src="admin.js"></script>
+  </body>
+</html>

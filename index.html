@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pronunciation Rating Platform</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="participant-mode">
+    <main class="app-shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Listening task</p>
+          <h1>English Word Listening Task</h1>
+        </div>
+        <div class="version researcher-only" id="version-label"></div>
+      </header>
+
+      <section class="panel setup-panel" id="setup-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Before you start</h2>
+            <p>You will listen to English words and answer a few short questions about each word.</p>
+          </div>
+          <div class="setup-status" id="setup-status">Loading task</div>
+        </div>
+
+        <div class="status-grid researcher-only" aria-live="polite">
+          <div>
+            <span>Audio</span>
+            <strong id="status-audio">0</strong>
+          </div>
+          <div>
+            <span>Targets</span>
+            <strong id="status-targets">0</strong>
+          </div>
+          <div>
+            <span>Manifest</span>
+            <strong id="status-manifest">none</strong>
+          </div>
+          <div>
+            <span>Mode</span>
+            <strong id="status-mode">combined</strong>
+          </div>
+        </div>
+
+        <div class="setup-layout">
+          <section class="setup-section">
+            <h3>Task instructions</h3>
+            <div class="participant-instructions">
+              <p>Please use headphones or earphones and sit in a quiet place.</p>
+              <ol>
+                <li>Press <strong>Play audio</strong>. Use <strong>Play again</strong> only if needed.</li>
+                <li>Type the English word you heard.</li>
+                <li>Rate how easy the word was to understand.</li>
+                <li>Rate how strong the speaker's accent sounded.</li>
+              </ol>
+              <p>The task begins with practice. Feedback is shown during practice only. During the main task, short calculation questions appear between parts.</p>
+            </div>
+            <div id="turnstile-widget" class="turnstile-widget hidden" aria-label="Security check"></div>
+            <div class="form-grid">
+              <label id="participant-id-field">
+                Participant ID
+                <input id="rater-id" type="text" autocomplete="off" placeholder="participant001" />
+              </label>
+              <label class="researcher-only">
+                Session label
+                <input id="session-id" type="text" autocomplete="off" placeholder="session01" />
+              </label>
+              <label class="researcher-only">
+                Randomization seed
+                <input id="seed" type="text" autocomplete="off" placeholder="defaults to rater + session" />
+              </label>
+              <label class="researcher-only">
+                Task mode
+                <select id="task-mode">
+                  <option value="combined">Combined: ratings + dictation</option>
+                  <option value="ratings">Ratings only</option>
+                  <option value="dictation">Dictation only</option>
+                </select>
+              </label>
+              <label class="researcher-only">
+                Break interval
+                <input id="break-interval" type="number" min="0" max="200" value="40" />
+              </label>
+            </div>
+            <div class="familiarity-grid">
+              <fieldset class="familiarity-field">
+                <legend>How familiar are you with Japanese in daily life?</legend>
+                <div class="familiarity-options" id="japanese-familiarity-options">
+                  <label><input type="radio" name="japanese-familiarity" value="1" required />1</label>
+                  <label><input type="radio" name="japanese-familiarity" value="2" />2</label>
+                  <label><input type="radio" name="japanese-familiarity" value="3" />3</label>
+                  <label><input type="radio" name="japanese-familiarity" value="4" />4</label>
+                  <label><input type="radio" name="japanese-familiarity" value="5" />5</label>
+                  <label><input type="radio" name="japanese-familiarity" value="6" />6</label>
+                </div>
+                <div class="familiarity-anchors">
+                  <span>Not familiar</span>
+                  <span>Very familiar</span>
+                </div>
+              </fieldset>
+              <fieldset class="familiarity-field">
+                <legend>How familiar are you with Chinese in daily life?</legend>
+                <div class="familiarity-options" id="chinese-familiarity-options">
+                  <label><input type="radio" name="chinese-familiarity" value="1" required />1</label>
+                  <label><input type="radio" name="chinese-familiarity" value="2" />2</label>
+                  <label><input type="radio" name="chinese-familiarity" value="3" />3</label>
+                  <label><input type="radio" name="chinese-familiarity" value="4" />4</label>
+                  <label><input type="radio" name="chinese-familiarity" value="5" />5</label>
+                  <label><input type="radio" name="chinese-familiarity" value="6" />6</label>
+                </div>
+                <div class="familiarity-anchors">
+                  <span>Not familiar</span>
+                  <span>Very familiar</span>
+                </div>
+              </fieldset>
+            </div>
+          </section>
+
+          <section class="setup-section researcher-only">
+            <h3>Materials</h3>
+            <div class="remote-card">
+              <div class="remote-heading">
+                <label class="checkbox-label source-option">
+                  <input id="custom-manifest-toggle" type="checkbox" />
+                  Use a custom stimulus manifest
+                </label>
+                <button id="load-participants-btn" class="secondary">Reload stimuli</button>
+              </div>
+              <div class="source-summary" id="source-summary">Default: remote_manifest.csv</div>
+              <label id="custom-manifest-field" class="custom-field hidden">
+                Stimulus manifest URL
+                <input id="remote-manifest-url" type="text" autocomplete="off" value="remote_manifest.csv" />
+              </label>
+              <div class="participant-actions">
+                <button id="remote-select-all-btn" class="secondary" disabled>Select all</button>
+                <button id="remote-clear-btn" class="secondary" disabled>Clear</button>
+              </div>
+              <div id="remote-participant-grid" class="participant-grid empty">Loading participants...</div>
+              <button id="prepare-remote-btn" disabled>Prepare counterbalanced session</button>
+              <small>
+                The default manifest loads automatically. Server-side counterbalancing uses the full stimulus pool.
+              </small>
+            </div>
+
+            <div class="upload-grid">
+              <label class="upload-card">
+                <span>Audio files</span>
+                <input id="audio-files" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" multiple />
+                <small>Select exported participant recordings.</small>
+              </label>
+
+              <label class="upload-card">
+                <span>Audio folder</span>
+                <input id="audio-folder" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" webkitdirectory multiple />
+                <small>Import a folder while preserving relative paths.</small>
+              </label>
+
+              <label class="upload-card">
+                <span>Manifest CSV</span>
+                <input id="manifest-file" type="file" accept=".csv,text/csv" />
+                <small>Optional metadata for targets and conditions.</small>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <details class="scale-details">
+          <summary>Rating scales</summary>
+          <div class="anchor-grid">
+            <div>
+              <h3>Ease of understanding</h3>
+              <p>How easy was the word to understand?</p>
+              <p><strong>1</strong> = very easy</p>
+              <p><strong>9</strong> = very difficult</p>
+            </div>
+            <div>
+              <h3>Accent strength</h3>
+              <p>How strong did the speaker's accent sound?</p>
+              <p><strong>1</strong> = no noticeable accent</p>
+              <p><strong>9</strong> = very strong accent</p>
+            </div>
+            <div>
+              <h3>Word typing</h3>
+              <p>Type the English word you hear.</p>
+              <p>Please answer as accurately as you can.</p>
+            </div>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button id="load-practice-btn" class="secondary researcher-only">Load demo materials</button>
+          <button id="prepare-btn" class="researcher-only">Prepare trials</button>
+          <button id="start-btn" disabled>Start practice</button>
+          <button id="download-btn" class="secondary researcher-only" disabled>Download results</button>
+        </div>
+
+        <pre id="setup-log" class="log researcher-only" aria-live="polite"></pre>
+      </section>
+
+      <section class="panel task-panel hidden" id="task-panel">
+        <div class="task-topbar">
+          <div>
+            <p class="eyebrow" id="task-phase">Main task</p>
+            <h2 id="trial-title">Trial</h2>
+          </div>
+          <button id="pause-btn" class="secondary">Pause</button>
+        </div>
+
+        <div class="progress-track" aria-hidden="true">
+          <div id="progress-fill"></div>
+        </div>
+        <div class="progress-text" id="progress-text">0 of 0 completed</div>
+
+        <div class="rating-workspace">
+          <aside class="trial-rail" aria-live="polite">
+            <div>
+              <span>Mode</span>
+              <strong id="rail-mode">Combined</strong>
+            </div>
+            <div>
+              <span>Completed</span>
+              <strong id="rail-completed">0</strong>
+            </div>
+            <div>
+              <span>Remaining</span>
+              <strong id="rail-remaining">0</strong>
+            </div>
+            <div>
+              <span>Audio</span>
+              <strong id="rail-audio">Pending</strong>
+            </div>
+          </aside>
+
+          <div class="response-stack">
+            <div class="stimulus-area">
+              <button id="play-btn" class="play-button">Play audio</button>
+              <p id="audio-state" class="audio-state">Audio has not been played.</p>
+            </div>
+
+            <div class="dictation-box" id="dictation-block">
+              <label for="dictation-input">Type the English word you heard</label>
+              <input id="dictation-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" disabled />
+              <label class="dictation-unidentified" for="dictation-unidentified">
+                <input id="dictation-unidentified" type="checkbox" disabled />
+                I could not identify the word
+              </label>
+            </div>
+
+            <fieldset class="scale-block" id="comprehensibility-block">
+              <legend>How easy was it to understand?</legend>
+              <div class="scale-endpoints">
+                <span>Very easy</span>
+                <span>Very difficult</span>
+              </div>
+              <div class="scale-options" id="comprehensibility-scale"></div>
+            </fieldset>
+
+            <fieldset class="scale-block" id="accentedness-block">
+              <legend>How strong did the accent sound?</legend>
+              <div class="scale-endpoints">
+                <span>No noticeable accent</span>
+                <span>Very strong accent</span>
+              </div>
+              <div class="scale-options" id="accentedness-scale"></div>
+            </fieldset>
+
+            <div id="practice-feedback" class="practice-feedback hidden" aria-live="polite"></div>
+
+            <label id="practice-reason-block" class="practice-reason hidden">
+              Please briefly explain what made you choose your rating.
+              <textarea id="practice-reason" rows="3" autocomplete="off"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="trial-actions">
+          <button id="next-btn" disabled>Continue</button>
+        </div>
+      </section>
+
+      <section class="panel break-panel hidden" id="break-panel">
+        <h2>Break</h2>
+        <p id="break-message"></p>
+        <button id="resume-btn">Resume</button>
+      </section>
+
+      <section class="panel distractor-panel hidden" id="distractor-panel">
+        <h2>Short Calculation Task</h2>
+        <p id="distractor-message"></p>
+        <div id="distractor-problems" class="distractor-problems"></div>
+        <p id="distractor-status" class="distractor-status" aria-live="polite"></p>
+        <button id="distractor-submit-btn" disabled>Continue</button>
+      </section>
+
+      <section class="panel complete-panel hidden" id="complete-panel">
+        <h2>Session complete</h2>
+        <p id="complete-message"></p>
+        <div class="completion-code-box">
+          <span>Prolific completion code</span>
+          <strong id="completion-code">Provided after completion</strong>
+        </div>
+        <a id="prolific-return-link" class="prolific-return-link hidden" href="#" rel="noopener noreferrer">
+          Return to Prolific
+        </a>
+        <div class="actions researcher-only">
+          <button id="final-download-btn">Download results</button>
+          <button id="new-session-btn" class="secondary">New session</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

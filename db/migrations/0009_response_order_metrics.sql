@@ -1,0 +1,14 @@
+ALTER TABLE rating_trials ADD COLUMN response_order TEXT;
+ALTER TABLE rating_trials ADD COLUMN first_response_field TEXT;
+ALTER TABLE rating_trials ADD COLUMN first_response_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN rating_order TEXT;
+ALTER TABLE rating_trials ADD COLUMN rating_interaction_sequence TEXT;
+ALTER TABLE rating_trials ADD COLUMN first_rating_field TEXT;
+ALTER TABLE rating_trials ADD COLUMN first_rating_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN comprehensibility_first_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN comprehensibility_last_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN comprehensibility_selection_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE rating_trials ADD COLUMN accentedness_first_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN accentedness_last_rt_ms REAL;
+ALTER TABLE rating_trials ADD COLUMN accentedness_selection_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE rating_trials ADD COLUMN unidentified_selected_rt_ms REAL;

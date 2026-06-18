@@ -1,0 +1,14 @@
+name = "accentedness-rating-platform"
+compatibility_date = "2026-06-17"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "accentedness-rating"
+database_id = "replace-with-cloudflare-d1-database-id"
+
+# Set the real value with:
+#   wrangler pages secret put ADMIN_TOKEN
+# Optional, when the authoritative stimulus manifest should not be committed:
+#   wrangler pages secret put COUNTERBALANCE_MANIFEST_URL
+# Do not put secret values in this file.

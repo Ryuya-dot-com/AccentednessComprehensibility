@@ -1,0 +1,13 @@
+audio_file,target_word,participant_id,native_language,condition,accent_condition,talker,pass_number,trial_number,word_number,take_number,spoken_form,practice_note
+practice_audio/english/chocolate.wav,chocolate,practice,english,practice,english,Samantha,,1,1,,chocolate,Native English TTS practice sample
+practice_audio/japanese/chocolate.wav,chocolate,practice,japanese,practice,japanese,Kyoko,,1,1,,チョコレート,Japanese katakana-shaped practice sample
+practice_audio/chinese/chocolate.wav,chocolate,practice,chinese,practice,chinese,Tingting,,1,1,,巧克力,Chinese cognate/loanword-shaped practice sample
+practice_audio/english/coffee.wav,coffee,practice,english,practice,english,Samantha,,2,2,,coffee,Native English TTS practice sample
+practice_audio/japanese/coffee.wav,coffee,practice,japanese,practice,japanese,Kyoko,,2,2,,コーヒー,Japanese katakana-shaped practice sample
+practice_audio/chinese/coffee.wav,coffee,practice,chinese,practice,chinese,Tingting,,2,2,,咖啡,Chinese cognate/loanword-shaped practice sample
+practice_audio/english/pizza.wav,pizza,practice,english,practice,english,Samantha,,3,3,,pizza,Native English TTS practice sample
+practice_audio/japanese/pizza.wav,pizza,practice,japanese,practice,japanese,Kyoko,,3,3,,ピザ,Japanese katakana-shaped practice sample
+practice_audio/chinese/pizza.wav,pizza,practice,chinese,practice,chinese,Tingting,,3,3,,披萨,Chinese cognate/loanword-shaped practice sample
+practice_audio/english/sofa.wav,sofa,practice,english,practice,english,Samantha,,4,4,,sofa,Native English TTS practice sample
+practice_audio/japanese/sofa.wav,sofa,practice,japanese,practice,japanese,Kyoko,,4,4,,ソファ,Japanese katakana-shaped practice sample
+practice_audio/chinese/sofa.wav,sofa,practice,chinese,practice,chinese,Tingting,,4,4,,沙发,Chinese cognate/loanword-shaped practice sample
