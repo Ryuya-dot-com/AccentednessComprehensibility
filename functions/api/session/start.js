@@ -3,6 +3,7 @@ import {
   cleanText,
   errorResponse,
   insertEvent,
+  isDryRunClient,
   jsonResponse,
   isProduction,
   nowMs,
@@ -58,6 +59,11 @@ function canonicalKey(value) {
 }
 
 function participantKey(client, raterId, sessionLabel) {
+  if (isDryRunClient(client)) {
+    return `dry-run:${canonicalKey(client.prolific_pid || raterId)}:${canonicalKey(
+      client.prolific_session_id || sessionLabel,
+    )}`;
+  }
   const prolificPid = canonicalKey(client.prolific_pid);
   const prolificStudyId = canonicalKey(client.prolific_study_id);
   const prolificSessionId = canonicalKey(client.prolific_session_id);
@@ -241,6 +247,7 @@ export async function onRequestPost(context) {
 
     client = requestClientContext(context.request, body);
     requireProlificIdentity(client, context.env);
+    const dryRun = isDryRunClient(client);
     const key = participantKey(client, raterId, sessionLabel);
     const turnstileVerified = await verifyTurnstile(
       context.request,
@@ -266,7 +273,7 @@ export async function onRequestPost(context) {
     if (counterbalanceEnabled) {
       const loadedManifest = await loadCounterbalanceMaterials(context);
       manifestSummary = loadedManifest.summary;
-      counterbalance = await allocateCounterbalance(db, sessionId, startedAt);
+      counterbalance = await allocateCounterbalance(db, sessionId, startedAt, { dryRun });
       try {
         mainAssignment = buildCounterbalancedAssignment(
           loadedManifest.materials,
@@ -416,6 +423,7 @@ export async function onRequestPost(context) {
         chinese_familiarity_1_6: body.chinese_familiarity_1_6,
         counterbalance: counterbalancePayload(counterbalance),
         counterbalance_enabled: counterbalanceEnabled,
+        dry_run: dryRun,
         materials: counterbalanceEnabled ? JSON.parse(safeMaterialsJson(manifestSummary)) : undefined,
       },
     });
@@ -425,6 +433,7 @@ export async function onRequestPost(context) {
       session_id: sessionId,
       session_token: sessionToken,
       trial_count: assignment.length,
+      dry_run: dryRun,
       counterbalance: counterbalancePayload(counterbalance),
       main_assignment: mainAssignment,
     });

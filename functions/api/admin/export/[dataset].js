@@ -9,6 +9,17 @@ import {
   textResponse,
 } from "../../_utils.js";
 
+function dryRunSessionSql(alias = "s") {
+  return `(
+    UPPER(COALESCE(${alias}.prolific_study_id, '')) = 'DRY_RUN'
+    OR LOWER(COALESCE(${alias}.participant_key, '')) LIKE 'dry-run:%'
+  )`;
+}
+
+function liveSessionSql(alias = "s") {
+  return `NOT ${dryRunSessionSql(alias)}`;
+}
+
 const EXPORTS = {
   analysis: {
     fileName: "analysis_main_completed.csv",
@@ -117,6 +128,7 @@ const EXPORTS = {
       JOIN sessions s ON s.id = rt.session_id
       WHERE s.status = 'completed'
         AND rt.phase = 'main'
+        AND ${liveSessionSql("s")}
       ORDER BY s.completed_at_ms, s.completed_at, s.id, rt.trial_index`,
     transform: addAnalysisParticipantIds,
   },
@@ -468,6 +480,7 @@ const EXPORTS = {
         WHERE event_type = 'distractor_complete'
         GROUP BY session_id
       ) de ON de.session_id = s.id
+      WHERE ${liveSessionSql("s")}
       GROUP BY s.id
       ORDER BY s.started_at_ms, s.started_at`,
     transform: addAnalysisParticipantIds,

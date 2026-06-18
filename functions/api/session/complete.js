@@ -3,6 +3,7 @@ import {
   elapsedSeconds,
   errorResponse,
   insertEvent,
+  isDryRunSession,
   jsonResponse,
   minCompletionSeconds,
   nowMs,
@@ -26,16 +27,20 @@ export async function onRequestPost(context) {
       .prepare(
         `SELECT id, rater_id, trial_count, counterbalance_allocation_id,
            session_token_hash, started_at, started_at_ms, status,
-           completed_trial_count, completion_url_issued_count
+           completed_trial_count, completion_url_issued_count,
+           prolific_pid, prolific_study_id, prolific_session_id, participant_key
          FROM sessions WHERE id = ?`,
       )
       .bind(sessionId)
       .first();
     if (!session) return errorResponse("Session was not found.", 404);
     await requireSessionToken(context.request, body, session);
+    const dryRun = isDryRunSession(session);
     if (cleanText(session.status) !== "started") {
       const priorCompletion = cleanText(session.status) === "completed"
-        ? prolificCompletionConfig(context.env)
+        ? dryRun
+          ? { code: "DRY-RUN", url: "" }
+          : prolificCompletionConfig(context.env)
         : { code: "", url: "" };
       return jsonResponse({
         ok: true,
@@ -75,9 +80,11 @@ export async function onRequestPost(context) {
     }
 
     const completion = status === "completed"
-      ? prolificCompletionConfig(context.env)
+      ? dryRun
+        ? { code: "DRY-RUN", url: "" }
+        : prolificCompletionConfig(context.env)
       : { code: "", url: "" };
-    if (status === "completed" && !completion.code && !completion.url) {
+    if (status === "completed" && !dryRun && !completion.code && !completion.url) {
       status = "completed_no_completion_config";
     }
 
@@ -111,6 +118,13 @@ export async function onRequestPost(context) {
       .run();
 
     if (session.counterbalance_allocation_id) {
+      const allocationStatus = dryRun
+        ? status === "completed"
+          ? "dry_run_completed"
+          : "dry_run_incomplete"
+        : status === "completed"
+          ? "completed"
+          : "incomplete";
       await db
         .prepare(
           `UPDATE counterbalance_allocations
@@ -118,7 +132,7 @@ export async function onRequestPost(context) {
            WHERE id = ?`,
         )
         .bind(
-          status === "completed" ? "completed" : "incomplete",
+          allocationStatus,
           status === "completed" ? completedAt : null,
           completedAt,
           session.counterbalance_allocation_id,
@@ -139,6 +153,7 @@ export async function onRequestPost(context) {
         elapsed_ms: elapsedMs,
         min_completion_seconds: minimumSeconds,
         completion_url_issued: Boolean(completion.url),
+        dry_run: dryRun,
       },
     });
 

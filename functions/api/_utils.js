@@ -315,6 +315,17 @@ export function requireProlificIdentity(client, env) {
   throw httpError("PROLIFIC_PID, STUDY_ID, and SESSION_ID are required in production.", 400);
 }
 
+export function isDryRunClient(client = {}) {
+  return cleanText(client.prolific_study_id).toUpperCase() === "DRY_RUN";
+}
+
+export function isDryRunSession(session = {}) {
+  return (
+    isDryRunClient(session) ||
+    cleanText(session.participant_key).toLowerCase().startsWith("dry-run:")
+  );
+}
+
 export function assertTextMax(name, value, maxLength) {
   if (cleanText(value).length > maxLength) {
     throw httpError(`${name} is too long.`, 400);
@@ -446,6 +457,8 @@ export async function insertEvent(db, event) {
 export function requestClientContext(request, body = {}) {
   const url = new URL(request.url);
   return {
+    dry_run:
+      cleanText(body.dry_run) || cleanText(url.searchParams.get("dry_run")),
     prolific_pid:
       cleanText(body.prolific_pid) || cleanText(url.searchParams.get("PROLIFIC_PID")),
     prolific_study_id:

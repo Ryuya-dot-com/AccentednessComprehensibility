@@ -477,32 +477,41 @@ export async function loadCounterbalanceMaterials(context) {
   };
 }
 
-export async function allocateCounterbalance(db, sessionId, assignedAt) {
+function allocationScopeSql(dryRun) {
+  return dryRun ? "ca.status LIKE 'dry_run_%'" : "ca.status NOT LIKE 'dry_run_%'";
+}
+
+export async function allocateCounterbalance(db, sessionId, assignedAt, options = {}) {
   await ensureCounterbalanceCells(db);
   const allocationId = crypto.randomUUID();
+  const dryRun = Boolean(options.dryRun);
+  const startedStatus = dryRun ? "dry_run_started" : "started";
+  const completedStatus = dryRun ? "dry_run_completed" : "completed";
+  const scopedAllocations = allocationScopeSql(dryRun);
   await db
     .prepare(
       `INSERT INTO counterbalance_allocations (
         id, session_id, cell_id, status, assigned_at, updated_at
       )
-      SELECT ?, ?, c.cell_id, 'started', ?, ?
+      SELECT ?, ?, c.cell_id, ?, ?, ?
       FROM counterbalance_cells c
       ORDER BY
         (
           SELECT COUNT(*)
           FROM counterbalance_allocations ca
           WHERE ca.cell_id = c.cell_id
-            AND ca.status = 'completed'
+            AND ca.status = ?
         ) ASC,
         (
           SELECT COUNT(*)
           FROM counterbalance_allocations ca
           WHERE ca.cell_id = c.cell_id
+            AND ${scopedAllocations}
         ) ASC,
         c.cell_id ASC
       LIMIT 1`,
     )
-    .bind(allocationId, sessionId, assignedAt, assignedAt)
+    .bind(allocationId, sessionId, startedStatus, assignedAt, assignedAt, completedStatus)
     .run();
 
   const row = await db

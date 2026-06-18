@@ -11,10 +11,15 @@
   const RATING_SCALE_MAX = 9;
   const DEFAULT_PROLIFIC_COMPLETION_CODE = "CONTACT_RESEARCHER";
   const ONBOARDING_STEPS = ["identity", "familiarity", "instructions", "ready"];
-  const SERVER_SAVE_REQUIRED = new URLSearchParams(window.location.search).get("local") !== "1";
-  const COUNTERBALANCE_ENABLED = new URLSearchParams(window.location.search).get("manual") !== "1";
+  const SEARCH_PARAMS = new URLSearchParams(window.location.search);
+  const DRY_RUN_MODE =
+    SEARCH_PARAMS.get("dry_run") === "1" ||
+    SEARCH_PARAMS.get("STUDY_ID")?.toUpperCase() === "DRY_RUN";
+  const SERVER_SAVE_REQUIRED = SEARCH_PARAMS.get("local") !== "1";
+  const COUNTERBALANCE_ENABLED = SEARCH_PARAMS.get("manual") !== "1";
   const PARTICIPANT_MODE = COUNTERBALANCE_ENABLED;
   document.body.classList.toggle("participant-mode", PARTICIPANT_MODE);
+  document.body.classList.toggle("dry-run-mode", DRY_RUN_MODE);
 
   const PRACTICE_ITEMS = [
     {
@@ -737,6 +742,7 @@
       seed,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
       turnstile_token: state.turnstileToken,
+      dry_run: DRY_RUN_MODE ? "1" : "",
       screen: clientScreenInfo(),
       ...familiarityValues(),
       ...prolificParams(),
@@ -2305,7 +2311,13 @@
     await buildDownload();
     const completionCode = completionResult?.completion_code || "";
     const completionUrl = completionResult?.completion_url || "";
-    if (!state.serverSaveFailed && state.serverSessionId && !completionCode && !completionUrl) {
+    if (
+      !DRY_RUN_MODE &&
+      !state.serverSaveFailed &&
+      state.serverSessionId &&
+      !completionCode &&
+      !completionUrl
+    ) {
       state.serverSaveFailed = true;
     }
     if (els.completionCode) {
@@ -2325,7 +2337,9 @@
     }
     els.completeMessage.textContent = state.serverSaveFailed
       ? "The task is complete, but saving needs review. Please contact the researcher."
-      : completionUrl
+      : DRY_RUN_MODE
+        ? "Dry run complete. Responses were saved as dry-run data and excluded from analysis exports."
+        : completionUrl
         ? "Thank you. Your responses have been saved. Returning to Prolific."
         : "Thank you. Your responses have been saved. Please copy the completion code below.";
     showOnly(els.completePanel);

@@ -24,24 +24,31 @@ body {
 }
 
 button,
+.button-link,
 input,
 select {
   font: inherit;
 }
 
-button {
+button,
+.button-link {
   border: 0;
   border-radius: 6px;
   background: var(--accent);
   color: white;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 700;
   min-height: 44px;
   padding: 0 18px;
+  text-decoration: none;
   transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+.button-link:hover {
   background: var(--accent-strong);
   box-shadow: 0 8px 20px rgba(22, 107, 112, 0.16);
 }
@@ -51,12 +58,14 @@ button:disabled {
   opacity: 0.45;
 }
 
-button.secondary {
+button.secondary,
+.button-link.secondary {
   background: #e8edf2;
   color: #24313f;
 }
 
-button.secondary:hover:not(:disabled) {
+button.secondary:hover:not(:disabled),
+.button-link.secondary:hover {
   background: #d5dee8;
 }
 

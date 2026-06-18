@@ -10,6 +10,17 @@ import {
   requireSameOrigin,
 } from "../_utils.js";
 
+function dryRunSessionSql(alias = "s") {
+  return `(
+    UPPER(COALESCE(${alias}.prolific_study_id, '')) = 'DRY_RUN'
+    OR LOWER(COALESCE(${alias}.participant_key, '')) LIKE 'dry-run:%'
+  )`;
+}
+
+function liveSessionSql(alias = "s") {
+  return `NOT ${dryRunSessionSql(alias)}`;
+}
+
 async function logAdminSummary(db, request, accessPayload) {
   try {
     const email = cleanText(
@@ -46,9 +57,14 @@ export async function onRequestGet(context) {
 
     const statusRows = await db
       .prepare(
-        `SELECT status, COUNT(*) AS count
-         FROM sessions
-         GROUP BY status
+        `SELECT
+           CASE
+             WHEN ${dryRunSessionSql("s")} THEN 'dry_run_' || s.status
+             ELSE s.status
+           END AS status,
+           COUNT(*) AS count
+         FROM sessions s
+         GROUP BY 1
          ORDER BY status`,
       )
       .all();
@@ -62,7 +78,11 @@ export async function onRequestGet(context) {
           SUM(CASE WHEN ca.status = 'completed' THEN 1 ELSE 0 END) AS completed,
           SUM(CASE WHEN ca.status = 'started' THEN 1 ELSE 0 END) AS started,
           SUM(CASE WHEN ca.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete,
-          COUNT(ca.id) AS assigned
+          SUM(CASE WHEN ca.status NOT LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS assigned,
+          SUM(CASE WHEN ca.status = 'dry_run_completed' THEN 1 ELSE 0 END) AS dry_run_completed,
+          SUM(CASE WHEN ca.status = 'dry_run_started' THEN 1 ELSE 0 END) AS dry_run_started,
+          SUM(CASE WHEN ca.status = 'dry_run_incomplete' THEN 1 ELSE 0 END) AS dry_run_incomplete,
+          SUM(CASE WHEN ca.status LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS dry_run_assigned
         FROM counterbalance_cells cc
         LEFT JOIN counterbalance_allocations ca ON ca.cell_id = cc.cell_id
         GROUP BY cc.cell_id, cc.list_comb, cc.pronunciation_style
@@ -83,9 +103,18 @@ export async function onRequestGet(context) {
           SUM(CASE WHEN duplicate_start_count > 0 THEN 1 ELSE 0 END) AS sessions_with_duplicate_starts,
           SUM(duplicate_start_count) AS duplicate_start_total,
           SUM(completion_url_issued_count) AS completion_url_issued_total
-         FROM sessions`,
+         FROM sessions s
+         WHERE ${liveSessionSql("s")}`,
       )
       .bind(staleCutoffMs)
+      .first();
+
+    const dryRunSessions = await db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM sessions s
+         WHERE ${dryRunSessionSql("s")}`,
+      )
       .first();
 
     const completedMainTrials = await db
@@ -94,7 +123,8 @@ export async function onRequestGet(context) {
          FROM rating_trials rt
          JOIN sessions s ON s.id = rt.session_id
          WHERE s.status = 'completed'
-           AND rt.phase = 'main'`,
+           AND rt.phase = 'main'
+           AND ${liveSessionSql("s")}`,
       )
       .first();
 
@@ -107,7 +137,8 @@ export async function onRequestGet(context) {
          FROM rating_trials rt
          JOIN sessions s ON s.id = rt.session_id
          WHERE s.status = 'completed'
-           AND rt.phase = 'main'`,
+           AND rt.phase = 'main'
+           AND ${liveSessionSql("s")}`,
       )
       .first();
 
@@ -135,6 +166,7 @@ export async function onRequestGet(context) {
         manual_review_count: Number(intelligibility?.manual_review_count || 0),
         blank_dictation_count: Number(intelligibility?.blank_dictation_count || 0),
         stale_after_minutes: staleAfterMinutes,
+        dry_run_sessions: Number(dryRunSessions?.count || 0),
       },
       sessions_by_status: statusRows.results || [],
       counterbalance_by_cell: counterbalanceRows.results || [],

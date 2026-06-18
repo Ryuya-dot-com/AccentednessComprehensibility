@@ -109,13 +109,18 @@
         `unidentified_count: ${data.quality?.unidentified_count || 0}`,
         `manual_review_count: ${data.quality?.manual_review_count || 0}`,
         `blank_dictation_count: ${data.quality?.blank_dictation_count || 0}`,
+        `dry_run_sessions: ${data.quality?.dry_run_sessions || 0}`,
         "",
         "counterbalance_by_cell:",
         ...(data.counterbalance_by_cell || []).map(
           (row) =>
             `cell ${row.cell_id} ${row.list_comb}/${row.pronunciation_style}: ` +
             `completed=${row.completed || 0}, started=${row.started || 0}, ` +
-            `incomplete=${row.incomplete || 0}, assigned=${row.assigned || 0}`,
+            `incomplete=${row.incomplete || 0}, assigned=${row.assigned || 0}, ` +
+            `dry_run_completed=${row.dry_run_completed || 0}, ` +
+            `dry_run_started=${row.dry_run_started || 0}, ` +
+            `dry_run_incomplete=${row.dry_run_incomplete || 0}, ` +
+            `dry_run_assigned=${row.dry_run_assigned || 0}`,
         ),
       ].join("\n"),
     );

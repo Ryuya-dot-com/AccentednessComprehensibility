@@ -95,11 +95,14 @@ export async function onRequestPost(context) {
         db
           .prepare(
             `UPDATE counterbalance_allocations
-             SET status = 'incomplete',
+             SET status = CASE
+                   WHEN status LIKE 'dry_run_%' THEN 'dry_run_incomplete'
+                   ELSE 'incomplete'
+                 END,
                  completed_at = NULL,
                  updated_at = ?
              WHERE session_id = ?
-               AND status = 'started'
+               AND status IN ('started', 'dry_run_started')
                AND EXISTS (
                  SELECT 1
                  FROM sessions s
