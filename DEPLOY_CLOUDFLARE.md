@@ -543,8 +543,8 @@ Before running the actual study:
 - Confirm that `ENG` rows are explicitly `natural`, never blank or `accented`; `JPN` and `CHN` rows must be explicitly labeled `natural` or `accented`.
 - If using an external manifest, set `COUNTERBALANCE_ALLOWED_HOSTS` to the expected manifest/audio hostnames.
 - Run `python3 scripts/audit_lexical_balance.py` and confirm `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/lexical_balance_pairwise_differences.csv` has no unresolved imbalance flags.
-- Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report flags one clipped selectable main stimulus: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav`.
-- Run `node scripts/preflight_production.mjs`. It must pass before Prolific launch. It currently fails until production audio hosting is configured, the clipped selectable stimulus is resolved or explicitly accepted, and provisional practice reference ratings are reviewed.
+- Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
+- Run `node scripts/preflight_production.mjs`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
 - Run `node scripts/check_live_deployment.mjs` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off` and document that exception.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.

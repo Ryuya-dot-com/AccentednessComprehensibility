@@ -418,7 +418,7 @@ The production manifest validator confirms that the real manifest satisfies the 
 
 The live deployment check writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the same metadata directory. Use `--allow-turnstile-off` only for pilot phases where Turnstile is intentionally disabled; omit it for the final production check if Turnstile is required.
 
-Current acoustic QC has one launch-blocking failure: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav` has full-scale clipping and can be selected by the Sheet2 assignment. Before launch, also decide whether peak amplitude 0.99 remains an enforceable preprocessing target, because most main files are consistent with intensity normalization rather than peak normalization.
+Current acoustic QC has no launch-blocking failure after the `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav` OSF package copy was repaired by linear interpolation across 11 full-scale samples. Before launch, still decide whether peak amplitude 0.99 remains an enforceable preprocessing target, because most main files are consistent with intensity normalization rather than peak normalization.
 
 ## Final-Stimulus Placeholder Checklist
 

@@ -466,9 +466,9 @@ For acoustic QC of the OSF package and selected app practice MP3 files, run:
 python3 scripts/audit_audio_qc.py
 ```
 
-This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it flags one launch-blocking clipped main stimulus plus review items for peak normalization, JPN sample-rate variation, and ENG intensity normalization.
+This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization.
 
-For the current clipped stimulus, a review-only repair candidate can be regenerated with:
+The applied clipping repair candidate can be regenerated with:
 
 ```sh
 python3 scripts/repair_clipped_audio.py
@@ -488,7 +488,7 @@ Open `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadat
 python3 scripts/apply_practice_review.py --review-csv PATH_TO_COMPLETED_REVIEW_CSV
 ```
 
-The apply script updates `app.js`, the selected practice manifests, and the OSF package materialization script. It does not apply the clipped-audio repair candidate; that production-audio decision remains separate.
+The apply script updates `app.js`, the selected practice manifests, and the OSF package materialization script. Production-audio repair decisions are tracked separately in the OSF audio QC report and repair metadata.
 
 For lexical-balance QC of style `a` versus style `b`, run:
 
@@ -512,7 +512,7 @@ Before any Prolific launch, run the production preflight:
 node scripts/preflight_production.mjs
 ```
 
-The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured, the clipped selectable stimulus is resolved or explicitly accepted, and provisional practice reference ratings are reviewed.
+The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured and provisional practice reference ratings are reviewed.
 
 After each Cloudflare deployment, run the live deployment check against the public URL:
 

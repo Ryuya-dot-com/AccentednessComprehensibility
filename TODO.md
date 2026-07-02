@@ -191,10 +191,10 @@ This list tracks the remaining work before using
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_summary.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/AUDIO_QC_REPORT_20260703.md`.
-  - Current result: 2549 audited rows; no missing/unreadable files; 1 launch-blocking clipping failure.
-  - Launch blocker: resolve `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav` before production collection. It can be selected by Sheet2 assignment and no alternate take exists in the manifest.
-  - Repair candidate generated with `scripts/repair_clipped_audio.py` at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_candidates/jpn_s06_natural_pass01_word018_capelin_take04_trial0018__linear_declip_candidate.wav`.
-  - The repair candidate is not applied to the production manifest; researcher listening review is required before replacement.
+  - Current result: 2549 audited rows; no missing/unreadable files; 0 launch-blocking audio failure rows.
+  - Repaired file: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav`.
+  - Repair applied from `scripts/repair_clipped_audio.py` candidate at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_candidates/jpn_s06_natural_pass01_word018_capelin_take04_trial0018__linear_declip_candidate.wav`.
+  - Original package copy backup: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_applied_20260703/original_backup/`.
   - Review before launch: decide whether peak amplitude 0.99 is still required, whether JPN sample-rate variation is acceptable, and whether ENG `eng_s01`/`eng_s04` intensity should be normalized.
   - Selected ElevenLabs practice MP3s pass the loudness check at -23.4 LUFS.
   - Completion: all launch-blocking audio QC flags are resolved or explicitly accepted by the research team.
@@ -224,7 +224,7 @@ This list tracks the remaining work before using
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current preflight report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured, one selectable main stimulus has clipping, and three practice reference ratings remain provisional.
+  - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured and three practice reference ratings remain provisional.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation, and stale/dropout finalization.
   - Current live result: FAIL, because Cloudflare Pages is still serving the old app bundle and demo/static practice paths.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
