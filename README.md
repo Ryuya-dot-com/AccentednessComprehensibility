@@ -558,17 +558,20 @@ After each Cloudflare deployment, run the live deployment check against the publ
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 ```
 
-Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, and server-side manifest path by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
+Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, and duplicate-start resume metadata by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
 
 The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. The current full live result is `FAIL`: public static `/remote_manifest.csv` is still the 12-row demo manifest, and live D1 has not yet received `db/migrations/0011_speaker_pattern.sql`. Live `app.js` and the selected practice MP3 path pass.
 
 After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 
 ```sh
-node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
+node scripts/audit_cloudflare_readiness.mjs \
+  --allow-turnstile-off \
+  --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv \
+  --using-external-manifest-secret
 ```
 
-This writes `CLOUDFLARE_READINESS_REPORT_20260703.md` to the OSF metadata directory and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, hosted-audio checks, and the live API dry-run check. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source. For the final launch gate, add `--live-concurrency-stress` after the single live dry-run passes.
+This writes `CLOUDFLARE_READINESS_REPORT_20260703.md` to the OSF metadata directory and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, hosted-audio checks, and the live API dry-run check. Pass `--production-manifest` after the hosted manifest is generated so local preflight and audio-hosting checks inspect the launch manifest. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source. For the final launch gate, add `--live-concurrency-stress` after the single live dry-run passes.
 
 After production audio URLs are generated, verify that hosted audio is actually reachable:
 

@@ -451,7 +451,7 @@ Immediately verify that the public URL is serving the same implementation that w
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 ```
 
-Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a pilot. For production, omit that flag if `REQUIRE_TURNSTILE=1` is configured. Keep `--api-dry-run-start` for the final readiness check; it creates one dry-run D1 session and confirms that `/api/session/start` can build the 100-trial server-side main assignment without falling back to placeholder materials. If `COUNTERBALANCE_MANIFEST_URL` is configured and the public static `remote_manifest.csv` intentionally remains demo-only, also pass `--allow-demo-static-manifest`. The script writes:
+Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a pilot. For production, omit that flag if `REQUIRE_TURNSTILE=1` is configured. Keep `--api-dry-run-start` for the final readiness check; it creates one dry-run D1 session and confirms that `/api/session/start` can build the 100-trial server-side main assignment without falling back to placeholder materials. It also repeats the same dry-run start once to verify duplicate-start resume metadata. If `COUNTERBALANCE_MANIFEST_URL` is configured and the public static `remote_manifest.csv` intentionally remains demo-only, also pass `--allow-demo-static-manifest`. The script writes:
 
 ```text
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
@@ -462,10 +462,13 @@ The current public deployment fails the full check because live `/remote_manifes
 After Wrangler authentication is available, run the aggregate readiness audit:
 
 ```sh
-node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
+node scripts/audit_cloudflare_readiness.mjs \
+  --allow-turnstile-off \
+  --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv \
+  --using-external-manifest-secret
 ```
 
-It writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/CLOUDFLARE_READINESS_REPORT_20260703.md` and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, and live API dry-run checks. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+It writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/CLOUDFLARE_READINESS_REPORT_20260703.md` and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, hosted-audio checks, and live API dry-run checks. Pass `--production-manifest` after the hosted manifest is generated so both preflight and audio-hosting checks inspect the actual launch manifest. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
 
 ## 10. Configure Edge Protection
 
@@ -582,9 +585,9 @@ Before running the actual study:
 - Run `node scripts/validate_audio_hosting.mjs --sample 80` after production HTTPS audio URLs are generated, and use `--sample 0` for the final full-row probe before launch.
 - Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
 - Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
-- Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available; this is the aggregate launch gate.
+- Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.
-- For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress`.
+- For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress`.
 - Complete a live pilot reload test: save trials, reload the same Prolific-style URL, confirm resume at the first unsaved trial, then finish and verify completion/export rows.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.

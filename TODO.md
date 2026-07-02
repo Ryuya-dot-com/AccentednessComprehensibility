@@ -267,8 +267,8 @@ node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
-node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress
 node scripts/build_hosted_manifest.mjs --audio-base-url https://stimuli.example.edu --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress
 node scripts/validate_audio_hosting.mjs --sample 80
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start

@@ -120,6 +120,10 @@ function checkRequiredAppSnippets(appText) {
     "response_flow",
     "error.data?.retryable === true",
     "Confirming saved responses...",
+    "resumeExistingServerSessionIfNeeded",
+    "applyServerFamiliarityValues",
+    "serverCompletedTrialKeys",
+    "serverCompletedDistractorIndexes",
   ];
   const forbidden = [
     'params.get("completion_code")',
@@ -171,9 +175,13 @@ async function liveApiDryRunStartCheck(baseUrl) {
     practice_assignment: [],
   };
   const result = await postJson(baseUrl, "/api/session/start", payload);
+  const duplicate = result.response.status === 200 && result.data.ok === true
+    ? await postJson(baseUrl, "/api/session/start", payload)
+    : null;
   const assignment = Array.isArray(result.data.main_assignment)
     ? result.data.main_assignment
     : [];
+  const duplicateResume = duplicate?.data?.resume || {};
   const placeholderRows = assignment.filter((row) => row.source_format === "dry_run_placeholder");
   const nonHttpsRows = assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || ""));
   const engAccentedRows = assignment.filter((row) =>
@@ -194,6 +202,20 @@ async function liveApiDryRunStartCheck(baseUrl) {
     ...(invalidPronunciationRows.length
       ? [`${invalidPronunciationRows.length} row(s) have invalid pronunciation_condition`]
       : []),
+    ...(duplicate
+      ? [
+          ...(duplicate.response.status === 200 ? [] : [`duplicate start returned ${duplicate.response.status}`]),
+          ...(duplicate.data.ok === true ? [] : [`duplicate start response was not ok: ${duplicate.data.error || duplicate.text.slice(0, 160)}`]),
+          ...(duplicate.data.existing_session === true ? [] : ["duplicate start did not report existing_session: true"]),
+          ...(duplicate.data.session_id === result.data.session_id ? [] : ["duplicate start did not return the same session_id"]),
+          ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
+          ...(Array.isArray(duplicate.data.saved_trials) ? [] : ["duplicate start did not return saved_trials"]),
+          ...(Array.isArray(duplicate.data.distractor_completed_trial_indexes) ? [] : ["duplicate start did not return distractor_completed_trial_indexes"]),
+          ...(["practice", "main", "complete"].includes(duplicateResume.next_phase) ? [] : ["duplicate start did not return a valid resume.next_phase"]),
+          ...(Number(duplicate.data.japanese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original japanese_familiarity_1_6"]),
+          ...(Number(duplicate.data.chinese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original chinese_familiarity_1_6"]),
+        ]
+      : []),
   ];
   return {
     problems,
@@ -206,6 +228,8 @@ async function liveApiDryRunStartCheck(baseUrl) {
       counterbalance_cell: result.data.counterbalance?.cell_id || "",
       placeholder_rows: placeholderRows.length,
       non_https_rows: nonHttpsRows.length,
+      duplicate_existing_session: duplicate?.data?.existing_session === true,
+      duplicate_resume_phase: duplicateResume.next_phase || "",
     }),
   };
 }

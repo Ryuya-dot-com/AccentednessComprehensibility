@@ -217,7 +217,11 @@ function checkD1Schema(database) {
 }
 
 function checkLocalPreflight() {
-  const result = run("node", ["scripts/preflight_production.mjs"]);
+  const args = ["scripts/preflight_production.mjs"];
+  const productionManifest = argValue("--production-manifest", process.env.PRODUCTION_MANIFEST || "");
+  if (productionManifest) args.push("--production-manifest", productionManifest);
+  if (hasFlag("--using-external-manifest-secret")) args.push("--using-external-manifest-secret");
+  const result = run("node", args);
   const problems = result.ok ? [] : ["Production preflight still has launch blockers."];
   return {
     name: "Local production preflight",
@@ -235,6 +239,8 @@ function checkAudioHosting() {
     "--timeout-ms",
     argValue("--audio-timeout-ms", "8000"),
   ];
+  const productionManifest = argValue("--production-manifest", process.env.PRODUCTION_MANIFEST || "");
+  if (productionManifest) args.push("--manifest", productionManifest);
   if (hasFlag("--allow-octet-stream")) args.push("--allow-octet-stream");
   if (hasFlag("--audio-structure-only")) args.push("--structure-only");
   const result = run("node", args);
