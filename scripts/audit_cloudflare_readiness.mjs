@@ -15,6 +15,9 @@ const DEFAULT_OUT = path.join(PACKAGE_ROOT, "metadata", "CLOUDFLARE_READINESS_RE
 
 const REQUIRED_SECRET_NAMES = [
   "ADMIN_TOKEN",
+];
+const COMPLETION_SECRET_NAMES = [
+  "PROLIFIC_COMPLETION_URL",
   "PROLIFIC_COMPLETION_CODE",
 ];
 const CONDITIONAL_SECRET_NAMES = [
@@ -118,6 +121,14 @@ function checkPagesSecrets(project) {
       problems.push(`Missing required Pages secret: ${name}`);
     }
   }
+  const completionSecretPresent = COMPLETION_SECRET_NAMES.some((name) =>
+    result.ok && secretPresence(output, name)
+  );
+  if (result.ok && !completionSecretPresent) {
+    problems.push(
+      `Missing Prolific completion secret: set one of ${COMPLETION_SECRET_NAMES.join(", ")}`,
+    );
+  }
   const optionalPresent = Object.fromEntries(
     CONDITIONAL_SECRET_NAMES.map((name) => [name, result.ok && secretPresence(output, name)]),
   );
@@ -127,6 +138,7 @@ function checkPagesSecrets(project) {
     summary: JSON.stringify({
       project,
       required_checked: REQUIRED_SECRET_NAMES,
+      completion_checked: COMPLETION_SECRET_NAMES,
       optional_present: optionalPresent,
     }),
     details: outputExcerpt(result),
@@ -215,6 +227,26 @@ function checkLocalPreflight() {
   };
 }
 
+function checkAudioHosting() {
+  const args = [
+    "scripts/validate_audio_hosting.mjs",
+    "--sample",
+    argValue("--audio-sample", "40"),
+    "--timeout-ms",
+    argValue("--audio-timeout-ms", "8000"),
+  ];
+  if (hasFlag("--allow-octet-stream")) args.push("--allow-octet-stream");
+  if (hasFlag("--audio-structure-only")) args.push("--structure-only");
+  const result = run("node", args);
+  const problems = result.ok ? [] : ["Audio hosting check still has launch blockers."];
+  return {
+    name: "Production audio hosting",
+    problems,
+    summary: result.ok ? "PASS" : "FAIL",
+    details: outputExcerpt(result, 1400),
+  };
+}
+
 function checkLiveDeployment() {
   const args = ["scripts/check_live_deployment.mjs", "--api-dry-run-start"];
   if (hasFlag("--allow-turnstile-off")) args.push("--allow-turnstile-off");
@@ -226,6 +258,35 @@ function checkLiveDeployment() {
     problems,
     summary: result.ok ? "PASS" : "FAIL",
     details: outputExcerpt(result, 1400),
+  };
+}
+
+function checkLiveConcurrencyStress() {
+  const args = [
+    "scripts/stress_live_counterbalance_concurrency.mjs",
+    "--participants",
+    argValue("--live-stress-participants", "40"),
+    "--timeout-ms",
+    argValue("--live-stress-timeout-ms", "30000"),
+  ];
+  const token = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
+  if (token) args.push("--turnstile-token", token);
+  const result = run("node", args);
+  const problems = result.ok ? [] : ["Live counterbalance concurrency stress test failed."];
+  return {
+    name: "Live counterbalance concurrency stress",
+    problems,
+    summary: result.ok ? "PASS" : "FAIL",
+    details: outputExcerpt(result, 1800),
+  };
+}
+
+function skippedLiveConcurrencyStress(reason) {
+  return {
+    name: "Live counterbalance concurrency stress",
+    problems: [],
+    summary: "SKIPPED",
+    details: reason,
   };
 }
 
@@ -263,6 +324,7 @@ function markdown(checks, context) {
 const project = argValue("--project-name", DEFAULT_PROJECT);
 const database = argValue("--database", DEFAULT_DATABASE);
 const out = path.resolve(argValue("--out", DEFAULT_OUT));
+const liveDeploymentCheck = checkLiveDeployment();
 const checks = [
   checkWranglerAuth(),
   checkPagesSecrets(project),
@@ -270,8 +332,16 @@ const checks = [
   checkD1Info(database),
   checkD1Schema(database),
   checkLocalPreflight(),
-  checkLiveDeployment(),
+  checkAudioHosting(),
+  liveDeploymentCheck,
 ];
+if (hasFlag("--live-concurrency-stress")) {
+  checks.push(
+    liveDeploymentCheck.problems.length
+      ? skippedLiveConcurrencyStress("Skipped because the live API dry-run check did not pass.")
+      : checkLiveConcurrencyStress(),
+  );
+}
 
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, markdown(checks, { project, database }));

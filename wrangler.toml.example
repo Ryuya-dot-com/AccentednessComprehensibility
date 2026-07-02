@@ -9,6 +9,9 @@ database_id = "replace-with-cloudflare-d1-database-id"
 
 # Set the real value with:
 #   wrangler pages secret put ADMIN_TOKEN
+#   wrangler pages secret put PROLIFIC_COMPLETION_URL
+# or:
+#   wrangler pages secret put PROLIFIC_COMPLETION_CODE
 # Optional, when the authoritative stimulus manifest should not be committed:
 #   wrangler pages secret put COUNTERBALANCE_MANIFEST_URL
 # Do not put secret values in this file.

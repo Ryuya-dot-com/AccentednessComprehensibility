@@ -57,7 +57,7 @@ Root directory: /
 ```text
 D1 binding name: DB
 Pages secret: ADMIN_TOKEN
-Pages secret: PROLIFIC_COMPLETION_CODE
+Pages secret: PROLIFIC_COMPLETION_URL or PROLIFIC_COMPLETION_CODE
 Optional Pages secret: COUNTERBALANCE_MANIFEST_URL
 Optional Pages variable: COUNTERBALANCE_ALLOWED_HOSTS=<comma-separated hosts>
 Optional Pages secret: TURNSTILE_SECRET_KEY
@@ -302,6 +302,16 @@ node scripts/validate_production_manifest.mjs \
   --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 ```
 
+After the audio host is public, verify hosted audio URLs:
+
+```sh
+node scripts/validate_audio_hosting.mjs \
+  --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv \
+  --sample 80
+```
+
+Use `--sample 0` for the final full-row probe before Prolific launch.
+
 Set the manifest URL as a Pages secret if the manifest is hosted outside the repository:
 
 ```sh
@@ -341,7 +351,13 @@ Do not put `ADMIN_TOKEN` in `wrangler.toml`.
 
 The admin API fails closed when `ADMIN_TOKEN` is not configured.
 
-Set the Prolific completion code as a Cloudflare Pages secret. Do not put it in the participant URL:
+Set the Prolific completion return target as a Cloudflare Pages secret. Prefer the full completion URL supplied by Prolific:
+
+```sh
+npx wrangler pages secret put PROLIFIC_COMPLETION_URL --project-name accentednesscomprehensibility
+```
+
+If Prolific only provides a completion code, set the code instead. The server will construct `https://app.prolific.com/submissions/complete?cc=...`:
 
 ```sh
 npx wrangler pages secret put PROLIFIC_COMPLETION_CODE --project-name accentednesscomprehensibility
@@ -527,16 +543,16 @@ For a Prolific-style test, use URL parameters such as:
 https://accentednesscomprehensibility.pages.dev/?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
 ```
 
-Do not include the completion code in the Prolific participant URL. Store it in `PROLIFIC_COMPLETION_CODE`.
+Do not include the completion code or completion URL in the Prolific participant URL. Store the full return URL in `PROLIFIC_COMPLETION_URL`, or store the code in `PROLIFIC_COMPLETION_CODE`.
 
-After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side `rating_assignments` row has a matching saved `rating_trials` row. If completion saving fails, the server detects missing assignments/trials, the session is implausibly fast, or `PROLIFIC_COMPLETION_CODE` is missing, the participant sees `CONTACT_RESEARCHER` instead.
+After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side `rating_assignments` row has a matching saved `rating_trials` row. If completion saving fails, the server detects missing assignments/trials, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
 
 ## 13. Important Checks Before Production
 
 Before running the actual study:
 
 - Confirm collaborator review of the selected ElevenLabs practice MP3 files and revise provisional reference ratings in `app.js` if needed.
-- Set `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
+- Set `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
 - Apply `db/migrations/0005_session_security.sql` to existing D1 databases.
 - Apply `db/migrations/0006_participant_lock_ms.sql` to existing D1 databases and confirm `participant_key` is unique.
@@ -560,9 +576,12 @@ Before running the actual study:
 - If using an external manifest, set `COUNTERBALANCE_ALLOWED_HOSTS` to the expected manifest/audio hostnames.
 - Run `python3 scripts/audit_lexical_balance.py` and confirm `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/lexical_balance_pairwise_differences.csv` has no unresolved imbalance flags.
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
+- Run `node scripts/validate_audio_hosting.mjs --sample 80` after production HTTPS audio URLs are generated, and use `--sample 0` for the final full-row probe before launch.
 - Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
 - Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
 - Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available; this is the aggregate launch gate.
+- Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.
+- For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress`.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.

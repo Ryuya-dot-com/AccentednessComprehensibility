@@ -396,7 +396,13 @@ Configure the Pages Functions D1 binding as `DB`. Set an admin token as a Cloudf
 wrangler pages secret put ADMIN_TOKEN
 ```
 
-Set the Prolific completion code as a Cloudflare secret, not as a participant URL query parameter:
+Set the Prolific completion return target as a Cloudflare secret, not as a participant URL query parameter. Prefer the full URL supplied by Prolific:
+
+```sh
+wrangler pages secret put PROLIFIC_COMPLETION_URL
+```
+
+If only a completion code is available, store the code instead:
 
 ```sh
 wrangler pages secret put PROLIFIC_COMPLETION_CODE
@@ -466,6 +472,14 @@ python3 scripts/stress_counterbalance_concurrency.py --participants 200
 ```
 
 The script writes `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. The current local result for 200 simultaneous starts is exactly 10 assignments per cell, with duplicate participant-key insertion rejected.
+
+After the live Pages API dry-run passes, stress-test the deployed D1-backed start endpoint with dry-run sessions:
+
+```sh
+node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
+```
+
+This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, checks one simultaneous wave across the 20 cells, and fails if the assignment spread is greater than 1.
 
 For acoustic QC of the OSF package and selected app practice MP3 files, run:
 
@@ -544,6 +558,14 @@ After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
 ```
 
-This writes `CLOUDFLARE_READINESS_REPORT_20260703.md` to the OSF metadata directory and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, and the live API dry-run check. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+This writes `CLOUDFLARE_READINESS_REPORT_20260703.md` to the OSF metadata directory and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, hosted-audio checks, and the live API dry-run check. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source. For the final launch gate, add `--live-concurrency-stress` after the single live dry-run passes.
+
+After production audio URLs are generated, verify that hosted audio is actually reachable:
+
+```sh
+node scripts/validate_audio_hosting.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --sample 80
+```
+
+Use `--sample 0` to probe every row before launch.
 
 For local-only testing without a Cloudflare API, open the page with `?manual=1&local=1`. Do not use `?local=1` for Prolific data collection because it permits advancing without server persistence.

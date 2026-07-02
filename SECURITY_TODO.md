@@ -57,7 +57,7 @@ Priority:
 
 - [ ] Remove placeholder study values before production.
   - Replace placeholder practice audio paths and expert ratings.
-  - Done in code/docs: client-supplied `completion_code` was removed from the participant URL flow; use `PROLIFIC_COMPLETION_CODE` instead.
+  - Done in code/docs: client-supplied `completion_code` was removed from the participant URL flow; use `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` instead.
   - Current live blockers are external configuration/state: public `remote_manifest.csv` is still demo-sized and remote D1 is missing `speaker_pattern_index` until schema updates are applied.
   - Verify with `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after deployment while Turnstile is intentionally disabled; omit `--allow-turnstile-off` before production if Turnstile is required.
   - Acceptance: grep finds no `PLACEHOLDER`, demo-only manifest paths, or production-ineligible practice notes in production config.
@@ -172,7 +172,9 @@ Priority:
   - Added live deployment check: `node scripts/check_live_deployment.mjs --api-dry-run-start` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, admin dry-run protection, live D1 schema compatibility, and server-side counterbalance assignment.
   - Added guarded D1 schema updater: `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply` checks live columns, exports a SQL backup, and applies only missing additive columns.
   - Added aggregate Cloudflare readiness audit: `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, production preflight, and live API dry-run checks.
+  - Added hosted-audio URL probe: `node scripts/validate_audio_hosting.mjs --sample 80` checks HTTPS `audio_url` presence and sampled network reachability.
   - Added local simultaneous-start stress test: `python3 scripts/stress_counterbalance_concurrency.py --participants 200` checks counterbalance spread and duplicate participant-key rejection under same-timestamp starts.
+  - Added live simultaneous-start stress test: `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` checks the deployed D1-backed dry-run start endpoint.
   - Acceptance: documented command or checklist passes before each production deployment.
 
 - [ ] Document incident response.

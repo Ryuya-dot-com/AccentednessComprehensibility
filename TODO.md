@@ -37,6 +37,8 @@ This list tracks the remaining work before using
   - Upload plan rows: 2,545 audio files total; 2,497 main WAV, 4 calibration WAV, 44 ElevenLabs MP3 candidates.
   - Current external-state blocker: `npx wrangler whoami` reports not authenticated; run `npx wrangler login` before upload or Cloudflare dry run.
   - Completion: document the chosen approach and confirm audio URLs are accessible from the live Pages app.
+  - Verification command after HTTPS URLs are generated: `node scripts/validate_audio_hosting.mjs --sample 80`.
+  - Final full-row check before launch: `node scripts/validate_audio_hosting.mjs --sample 0`.
 
 - [ ] Redeploy the current app and verify the live Cloudflare URL.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
@@ -55,6 +57,8 @@ This list tracks the remaining work before using
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
     - `node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required.
+    - `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes.
+    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress` for the final no-Turnstile pilot gate.
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
 
@@ -170,9 +174,10 @@ This list tracks the remaining work before using
 
 - [x] Stress-test simultaneous counterbalance allocation.
   - Script: `scripts/stress_counterbalance_concurrency.py`.
+  - Live script: `scripts/stress_live_counterbalance_concurrency.mjs`.
   - Current report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
   - Current result: 200 simultaneous starts produced exactly 10 assignments per cell; duplicate `participant_key` insertion was rejected.
-  - This is a local SQLite-compatible stress test, not a replacement for a live Cloudflare D1 dry run.
+  - This local SQLite-compatible stress test is now paired with a live D1-backed dry-run stress command before launch.
 
 - [x] Audit lexical balance for style `a` versus style `b` assignments.
   - Reproducible script: `scripts/audit_lexical_balance.py`.
@@ -256,8 +261,10 @@ This list tracks the remaining work before using
 node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
+node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
-node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress
+node scripts/validate_audio_hosting.mjs --sample 80
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 python3 scripts/generate_elevenlabs_practice_audio.py --dry-run
