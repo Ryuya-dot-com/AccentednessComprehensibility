@@ -512,6 +512,13 @@ Before any Prolific launch, run the production preflight:
 node scripts/preflight_production.mjs
 ```
 
+If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass the package location explicitly:
+
+```sh
+node scripts/preflight_production.mjs \
+  --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
+```
+
 The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured and provisional practice reference ratings are reviewed.
 
 After each Cloudflare deployment, run the live deployment check against the public URL:
@@ -520,6 +527,6 @@ After each Cloudflare deployment, run the live deployment check against the publ
 node scripts/check_live_deployment.mjs --allow-turnstile-off
 ```
 
-Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit the flag if `REQUIRE_TURNSTILE=1` is expected. The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, and non-demo manifest state. The current live result is `FAIL`: Cloudflare Pages is still serving an older `app.js`, a 12-row demo `remote_manifest.csv`, and an HTML fallback for the selected practice MP3 path.
+Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit the flag if `REQUIRE_TURNSTILE=1` is expected. The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, and non-demo manifest state. The current live result is `FAIL` only because the public static `/remote_manifest.csv` is still the 12-row demo manifest; live `app.js` and the selected practice MP3 path now pass.
 
 For local-only testing without a Cloudflare API, open the page with `?manual=1&local=1`. Do not use `?local=1` for Prolific data collection because it permits advancing without server persistence.

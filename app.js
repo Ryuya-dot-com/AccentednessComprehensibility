@@ -703,9 +703,18 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) {
-      throw new Error(data.error || `${response.status} ${response.statusText}`);
+      const error = new Error(data.error || data.status || `${response.status} ${response.statusText}`);
+      error.status = response.status;
+      error.data = data;
+      throw error;
     }
     return data;
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
   }
 
   function loadScriptOnce(id, src) {
@@ -874,10 +883,23 @@
 
   async function completeServerSession() {
     if (!state.serverSessionId) return null;
-    return postJson("/api/session/complete", {
+    const payload = {
       session_id: state.serverSessionId,
       session_token: state.serverSessionToken,
-    });
+    };
+    const maxAttempts = 4;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await postJson("/api/session/complete", payload);
+      } catch (error) {
+        const retryable = error.status === 409 && error.data?.retryable === true;
+        if (!retryable || attempt === maxAttempts - 1) throw error;
+        els.progressText.textContent = "Confirming saved responses...";
+        els.railAudio.textContent = "Saving";
+        await delay(700 + attempt * 900);
+      }
+    }
+    return null;
   }
 
   function csvCell(value) {

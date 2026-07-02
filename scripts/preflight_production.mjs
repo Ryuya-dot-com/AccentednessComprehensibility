@@ -4,7 +4,10 @@ import path from "node:path";
 
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
-const PACKAGE_ROOT = path.join(PROJECT_ROOT, "Stimuli_OSF_Release_20260703");
+const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703";
+const PACKAGE_ROOT = path.resolve(
+  argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
+);
 const DEFAULTS = {
   productionManifest: path.join(PACKAGE_ROOT, "remote_manifest.csv"),
   deployedManifest: path.join(REPO_ROOT, "remote_manifest.csv"),
@@ -30,6 +33,18 @@ function argValue(name, fallback = "") {
 
 function hasFlag(name) {
   return process.argv.includes(name);
+}
+
+function defaultPackageRoot() {
+  const adjacentRoot = path.join(PROJECT_ROOT, "Stimuli_OSF_Release_20260703");
+  if (packageRootLooksUsable(DROPBOX_PACKAGE_ROOT)) return DROPBOX_PACKAGE_ROOT;
+  if (packageRootLooksUsable(adjacentRoot)) return adjacentRoot;
+  return adjacentRoot;
+}
+
+function packageRootLooksUsable(packageRoot) {
+  return fs.existsSync(path.join(packageRoot, "remote_manifest.csv")) ||
+    fs.existsSync(path.join(packageRoot, "metadata", "selected_practice_manifest.csv"));
 }
 
 function parseCsv(text) {
@@ -79,6 +94,12 @@ function parseCsv(text) {
 function readCsv(filePath) {
   if (!fs.existsSync(filePath)) return [];
   return parseCsv(fs.readFileSync(filePath, "utf8"));
+}
+
+function csvInputProblems(label, filePath, rows) {
+  if (!fileExists(filePath)) return [`${label} file is missing: ${filePath}`];
+  if (!rows.length) return [`${label} has no data rows: ${filePath}`];
+  return [];
 }
 
 function fileExists(filePath) {
@@ -257,15 +278,20 @@ function checkProlificFlowSourceGuards(options) {
 
   requireSnippet(problems, "app.js", app, "window.location.assign(completionUrl)");
   requireSnippet(problems, "app.js", app, "Your response could not be saved. Please try Continue again.");
+  requireSnippet(problems, "app.js", app, "error.data?.retryable === true");
+  requireSnippet(problems, "app.js", app, "Confirming saved responses...");
   forbidSnippet(problems, "app.js", app, 'params.get("completion_code")');
   forbidSnippet(problems, "app.js", app, 'params.get("PROLIFIC_CODE")');
   requireSnippet(problems, "session/complete.js", complete, "LEFT JOIN rating_trials rt");
   requireSnippet(problems, "session/complete.js", complete, "missingAssignmentCount === 0");
   requireSnippet(problems, "session/complete.js", complete, "prolificCompletionConfig(context.env)");
-  requireSnippet(problems, "session/complete.js", complete, "completed_with_missing_trials");
+  requireSnippet(problems, "session/complete.js", complete, "completion_missing_trials");
+  requireSnippet(problems, "session/complete.js", complete, "retryable: true");
   requireSnippet(problems, "session/complete.js", complete, "completed_too_fast");
+  requireSnippet(problems, "session/complete.js", complete, "insertNonCriticalEvent");
   requireSnippet(problems, "trial.js", trial, "await requireSessionToken(context.request, body, session)");
   requireSnippet(problems, "trial.js", trial, "INSERT OR IGNORE INTO rating_trials");
+  requireSnippet(problems, "trial.js", trial, "insertNonCriticalEvent");
   requireSnippet(problems, "session/start.js", start, "duplicateStartResponse");
   requireSnippet(problems, "session/start.js", start, "participantKey(client, raterId, sessionLabel)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "SELECT COUNT(*)");
@@ -347,34 +373,54 @@ const duration = checkDuration(durationRows);
 const checks = [
   {
     name: "Production manifest structure",
-    problems: checkProductionManifest(productionRows),
+    problems: [
+      ...csvInputProblems("Production manifest", options.productionManifest, productionRows),
+      ...checkProductionManifest(productionRows),
+    ],
     summary: `${productionRows.length} row(s), ${uniqueValues(productionRows, "target_word").size} target word(s)`,
   },
   {
     name: "Production audio hosting",
-    problems: checkAudioHosting(productionRows, deployedRows, options),
+    problems: [
+      ...(options.usingExternalManifestSecret
+        ? []
+        : csvInputProblems("Deployed/repo manifest", options.deployedManifest, deployedRows)),
+      ...checkAudioHosting(productionRows, deployedRows, options),
+    ],
     summary: options.usingExternalManifestSecret
       ? "external COUNTERBALANCE_MANIFEST_URL assumed"
       : `${deployedRows.length} repo remote_manifest row(s)`,
   },
   {
     name: "Audio QC",
-    problems: audioQc.problems,
+    problems: [
+      ...csvInputProblems("Audio QC issues", options.audioQcIssues, audioQcRows),
+      ...audioQc.problems,
+    ],
     summary: audioQc.summary,
   },
   {
     name: "Lexical balance QC",
-    problems: lexical.problems,
+    problems: [
+      ...csvInputProblems("Lexical balance", options.lexicalPairwise, lexicalRows),
+      ...lexical.problems,
+    ],
     summary: lexical.summary,
   },
   {
     name: "Selected practice ratings",
-    problems: checkPractice(practiceRows, options),
+    problems: [
+      ...csvInputProblems("Selected practice manifest", options.selectedPracticeManifest, practiceRows),
+      ...checkPractice(practiceRows, options),
+    ],
     summary: `${practiceRows.length} selected-practice manifest row(s)`,
   },
   {
     name: "Duration lower-bound estimate",
-    problems: duration.problems,
+    problems: [
+      ...csvInputProblems("Duration summary", options.durationSummary, durationRows),
+      ...duration.problems,
+    ],
     summary: duration.summary,
   },
   {

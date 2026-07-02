@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import os
 import sqlite3
 import tempfile
 import threading
@@ -20,10 +21,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = ROOT.parent
-PACKAGE_ROOT = PROJECT_ROOT / "Stimuli_OSF_Release_20260703"
+DROPBOX_PACKAGE_ROOT = Path("/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703")
 SCHEMA = ROOT / "db" / "schema.sql"
-DEFAULT_REPORT = PACKAGE_ROOT / "metadata" / "COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md"
 FIXED_TIMESTAMP = "2026-07-03T00:00:00.000Z"
+
+
+def default_package_root() -> Path:
+    env_root = os.environ.get("STIMULI_PACKAGE_ROOT", "").strip()
+    if env_root:
+        return Path(env_root).expanduser()
+    adjacent_root = PROJECT_ROOT / "Stimuli_OSF_Release_20260703"
+    if package_root_looks_usable(DROPBOX_PACKAGE_ROOT):
+        return DROPBOX_PACKAGE_ROOT
+    if package_root_looks_usable(adjacent_root):
+        return adjacent_root
+    return adjacent_root
+
+
+def package_root_looks_usable(package_root: Path) -> bool:
+    return (package_root / "remote_manifest.csv").exists() or (
+        package_root / "metadata" / "selected_practice_manifest.csv"
+    ).exists()
 
 
 def init_db(path: Path) -> None:
@@ -209,8 +227,11 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=0, help="Defaults to --participants.")
     parser.add_argument("--timeout-s", type=float, default=30.0)
     parser.add_argument("--keep-db", type=Path, default=None)
-    parser.add_argument("--out", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--package-root", type=Path, default=None)
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
+    package_root = args.package_root.expanduser() if args.package_root else default_package_root()
+    report_path = args.out or package_root / "metadata" / "COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md"
 
     if args.participants < 20:
         raise SystemExit("--participants must be at least 20")
@@ -240,8 +261,8 @@ def main() -> int:
             raise RuntimeError(f"allocation spread is too large: {spread}; counts={counts}")
 
         duplicate_participant_key_check(db_path)
-        if args.out:
-            write_report(args.out.expanduser().resolve(), args.participants, workers, counts)
+        if report_path:
+            write_report(report_path.expanduser().resolve(), args.participants, workers, counts)
         print(f"simultaneous starts: {args.participants}")
         print(f"workers: {workers}")
         print(f"assigned_min: {min(values)}")
@@ -249,8 +270,8 @@ def main() -> int:
         print(f"assigned_spread: {spread}")
         print("cell_counts:", " ".join(f"{cell}:{count}" for cell, count in counts))
         print("duplicate_participant_key_check: passed")
-        if args.out:
-            print(f"report: {args.out.expanduser().resolve()}")
+        if report_path:
+            print(f"report: {report_path.expanduser().resolve()}")
         if args.keep_db:
             print(f"database: {db_path}")
     return 0

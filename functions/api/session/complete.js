@@ -15,6 +15,16 @@ import {
   requireSessionToken,
 } from "../_utils.js";
 
+async function insertNonCriticalEvent(db, event) {
+  try {
+    await insertEvent(db, event);
+    return true;
+  } catch (error) {
+    console.warn("non-critical event log failed", error);
+    return false;
+  }
+}
+
 export async function onRequestPost(context) {
   try {
     requireSameOrigin(context.request);
@@ -96,11 +106,59 @@ export async function onRequestPost(context) {
       completedCount === expectedTrialCount &&
       missingAssignmentCount === 0 &&
       orphanTrialCount === 0;
-    let status = hasCompleteAssignmentCoverage ? "completed" : "completed_with_missing_trials";
     const minimumSeconds = minCompletionSeconds(context.env);
     const elapsed = elapsedSeconds(session.started_at, completedAt);
     const startedAtMs = Number(session.started_at_ms || 0);
     const elapsedMs = startedAtMs > 0 ? Math.max(0, completedAtMs - startedAtMs) : null;
+    if (!hasCompleteAssignmentCoverage) {
+      await db
+        .prepare(
+          `UPDATE sessions
+           SET last_seen_at = ?,
+               last_seen_at_ms = ?,
+               completed_trial_count = ?
+           WHERE id = ? AND status = 'started'`,
+        )
+        .bind(completedAt, completedAtMs, completedCount, sessionId)
+        .run();
+
+      await insertNonCriticalEvent(db, {
+        session_id: sessionId,
+        rater_id: session.rater_id,
+        event_type: "session_complete_rejected_missing_trials",
+        event_at: completedAt,
+        payload: {
+          trial_count: session.trial_count,
+          assignment_count: assignmentCount,
+          completed_trial_count: completedCount,
+          missing_assignment_count: missingAssignmentCount,
+          orphan_trial_count: orphanTrialCount,
+          elapsed_seconds: elapsed,
+          elapsed_ms: elapsedMs,
+          dry_run: dryRun,
+        },
+      });
+
+      return jsonResponse(
+        {
+          ok: false,
+          retryable: true,
+          session_id: sessionId,
+          status: "completion_missing_trials",
+          trial_count: Number(session.trial_count || 0),
+          assignment_count: assignmentCount,
+          completed_trial_count: completedCount,
+          missing_assignment_count: missingAssignmentCount,
+          orphan_trial_count: orphanTrialCount,
+          completion_code: "",
+          completion_url: "",
+          redirect_after_ms: 0,
+        },
+        409,
+      );
+    }
+
+    let status = "completed";
     if (
       status === "completed" &&
       minimumSeconds &&
@@ -171,7 +229,7 @@ export async function onRequestPost(context) {
         .run();
     }
 
-    await insertEvent(db, {
+    await insertNonCriticalEvent(db, {
       session_id: sessionId,
       rater_id: session.rater_id,
       event_type: "session_complete",

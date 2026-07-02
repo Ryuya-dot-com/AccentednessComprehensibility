@@ -37,6 +37,16 @@ function assertOptionalAllowed(name, value, allowedValues) {
   assertAllowed(name, text, allowedValues);
 }
 
+async function insertNonCriticalEvent(db, event) {
+  try {
+    await insertEvent(db, event);
+    return true;
+  } catch (error) {
+    console.warn("non-critical event log failed", error);
+    return false;
+  }
+}
+
 export async function onRequestPost(context) {
   try {
     requireSameOrigin(context.request);
@@ -319,7 +329,7 @@ export async function onRequestPost(context) {
       .bind(receivedAt, receivedAtMs, serverSessionId, serverSessionId)
       .run();
 
-    await insertEvent(db, {
+    const eventLogged = await insertNonCriticalEvent(db, {
       session_id: serverSessionId,
       rater_id: cleanText(session.rater_id),
       event_type: "trial_saved",
@@ -336,7 +346,12 @@ export async function onRequestPost(context) {
       },
     });
 
-    return jsonResponse({ ok: true, session_id: serverSessionId, trial_index: trialIndex });
+    return jsonResponse({
+      ok: true,
+      session_id: serverSessionId,
+      trial_index: trialIndex,
+      event_logged: eventLogged,
+    });
   } catch (error) {
     return errorResponse(error.message || "Could not save trial.", error.status || 500);
   }

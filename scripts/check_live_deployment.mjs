@@ -3,14 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const DEFAULT_OUT = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "..",
-  "..",
-  "Stimuli_OSF_Release_20260703",
-  "metadata",
-  "LIVE_DEPLOYMENT_CHECK_20260703.md",
+const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
+const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703";
+const PACKAGE_ROOT = path.resolve(
+  argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
+const DEFAULT_OUT = path.join(PACKAGE_ROOT, "metadata", "LIVE_DEPLOYMENT_CHECK_20260703.md");
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -20,6 +19,18 @@ function argValue(name, fallback = "") {
 
 function hasFlag(name) {
   return process.argv.includes(name);
+}
+
+function defaultPackageRoot() {
+  const adjacentRoot = path.join(PROJECT_ROOT, "Stimuli_OSF_Release_20260703");
+  if (packageRootLooksUsable(DROPBOX_PACKAGE_ROOT)) return DROPBOX_PACKAGE_ROOT;
+  if (packageRootLooksUsable(adjacentRoot)) return adjacentRoot;
+  return adjacentRoot;
+}
+
+function packageRootLooksUsable(packageRoot) {
+  return fs.existsSync(path.join(packageRoot, "remote_manifest.csv")) ||
+    fs.existsSync(path.join(packageRoot, "metadata", "selected_practice_manifest.csv"));
 }
 
 function parseCsv(text) {

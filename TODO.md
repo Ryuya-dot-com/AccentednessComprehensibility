@@ -16,8 +16,8 @@ This list tracks the remaining work before using
 - [x] OSF rename crosswalks are generated for files, folders, and 30 speakers.
 - [x] Draft production manifests are generated from the OSF crosswalk and validate against the app's counterbalance code for all 20 cells.
 - [x] OSF-ready standardized stimulus package is generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`.
-- [ ] Live Cloudflare deployment is currently behind the local implementation: deployed `app.js` still lacks staged-flow, Sheet2 speaker-pattern, selected ElevenLabs practice, and completion-code hardening changes.
-- [ ] Deployed `remote_manifest.csv` still points to demo materials until the production audio host/path is chosen.
+- [x] Live Cloudflare deployment is serving the current app implementation, including staged flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice audio, and completion-code hardening.
+- [ ] Deployed `remote_manifest.csv` still points to demo materials until the production audio host/path is chosen or `COUNTERBALANCE_MANIFEST_URL` is configured.
 - [x] Placeholder practice tones are removed; `app.js` now uses 4 selected ElevenLabs MP3 practice items: `chocolate`, `coffee`, `pizza`, and `sofa`.
 - [x] Top-level local `practice_manifest.csv` and dry-run placeholder audio now point to the selected ElevenLabs MP3 set, not the legacy macOS TTS WAV set.
 - [ ] The selected practice reference ratings still need collaborator listening review before participant launch.
@@ -42,11 +42,11 @@ This list tracks the remaining work before using
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current result: FAIL.
-  - Current live blockers:
-    - `/app.js` is older than the local implementation; it is missing staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, and `response_flow`.
-    - Live `/app.js` still reads `completion_code` / `PROLIFIC_CODE` from URL query parameters.
+  - Current live blocker:
     - Live `/remote_manifest.csv` is still a 12-row demo manifest.
-    - Live selected practice MP3 path falls through to HTML instead of returning `audio/mpeg`.
+  - Current live passes:
+    - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
+    - Live selected practice MP3 path returns `audio/mpeg`.
   - Run after every deployment:
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off` during pilot/no-Turnstile checks.
     - `node scripts/check_live_deployment.mjs` before production if Turnstile is required.
@@ -226,7 +226,7 @@ This list tracks the remaining work before using
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured and three practice reference ratings remain provisional.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation, and stale/dropout finalization.
-  - Current live result: FAIL, because Cloudflare Pages is still serving the old app bundle and demo/static practice paths.
+  - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv`.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 
 - [ ] Review production secrets and access controls.
@@ -250,7 +250,7 @@ This list tracks the remaining work before using
 node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
-node scripts/preflight_production.mjs
+node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off
 python3 scripts/generate_elevenlabs_practice_audio.py --dry-run
 python3 scripts/generate_elevenlabs_practice_audio.py --search-shared-voices --accent japanese --gender male --voice-search english

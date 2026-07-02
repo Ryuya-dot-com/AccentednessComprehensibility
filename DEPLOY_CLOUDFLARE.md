@@ -285,14 +285,14 @@ Generate the production manifest with absolute audio URLs after the public audio
 python3 scripts/generate_production_manifest_from_crosswalk.py \
   --path-mode osf \
   --audio-base-url https://stimuli.example.edu \
-  --out /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_r2_20260703.csv
+  --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 ```
 
 Validate the manifest before setting it in Cloudflare:
 
 ```sh
 node scripts/validate_production_manifest.mjs \
-  --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_r2_20260703.csv
+  --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 ```
 
 Set the manifest URL as a Pages secret if the manifest is hosted outside the repository:
@@ -433,7 +433,7 @@ Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
 ```
 
-The current public deployment fails this check: live `/app.js` is older than the local implementation, live `/remote_manifest.csv` is still the 12-row demo manifest, and the selected ElevenLabs practice MP3 path returns the HTML app shell rather than audio. Do not run Prolific participants until this live check passes or the remaining pilot-only exception is explicitly documented.
+The current public deployment fails this check only because live `/remote_manifest.csv` is still the 12-row demo manifest. Live `/app.js`, the selected ElevenLabs practice MP3 path, production config endpoint, security headers, and admin dry-run protection now pass the scripted check. Do not run Prolific participants until the live manifest check passes or an external `COUNTERBALANCE_MANIFEST_URL` deployment path is explicitly verified.
 
 ## 10. Configure Edge Protection
 
@@ -544,7 +544,7 @@ Before running the actual study:
 - If using an external manifest, set `COUNTERBALANCE_ALLOWED_HOSTS` to the expected manifest/audio hostnames.
 - Run `python3 scripts/audit_lexical_balance.py` and confirm `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/lexical_balance_pairwise_differences.csv` has no unresolved imbalance flags.
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
-- Run `node scripts/preflight_production.mjs`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
+- Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
 - Run `node scripts/check_live_deployment.mjs` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off` and document that exception.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
