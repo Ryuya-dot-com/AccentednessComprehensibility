@@ -78,15 +78,34 @@ function parseCsv(text) {
 
 async function fetchText(baseUrl, pathname) {
   const url = new URL(pathname, baseUrl);
-  const response = await fetch(url, { redirect: "manual" });
+  const response = await fetch(url, { redirect: "manual", cache: "no-store" });
   const text = await response.text();
   return { url: url.toString(), response, text };
 }
 
 async function fetchHead(baseUrl, pathname) {
   const url = new URL(pathname, baseUrl);
-  const response = await fetch(url, { method: "HEAD", redirect: "manual" });
+  const response = await fetch(url, { method: "HEAD", redirect: "manual", cache: "no-store" });
   return { url: url.toString(), response };
+}
+
+async function postJson(baseUrl, pathname, payload) {
+  const url = new URL(pathname, baseUrl);
+  const response = await fetch(url, {
+    method: "POST",
+    redirect: "manual",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { parse_error: true, text: text.slice(0, 240) };
+  }
+  return { url: url.toString(), response, data, text };
 }
 
 function header(response, name) {
@@ -134,6 +153,63 @@ function summarizeHeaders(response) {
   };
 }
 
+async function liveApiDryRunStartCheck(baseUrl) {
+  const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const payload = {
+    rater_id: `live_check_${nonce}`,
+    session_label: `live_check_${nonce}`,
+    task_mode: "combined",
+    platform_version: "live_check",
+    seed: `live_check_${nonce}`,
+    dry_run: "1",
+    prolific_pid: `LIVE_CHECK_${nonce}`,
+    prolific_study_id: "DRY_RUN",
+    prolific_session_id: `LIVE_CHECK_SESSION_${nonce}`,
+    japanese_familiarity_1_6: 3,
+    chinese_familiarity_1_6: 3,
+    counterbalance: { enabled: true },
+    practice_assignment: [],
+  };
+  const result = await postJson(baseUrl, "/api/session/start", payload);
+  const assignment = Array.isArray(result.data.main_assignment)
+    ? result.data.main_assignment
+    : [];
+  const placeholderRows = assignment.filter((row) => row.source_format === "dry_run_placeholder");
+  const nonHttpsRows = assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || ""));
+  const engAccentedRows = assignment.filter((row) =>
+    row.l1_condition === "ENG" && row.pronunciation_condition !== "natural"
+  );
+  const invalidL1Rows = assignment.filter((row) => !["ENG", "JPN", "CHN"].includes(row.l1_condition));
+  const invalidPronunciationRows = assignment.filter((row) =>
+    !["natural", "accented"].includes(row.pronunciation_condition)
+  );
+  const problems = [
+    ...(result.response.status === 200 ? [] : [`/api/session/start returned ${result.response.status}`]),
+    ...(result.data.ok === true ? [] : [`/api/session/start response was not ok: ${result.data.error || result.text.slice(0, 160)}`]),
+    ...(assignment.length === 100 ? [] : [`expected 100 main assignments, got ${assignment.length}`]),
+    ...(placeholderRows.length ? [`${placeholderRows.length} assignment row(s) used dry_run_placeholder fallback`] : []),
+    ...(nonHttpsRows.length ? [`${nonHttpsRows.length} assignment row(s) do not have HTTPS audio_url`] : []),
+    ...(engAccentedRows.length ? [`${engAccentedRows.length} ENG row(s) are not natural`] : []),
+    ...(invalidL1Rows.length ? [`${invalidL1Rows.length} row(s) have invalid l1_condition`] : []),
+    ...(invalidPronunciationRows.length
+      ? [`${invalidPronunciationRows.length} row(s) have invalid pronunciation_condition`]
+      : []),
+  ];
+  return {
+    problems,
+    summary: JSON.stringify({
+      status: result.response.status,
+      ok: result.data.ok === true,
+      dry_run: result.data.dry_run === true,
+      trial_count: result.data.trial_count,
+      main_assignment: assignment.length,
+      counterbalance_cell: result.data.counterbalance?.cell_id || "",
+      placeholder_rows: placeholderRows.length,
+      non_https_rows: nonHttpsRows.length,
+    }),
+  };
+}
+
 function markdown(checks, context) {
   const blockers = checks.flatMap((check) => check.problems.map((problem) => ({ ...check, problem })));
   const lines = [
@@ -163,6 +239,7 @@ const baseUrl = argValue("--base-url", DEFAULT_BASE_URL).replace(/\/+$/, "/");
 const out = path.resolve(argValue("--out", DEFAULT_OUT));
 const allowDemoStaticManifest = hasFlag("--allow-demo-static-manifest");
 const allowTurnstileOff = hasFlag("--allow-turnstile-off");
+const apiDryRunStart = hasFlag("--api-dry-run-start");
 
 const index = await fetchText(baseUrl, "/");
 const app = await fetchText(baseUrl, "/app.js");
@@ -229,6 +306,13 @@ const checks = [
     summary: JSON.stringify(summarizeHeaders(adminDryRun.response)),
   },
 ];
+
+if (apiDryRunStart) {
+  checks.push({
+    name: "Live API dry-run start",
+    ...(await liveApiDryRunStartCheck(baseUrl)),
+  });
+}
 
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, markdown(checks, { baseUrl }));

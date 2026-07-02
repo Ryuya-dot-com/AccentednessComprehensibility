@@ -169,7 +169,7 @@ Priority:
 - [ ] Add security smoke tests.
   - Test missing D1 binding, missing `ADMIN_TOKEN`, invalid admin token, duplicate Prolific starts, invalid trial index, replayed trial save, missing session token, and production `?local=1`.
   - Added production preflight: `node scripts/preflight_production.mjs` checks production manifest shape, demo-manifest leakage, audio QC failures, lexical balance flags, provisional practice ratings, duration summary, and static security files.
-  - Added live deployment check: `node scripts/check_live_deployment.mjs` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, and admin dry-run protection.
+  - Added live deployment check: `node scripts/check_live_deployment.mjs --api-dry-run-start` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, admin dry-run protection, live D1 schema compatibility, and server-side counterbalance assignment.
   - Added local simultaneous-start stress test: `python3 scripts/stress_counterbalance_concurrency.py --participants 200` checks counterbalance spread and duplicate participant-key rejection under same-timestamp starts.
   - Acceptance: documented command or checklist passes before each production deployment.
 

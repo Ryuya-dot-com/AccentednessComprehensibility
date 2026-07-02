@@ -42,14 +42,18 @@ This list tracks the remaining work before using
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current result: FAIL.
-  - Current live blocker:
+  - Current live blockers:
     - Live `/remote_manifest.csv` is still a 12-row demo manifest.
+    - Live `/api/session/start` dry-run currently fails because the remote D1 `rating_assignments` table is missing `speaker_pattern_index`; apply `db/migrations/0011_speaker_pattern.sql`.
+      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0010_staged_response_flow.sql`.
+      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql`.
   - Current live passes:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
     - Live selected practice MP3 path returns `audio/mpeg`.
   - Run after every deployment:
-    - `node scripts/check_live_deployment.mjs --allow-turnstile-off` during pilot/no-Turnstile checks.
-    - `node scripts/check_live_deployment.mjs` before production if Turnstile is required.
+    - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
+    - `node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required.
+    - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
 
 - [x] Verify ENG/native English production stimulus coverage.
@@ -226,7 +230,7 @@ This list tracks the remaining work before using
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured and three practice reference ratings remain provisional.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation, and stale/dropout finalization.
-  - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv`.
+  - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv` and live D1 is missing the `0011_speaker_pattern.sql` columns.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 
 - [ ] Review production secrets and access controls.
@@ -251,7 +255,7 @@ node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
-node scripts/check_live_deployment.mjs --allow-turnstile-off
+node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 python3 scripts/generate_elevenlabs_practice_audio.py --dry-run
 python3 scripts/generate_elevenlabs_practice_audio.py --search-shared-voices --accent japanese --gender male --voice-search english
 python3 scripts/generate_elevenlabs_practice_audio.py --search-shared-voices --accent chinese --gender male --voice-search english

@@ -524,9 +524,11 @@ The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory a
 After each Cloudflare deployment, run the live deployment check against the public URL:
 
 ```sh
-node scripts/check_live_deployment.mjs --allow-turnstile-off
+node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 ```
 
-Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit the flag if `REQUIRE_TURNSTILE=1` is expected. The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, and non-demo manifest state. The current live result is `FAIL` only because the public static `/remote_manifest.csv` is still the 12-row demo manifest; live `app.js` and the selected practice MP3 path now pass.
+Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, and server-side manifest path by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
+
+The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. The current full live result is `FAIL`: public static `/remote_manifest.csv` is still the 12-row demo manifest, and live D1 has not yet received `db/migrations/0011_speaker_pattern.sql`. Live `app.js` and the selected practice MP3 path pass.
 
 For local-only testing without a Cloudflare API, open the page with `?manual=1&local=1`. Do not use `?local=1` for Prolific data collection because it permits advancing without server persistence.
