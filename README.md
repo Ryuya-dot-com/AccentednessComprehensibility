@@ -422,6 +422,16 @@ python3 scripts/generate_r2_upload_commands.py
 
 This writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/upload_to_r2_accentedness_production_stimuli.sh`. Run `npx wrangler login` before executing it.
 
+After the R2 bucket is exposed through a production HTTPS base URL, generate the hosted manifest from the already validated OSF package manifest:
+
+```sh
+node scripts/build_hosted_manifest.mjs \
+  --audio-base-url https://stimuli.example.edu \
+  --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
+```
+
+This preserves the package manifest rows and fills `audio_url` from `audio_file`; it also checks that every manifest audio path is present in `metadata/r2_upload_plan.csv`.
+
 Admin APIs fail closed when `ADMIN_TOKEN` is missing.
 For production, protect `/admin/*` and `/api/admin/*` with Cloudflare Access and set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`; `ADMIN_TOKEN` remains as a second layer.
 

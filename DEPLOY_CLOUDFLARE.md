@@ -286,14 +286,15 @@ https://stimuli.example.edu/
 
 Cloudflare's `r2.dev` public URL is acceptable for development checks, but Cloudflare documents it as non-production and rate-limited. For production, use a custom domain so Cloudflare cache, WAF, access controls, and bot-management options can be applied.
 
-Generate the production manifest with absolute audio URLs after the public audio base URL is known:
+Generate the production manifest with absolute audio URLs after the public audio base URL is known. Prefer the hosted-manifest builder because it preserves the already validated OSF package manifest and only fills `audio_url` from `audio_file`:
 
 ```sh
-python3 scripts/generate_production_manifest_from_crosswalk.py \
-  --path-mode osf \
+node scripts/build_hosted_manifest.mjs \
   --audio-base-url https://stimuli.example.edu \
   --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 ```
+
+This command also checks that every `audio_file` in the manifest exists in `metadata/r2_upload_plan.csv`. Use `scripts/generate_production_manifest_from_crosswalk.py` only when the OSF crosswalk itself has changed and the package manifest must be rebuilt.
 
 Validate the manifest before setting it in Cloudflare:
 

@@ -35,6 +35,7 @@ This list tracks the remaining work before using
   - Deployment guide: `DEPLOY_CLOUDFLARE.md` section "Host Production Audio".
   - R2 upload plan generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/r2_upload_plan.csv`.
   - R2 upload command script generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/upload_to_r2_accentedness_production_stimuli.sh`.
+  - Hosted manifest builder: `scripts/build_hosted_manifest.mjs` fills HTTPS `audio_url` values from the validated OSF package manifest after the R2/custom-domain base URL is known.
   - Upload plan rows: 2,545 audio files total; 2,497 main WAV, 4 calibration WAV, 44 ElevenLabs MP3 candidates.
   - Current external-state blocker: `npx wrangler whoami` reports not authenticated; run `npx wrangler login` before upload or Cloudflare dry run.
   - Completion: document the chosen approach and confirm audio URLs are accessible from the live Pages app.
@@ -267,6 +268,7 @@ python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
 node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress
+node scripts/build_hosted_manifest.mjs --audio-base-url https://stimuli.example.edu --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 node scripts/validate_audio_hosting.mjs --sample 80
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
