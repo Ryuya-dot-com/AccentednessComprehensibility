@@ -47,6 +47,7 @@ This list tracks the remaining work before using
     - Live `/api/session/start` dry-run currently fails because the remote D1 `rating_assignments` table is missing `speaker_pattern_index`; apply `db/migrations/0011_speaker_pattern.sql`.
       - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0010_staged_response_flow.sql`.
       - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql`.
+      - Safer partially-migrated DB path: `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply`.
   - Current live passes:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
     - Live selected practice MP3 path returns `audio/mpeg`.
@@ -254,6 +255,7 @@ This list tracks the remaining work before using
 node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
+node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 python3 scripts/generate_elevenlabs_practice_audio.py --dry-run

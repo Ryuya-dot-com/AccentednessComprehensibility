@@ -383,6 +383,13 @@ If the D1 database was created before Sheet2 speaker-pattern metadata was added,
 wrangler d1 execute <DB_NAME> --file=./db/migrations/0011_speaker_pattern.sql
 ```
 
+For a partially migrated Cloudflare D1 database, use the guarded schema updater after `npx wrangler login`. It checks live columns first, exports a backup when applying, and adds only missing additive columns:
+
+```sh
+node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
+node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply
+```
+
 Configure the Pages Functions D1 binding as `DB`. Set an admin token as a Cloudflare secret:
 
 ```sh

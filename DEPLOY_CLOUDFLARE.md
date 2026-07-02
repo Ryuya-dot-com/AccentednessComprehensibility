@@ -227,6 +227,13 @@ If the database was created before Sheet2 speaker-pattern metadata was added, ru
 npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql
 ```
 
+If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
+
+```sh
+node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
+node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply
+```
+
 ## 6. Host Production Audio
 
 Do not commit the 2,497 main production audio files to the Pages repository. Use Cloudflare R2 or another approved static HTTPS host for production audio. Keep the four built-in practice MP3 files in `practice_training_audio/`; they are small and are part of the app UI.
@@ -530,6 +537,7 @@ Before running the actual study:
 - Apply `db/migrations/0009_response_order_metrics.sql` to existing D1 databases.
 - Apply `db/migrations/0010_staged_response_flow.sql` to existing D1 databases.
 - Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
+- For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply`; it exports a SQL backup first and adds only missing columns.
 - Confirm the Prolific Study URL includes `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
 - Protect `/admin/*` and `/api/admin/*` with Cloudflare Access; set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`.
 - Configure WAF rate limiting rules for participant and admin API paths.
