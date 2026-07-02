@@ -31,32 +31,41 @@ function mulberry32(seed) {
 
 function placeholderMaterials() {
   const materials = [];
+  const speakerIds = (l1) => {
+    const count = l1 === "ENG" ? 5 : 10;
+    const prefix = l1.toLowerCase();
+    return Array.from({ length: count }, (_, index) => `${prefix}_s${String(index + 1).padStart(2, "0")}`);
+  };
   for (const stimulusList of LISTS) {
     for (let wordNumber = 1; wordNumber <= 50; wordNumber += 1) {
       const word = `word${String(wordNumber).padStart(3, "0")}`;
-      materials.push({
-        audio_url: `placeholder/ame/${stimulusList}/${word}.mp3`,
-        target_word: word,
-        participant_id: "AME_PLACEHOLDER",
-        l1_condition: "AME",
-        pronunciation_condition: "natural",
-        stimulus_list: stimulusList,
-        word_number: String(wordNumber),
-        file_name: `ame_${stimulusList}_${word}.mp3`,
-      });
+      for (const participantId of speakerIds("ENG")) {
+        materials.push({
+          audio_url: `placeholder/eng/${participantId}/${stimulusList}/${word}.wav`,
+          target_word: word,
+          participant_id: participantId,
+          l1_condition: "ENG",
+          pronunciation_condition: "natural",
+          stimulus_list: stimulusList,
+          word_number: String(wordNumber),
+          file_name: `${participantId}_${stimulusList}_${word}.wav`,
+        });
+      }
 
       for (const pronunciation of ["natural", "accented"]) {
         for (const l1 of ["JPN", "CHN"]) {
-          materials.push({
-            audio_url: `placeholder/${l1.toLowerCase()}/${pronunciation}/${stimulusList}/${word}.mp3`,
-            target_word: word,
-            participant_id: `${l1}_PLACEHOLDER`,
-            l1_condition: l1,
-            pronunciation_condition: pronunciation,
-            stimulus_list: stimulusList,
-            word_number: String(wordNumber),
-            file_name: `${l1.toLowerCase()}_${pronunciation}_${stimulusList}_${word}.mp3`,
-          });
+          for (const participantId of speakerIds(l1)) {
+            materials.push({
+              audio_url: `placeholder/${l1.toLowerCase()}/${participantId}/${pronunciation}/${stimulusList}/${word}.wav`,
+              target_word: word,
+              participant_id: participantId,
+              l1_condition: l1,
+              pronunciation_condition: pronunciation,
+              stimulus_list: stimulusList,
+              word_number: String(wordNumber),
+              file_name: `${participantId}_${pronunciation}_${stimulusList}_${word}.wav`,
+            });
+          }
         }
       }
     }
@@ -102,9 +111,9 @@ function auditCells(materials) {
 
     const participantSummary = summarizeAssignment(assignment);
     const expectedSummary = {
-      "AME:natural": 20,
       "CHN:accented": 20,
       "CHN:natural": 20,
+      "ENG:natural": 20,
       "JPN:accented": 20,
       "JPN:natural": 20,
     };
@@ -126,9 +135,9 @@ function auditCells(materials) {
 
       const blockCounts = summarizeAssignment(block);
       const expectedBlockCounts = {
-        "AME:natural": 5,
         "CHN:accented": 5,
         "CHN:natural": 5,
+        "ENG:natural": 5,
         "JPN:accented": 5,
         "JPN:natural": 5,
       };

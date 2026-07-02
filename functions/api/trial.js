@@ -108,6 +108,10 @@ export async function onRequestPost(context) {
     assertTextMax("response_order", row.response_order, 120);
     assertTextMax("rating_order", row.rating_order, 80);
     assertTextMax("rating_interaction_sequence", row.rating_interaction_sequence, 240);
+    assertOptionalAllowed("response_flow", row.response_flow, [
+      "single_page",
+      "staged_dictation_then_ratings",
+    ]);
     assertRequiredIntRange("japanese_familiarity_1_6", row.japanese_familiarity_1_6, 1, 6);
     assertRequiredIntRange("chinese_familiarity_1_6", row.chinese_familiarity_1_6, 1, 6);
     assertOptionalAllowed("first_response_field", row.first_response_field, [
@@ -173,6 +177,7 @@ export async function onRequestPost(context) {
           counterbalance_cell, list_comb, pronunciation_style, stimulus_list,
           l1_condition, pronunciation_condition, block_index, block_list,
           within_block_index, block_trial_count,
+          speaker_pattern_index, speaker_pattern_speaker,
           trial_index, trial_total, completed_at, played_at,
           source_path, audio_url, file_name, participant_id, native_language,
           accent_condition, condition, talker, pass_number, word_number,
@@ -185,6 +190,9 @@ export async function onRequestPost(context) {
           practice_feedback, practice_requires_reason, practice_reason,
           japanese_familiarity_1_6, chinese_familiarity_1_6,
           first_key_rt_ms, submit_rt_ms, audio_duration_s, replay_count,
+          response_flow, dictation_played_at, rating_played_at,
+          dictation_submit_rt_ms, rating_submit_rt_ms,
+          dictation_audio_duration_s, rating_audio_duration_s,
           response_order, first_response_field, first_response_rt_ms,
           rating_order, rating_interaction_sequence, first_rating_field,
           first_rating_rt_ms, comprehensibility_first_rt_ms,
@@ -197,7 +205,8 @@ export async function onRequestPost(context) {
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?
         )`,
       )
       .bind(
@@ -224,6 +233,8 @@ export async function onRequestPost(context) {
         nullableText(assignment.block_list),
         nullableInt(assignment.within_block_index),
         nullableInt(assignment.block_trial_count),
+        nullableInt(assignment.speaker_pattern_index),
+        nullableText(assignment.speaker_pattern_speaker),
         trialIndex,
         nullableInt(session.trial_count) || nullableInt(row.trial_total) || 0,
         nullableText(row.completed_at) || receivedAt,
@@ -268,6 +279,13 @@ export async function onRequestPost(context) {
         nullableNumber(row.submit_rt_ms),
         nullableNumber(row.audio_duration_s),
         nullableInt(row.replay_count) || 0,
+        nullableText(row.response_flow),
+        nullableText(row.dictation_played_at),
+        nullableText(row.rating_played_at),
+        nullableNumber(row.dictation_submit_rt_ms),
+        nullableNumber(row.rating_submit_rt_ms),
+        nullableNumber(row.dictation_audio_duration_s),
+        nullableNumber(row.rating_audio_duration_s),
         nullableText(row.response_order),
         nullableText(row.first_response_field),
         nullableNumber(row.first_response_rt_ms),

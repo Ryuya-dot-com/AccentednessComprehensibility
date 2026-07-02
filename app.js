@@ -4,11 +4,21 @@
   const VERSION = "pronunciation_rating_v0.5.0";
   const DEFAULT_REMOTE_MANIFEST_URL = "remote_manifest.csv";
   const AUDIO_EXTENSIONS = /\.(wav|mp3|m4a|ogg|webm)$/i;
-  const REQUIRED_MANIFEST_FILE_COLUMNS = ["audio_file", "file", "filename", "path"];
+  const REQUIRED_MANIFEST_FILE_COLUMNS = [
+    "audio_file",
+    "osf_audio_file",
+    "standardized_audio_file",
+    "new_relative_path",
+    "file",
+    "filename",
+    "path",
+  ];
   const REMOTE_AUDIO_URL_COLUMNS = ["audio_url", "url", "source_url", "raw_url"];
   const DEFAULT_BREAK_INTERVAL = 40;
   const DISTRACTOR_PROBLEM_COUNT = 6;
   const RATING_SCALE_MAX = 9;
+  const AUDIO_REPLAY_ALLOWED = false;
+  const STAGED_COMBINED_FLOW = true;
   const DEFAULT_PROLIFIC_COMPLETION_CODE = "CONTACT_RESEARCHER";
   const ONBOARDING_STEPS = ["identity", "familiarity", "instructions", "ready"];
   const SEARCH_PARAMS = new URLSearchParams(window.location.search);
@@ -25,62 +35,58 @@
     {
       practice_kind: "combined",
       practice_group: "natural",
-      word: "lantern",
-      file_name: "practice_rating_natural_01_lantern.mp3",
-      audio_url: "practice_training_audio/rating_natural_01_lantern.mp3",
+      word: "chocolate",
+      file_name: "chocolate__eng_bella.mp3",
+      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3",
+      l1_condition: "ENG",
+      pronunciation_condition: "natural",
+      talker: "practice_eng_bella",
+      voice_variant: "eng_bella",
       expert_comprehensibility_1_9: 1,
       expert_accentedness_1_9: 1,
-      placeholder_audio: true,
-    },
-    {
-      practice_kind: "combined",
-      practice_group: "natural",
-      word: "velvet",
-      file_name: "practice_rating_natural_02_velvet.mp3",
-      audio_url: "practice_training_audio/rating_natural_02_velvet.mp3",
-      expert_comprehensibility_1_9: 2,
-      expert_accentedness_1_9: 1,
-      placeholder_audio: true,
-    },
-    {
-      practice_kind: "combined",
-      practice_group: "strong_accent",
-      word: "kettle",
-      file_name: "practice_rating_strong_01_kettle.mp3",
-      audio_url: "practice_training_audio/rating_strong_01_kettle.mp3",
-      expert_comprehensibility_1_9: 8,
-      expert_accentedness_1_9: 9,
-      placeholder_audio: true,
-    },
-    {
-      practice_kind: "combined",
-      practice_group: "strong_accent",
-      word: "marble",
-      file_name: "practice_rating_strong_02_marble.mp3",
-      audio_url: "practice_training_audio/rating_strong_02_marble.mp3",
-      expert_comprehensibility_1_9: 9,
-      expert_accentedness_1_9: 8,
-      placeholder_audio: true,
+      practice_note: "Selected ElevenLabs practice MP3. Loudness-normalized with ffmpeg loudnorm I=-23 LRA=7 TP=-2.",
     },
     {
       practice_kind: "combined",
       practice_group: "mild_accent",
-      word: "compass",
-      file_name: "practice_rating_mild_01_compass.mp3",
-      audio_url: "practice_training_audio/rating_mild_01_compass.mp3",
-      expert_comprehensibility_1_9: 4,
+      word: "coffee",
+      file_name: "coffee__jpn_yusuke_stronger.mp3",
+      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/coffee__jpn_yusuke_stronger.mp3",
+      l1_condition: "JPN",
+      pronunciation_condition: "accented",
+      talker: "practice_jpn_yusuke_stronger",
+      voice_variant: "jpn_yusuke_stronger",
+      expert_comprehensibility_1_9: 3,
       expert_accentedness_1_9: 4,
-      placeholder_audio: true,
+      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
     },
     {
       practice_kind: "combined",
-      practice_group: "mild_accent",
-      word: "meadow",
-      file_name: "practice_rating_mild_02_meadow.mp3",
-      audio_url: "practice_training_audio/rating_mild_02_meadow.mp3",
+      practice_group: "strong_accent",
+      word: "pizza",
+      file_name: "pizza__jpn_lia_stronger.mp3",
+      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/pizza__jpn_lia_stronger.mp3",
+      l1_condition: "JPN",
+      pronunciation_condition: "accented",
+      talker: "practice_jpn_lia_stronger",
+      voice_variant: "jpn_lia_stronger",
       expert_comprehensibility_1_9: 5,
-      expert_accentedness_1_9: 5,
-      placeholder_audio: true,
+      expert_accentedness_1_9: 6,
+      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
+    },
+    {
+      practice_kind: "combined",
+      practice_group: "strong_accent",
+      word: "sofa",
+      file_name: "sofa__chn_deep_bass_stronger.mp3",
+      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/sofa__chn_deep_bass_stronger.mp3",
+      l1_condition: "CHN",
+      pronunciation_condition: "accented",
+      talker: "practice_chn_deep_bass_stronger",
+      voice_variant: "chn_deep_bass_stronger",
+      expert_comprehensibility_1_9: 7,
+      expert_accentedness_1_9: 8,
+      practice_note: "Selected stronger Chinese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
     },
   ];
 
@@ -179,6 +185,14 @@
     currentAudio: null,
     audioStartMs: null,
     playedAtIso: "",
+    trialStage: "single",
+    dictationAudioStartMs: null,
+    ratingAudioStartMs: null,
+    dictationPlayedAtIso: "",
+    ratingPlayedAtIso: "",
+    dictationSubmitRtMs: null,
+    dictationAudioDurationS: null,
+    ratingAudioDurationS: null,
     firstKeyRtMs: null,
     replayCount: 0,
     responseTrace: null,
@@ -460,6 +474,37 @@
     state.responseTrace = newResponseTrace();
   }
 
+  function itemRequiresDictation(item = currentTrial()) {
+    if (isPracticeTrial(item)) return item.practice_kind === "combined";
+    return els.taskMode.value === "combined" || els.taskMode.value === "dictation";
+  }
+
+  function itemRequiresRatings(item = currentTrial()) {
+    if (isPracticeTrial(item)) return item.practice_kind === "combined";
+    return els.taskMode.value === "combined" || els.taskMode.value === "ratings";
+  }
+
+  function usesStagedResponseFlow(item = currentTrial()) {
+    return Boolean(
+      STAGED_COMBINED_FLOW &&
+        item &&
+        itemRequiresDictation(item) &&
+        itemRequiresRatings(item),
+    );
+  }
+
+  function initialTrialStage(item = currentTrial()) {
+    return usesStagedResponseFlow(item) ? "dictation" : "single";
+  }
+
+  function currentStagePlayed() {
+    if (usesStagedResponseFlow()) {
+      if (state.trialStage === "dictation") return Boolean(state.dictationAudioStartMs);
+      if (state.trialStage === "ratings") return Boolean(state.ratingAudioStartMs);
+    }
+    return Boolean(state.audioStartMs);
+  }
+
   function currentResponseRtMs() {
     return state.audioStartMs ? performance.now() - state.audioStartMs : null;
   }
@@ -531,12 +576,7 @@
   }
 
   function prolificCompletionCode() {
-    const params = new URLSearchParams(window.location.search);
-    return (
-      params.get("completion_code") ||
-      params.get("PROLIFIC_CODE") ||
-      DEFAULT_PROLIFIC_COMPLETION_CODE
-    );
+    return DEFAULT_PROLIFIC_COMPLETION_CODE;
   }
 
   function ensureSessionLabel() {
@@ -558,21 +598,27 @@
       audio_url: item.audio_url,
       file_name: item.file_name,
       target_word: item.word,
-      participant_id: "practice",
-      native_language: "",
+      participant_id: item.talker || "practice",
+      native_language: item.l1_condition || "",
       accent_condition: item.practice_group,
-      condition: "practice_combined",
-      talker: "PLACEHOLDER_TALKER",
+      condition: `practice_${item.pronunciation_condition || item.practice_group}`,
+      talker: item.talker || "practice_talker",
       pass_number: "",
       word_number: String(index + 1),
       trial_number: String(index + 1),
       take_number: "",
       spoken_form: item.word,
-      practice_note: "PLACEHOLDER combined practice item. Replace audio and reference ratings before launch.",
-      source_format: "practice_placeholder",
+      practice_note: item.practice_note || "",
+      source_format: item.source_format || "practice_elevenlabs_mp3_norm",
+      stimulus_list: "practice",
+      l1_condition: item.l1_condition || "",
+      pronunciation_condition: item.pronunciation_condition || "",
+      speaker_pattern_index: item.speaker_pattern_index || "",
+      speaker_pattern_speaker: item.speaker_pattern_speaker || "",
+      voice_variant: item.voice_variant || "",
       expert_comprehensibility_1_9: item.expert_comprehensibility_1_9,
       expert_accentedness_1_9: item.expert_accentedness_1_9,
-      placeholder_audio: item.placeholder_audio,
+      placeholder_audio: Boolean(item.placeholder_audio),
     }));
   }
 
@@ -586,6 +632,8 @@
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
+      speaker_pattern_index: item.speaker_pattern_index || "",
+      speaker_pattern_speaker: item.speaker_pattern_speaker || "",
       block_index: item.block_index || "",
       block_list: item.block_list || "",
       within_block_index: item.within_block_index || "",
@@ -618,6 +666,8 @@
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
+      speaker_pattern_index: item.speaker_pattern_index || "",
+      speaker_pattern_speaker: item.speaker_pattern_speaker || "",
       block_index: item.block_index || "",
       block_list: item.block_list || "",
       within_block_index: item.within_block_index || "",
@@ -989,7 +1039,7 @@
 
   function normalizeL1Condition(value) {
     const text = String(value || "").trim().toLowerCase();
-    if (["ame", "american", "us", "usa", "english", "native_english"].includes(text)) return "AME";
+    if (["eng", "english", "native_english", "ame", "american", "us", "usa"].includes(text)) return "ENG";
     if (["jpn", "jp", "japanese", "japan"].includes(text)) return "JPN";
     if (["chn", "cn", "zh", "chinese", "china", "mandarin"].includes(text)) return "CHN";
     return "";
@@ -1003,7 +1053,14 @@
   }
 
   function participantIdFromRow(row) {
-    return valueFrom(row, ["participant_id", "participant", "speaker_id", "speaker"]);
+    return valueFrom(row, [
+      "participant_id",
+      "participant",
+      "proposed_speaker_id",
+      "l1_speaker_id",
+      "speaker_id",
+      "speaker",
+    ]);
   }
 
   function resolveUrl(value, baseUrl = window.location.href) {
@@ -1032,13 +1089,13 @@
       "accent",
       "style",
     ]));
-    const pronunciationReady = l1 === "AME"
+    const pronunciationReady = l1 === "ENG"
       ? (!pronunciation || pronunciation === "natural")
       : Boolean(pronunciation);
     return Boolean(wordNumber && l1 && pronunciationReady);
   }
 
-  function displayFileNameFromSource(sourcePath, fallback = "audio.mp3") {
+  function displayFileNameFromSource(sourcePath, fallback = "audio.wav") {
     const key = fileKey(sourcePath);
     return key || fallback;
   }
@@ -1135,18 +1192,18 @@
         source_path: sourcePath,
         file_name: file.name,
         target_word: targetWord,
-        participant_id: valueFrom(manifest, ["participant_id", "participant", "speaker_id", "speaker"]) || parsed.participant_id || "",
+        participant_id: participantIdFromRow(manifest) || parsed.participant_id || "",
         native_language: valueFrom(manifest, ["native_language", "native", "l1"]) || parsed.native_language || "",
         condition: valueFrom(manifest, ["condition", "pass_condition", "variability_condition"]) || parsed.condition || "",
         accent_condition: valueFrom(manifest, ["accent_condition", "accent"]) || "",
-        talker: valueFrom(manifest, ["talker", "talker_id", "voice", "voice_alias"]) || parsed.talker || "",
+        talker: valueFrom(manifest, ["talker", "global_speaker_id", "talker_id", "voice", "voice_alias"]) || parsed.talker || "",
         pass_number: valueFrom(manifest, ["pass_number", "pass"]) || parsed.pass_number || "",
         trial_number: valueFrom(manifest, ["trial_number", "trial"]) || parsed.trial_number || "",
         word_number: valueFrom(manifest, ["word_number", "word_id", "item_id"]) || parsed.word_number || "",
         take_number: valueFrom(manifest, ["take_number", "take"]) || parsed.take_number || "",
         spoken_form: valueFrom(manifest, ["spoken_form", "spoken_text", "prompt"]),
         practice_note: valueFrom(manifest, ["practice_note", "note", "notes"]),
-        source_format: parsed.source_format,
+        source_format: valueFrom(manifest, ["source_format"]) || parsed.source_format,
         manifest,
       };
     });
@@ -1157,7 +1214,7 @@
   function remoteRowToItem(row, manifestUrl, index, participantId = "") {
     const audioUrl = remoteAudioUrlFromRow(row, manifestUrl);
     const sourcePath = valueFrom(row, REQUIRED_MANIFEST_FILE_COLUMNS) || audioUrl;
-    const fileName = displayFileNameFromSource(sourcePath || audioUrl, `remote_${String(index + 1).padStart(3, "0")}.mp3`);
+    const fileName = displayFileNameFromSource(sourcePath || audioUrl, `remote_${String(index + 1).padStart(3, "0")}.wav`);
     const parsed = parseRecordingName(fileName);
     const targetWord = valueFrom(row, ["target_word", "word", "item", "expected_word"]) || parsed.target_word || "";
     const l1Raw = valueFrom(row, ["l1_condition", "l1", "native_language", "native", "speaker_l1"]) || parsed.native_language || "";
@@ -1184,14 +1241,14 @@
       stimulus_list: valueFrom(row, ["stimulus_list", "list", "list_id", "counterbalance_list"]).toUpperCase(),
       condition: valueFrom(row, ["condition", "pass_condition", "variability_condition"]) || parsed.condition || "",
       accent_condition: pronunciationCondition,
-      talker: valueFrom(row, ["talker", "talker_id", "voice", "voice_alias"]) || parsed.talker || "",
+      talker: valueFrom(row, ["talker", "global_speaker_id", "talker_id", "voice", "voice_alias"]) || parsed.talker || "",
       pass_number: valueFrom(row, ["pass_number", "pass"]) || parsed.pass_number || "",
       trial_number: valueFrom(row, ["trial_number", "trial"]) || parsed.trial_number || "",
       word_number: valueFrom(row, ["word_number", "word_id", "item_id", "word_no"]) || parsed.word_number || "",
       take_number: valueFrom(row, ["take_number", "take"]) || parsed.take_number || "",
       spoken_form: valueFrom(row, ["spoken_form", "spoken_text", "prompt"]),
       practice_note: valueFrom(row, ["practice_note", "note", "notes"]),
-      source_format: "github_remote",
+      source_format: valueFrom(row, ["source_format"]) || "github_remote",
       manifest: row,
     };
   }
@@ -1340,7 +1397,7 @@
       updateSelectedMaterialSummary();
       throw new Error(
         COUNTERBALANCE_ENABLED
-          ? "The manifest needs rows with audio_file/audio_url, word_number, l1_condition/native_language, natural pronunciation for AME rows, and natural/accented pronunciation for JPN/CHN rows."
+          ? "The manifest needs rows with audio_file/audio_url, word_number, l1_condition/native_language, natural pronunciation for ENG rows, and natural/accented pronunciation for JPN/CHN rows."
           : "The manifest needs rows with participant_id plus audio_file or audio_url.",
       );
     }
@@ -1526,12 +1583,16 @@
   }
 
   function setResponseInputsEnabled(enabled) {
+    const staged = usesStagedResponseFlow();
+    const dictationActive = !staged || state.trialStage === "dictation";
+    const ratingsActive = !staged || state.trialStage === "ratings";
     if (requiresDictation()) {
-      els.dictationInput.disabled = !enabled || Boolean(els.dictationUnidentified?.checked);
-      if (els.dictationUnidentified) els.dictationUnidentified.disabled = !enabled;
+      const canUseDictation = enabled && dictationActive;
+      els.dictationInput.disabled = !canUseDictation || Boolean(els.dictationUnidentified?.checked);
+      if (els.dictationUnidentified) els.dictationUnidentified.disabled = !canUseDictation;
     }
     if (requiresRatings()) {
-      setScaleInputsDisabled(!enabled);
+      setScaleInputsDisabled(!(enabled && ratingsActive));
     }
   }
 
@@ -1552,7 +1613,7 @@
     }
     if (els.practiceReasonBlock) els.practiceReasonBlock.classList.add("hidden");
     if (els.practiceReason) els.practiceReason.value = "";
-    if (els.nextBtn) els.nextBtn.textContent = "Continue";
+    updateNextButtonLabel();
   }
 
   function practiceRequiresReason(feedback) {
@@ -1582,6 +1643,37 @@
         `Accent reference: ${expertAccent}; your rating: ${userAccent}.\n` +
         "These reference ratings are only for practice.",
     };
+  }
+
+  function shouldAdvanceToRatingStage() {
+    return usesStagedResponseFlow() && state.trialStage === "dictation";
+  }
+
+  function advanceToRatingStage() {
+    state.dictationSubmitRtMs = currentResponseRtMs();
+    cleanupAudio();
+    state.audioStartMs = null;
+    state.trialStage = "ratings";
+    els.playBtn.disabled = false;
+    els.playBtn.textContent = "Play audio";
+    els.audioState.textContent = "Press Play audio to begin the rating part.";
+    els.railAudio.textContent = "Pending";
+    els.trialTitle.textContent = trialTitleText();
+    updateTaskModeVisibility();
+    setResponseInputsEnabled(false);
+    updateNextButtonLabel();
+    updateNextState();
+    logServerEvent(
+      "rating_stage_shown",
+      {
+        phase: state.phase,
+        file_name: currentTrial()?.file_name || "",
+        target_word: currentTrial()?.target_word || "",
+        dictation_submit_rt_ms: rtCell(state.dictationSubmitRtMs),
+      },
+      state.currentIndex + 1,
+    );
+    els.playBtn.focus();
   }
 
   async function startSession() {
@@ -1652,11 +1744,41 @@
     showTrial(0);
   }
 
+  function trialTitleText(item = currentTrial()) {
+    if (usesStagedResponseFlow(item)) {
+      return state.trialStage === "ratings" ? "Rate the word" : "Identify the word";
+    }
+    return isPracticeTrial(item) ? "Practice" : "Listen and answer";
+  }
+
+  function updateNextButtonLabel() {
+    if (!els.nextBtn) return;
+    const item = currentTrial();
+    if (state.pendingPracticeRow) {
+      els.nextBtn.textContent = "Continue";
+    } else if (usesStagedResponseFlow(item) && state.trialStage === "dictation") {
+      els.nextBtn.textContent = "Continue to ratings";
+    } else if (isPracticeTrial(item)) {
+      els.nextBtn.textContent = "Check practice answer";
+    } else {
+      els.nextBtn.textContent = "Continue";
+    }
+  }
+
   function showTrial(index) {
     cleanupAudio();
     state.currentIndex = index;
+    const item = currentTrial();
     state.audioStartMs = null;
     state.playedAtIso = "";
+    state.trialStage = initialTrialStage(item);
+    state.dictationAudioStartMs = null;
+    state.ratingAudioStartMs = null;
+    state.dictationPlayedAtIso = "";
+    state.ratingPlayedAtIso = "";
+    state.dictationSubmitRtMs = null;
+    state.dictationAudioDurationS = null;
+    state.ratingAudioDurationS = null;
     state.firstKeyRtMs = null;
     state.replayCount = 0;
     resetResponseTrace();
@@ -1674,20 +1796,19 @@
     els.nextBtn.disabled = true;
     els.playBtn.disabled = false;
     els.playBtn.textContent = "Play audio";
-    els.audioState.textContent = "Press Play audio to begin.";
+    els.audioState.textContent = usesStagedResponseFlow(item)
+      ? "Press Play audio to begin the word-identification part."
+      : "Press Play audio to begin.";
     updateTaskModeVisibility();
     setResponseInputsEnabled(false);
 
     const trialNumber = index + 1;
     const total = state.trials.length;
-    const item = currentTrial();
     els.taskPhase.textContent = isPracticeTrial(item)
       ? `Practice ${trialNumber} of ${total}`
       : `Question ${trialNumber} of ${total}`;
-    els.trialTitle.textContent = isPracticeTrial(item)
-      ? "Practice"
-      : "Listen and answer";
-    els.nextBtn.textContent = isPracticeTrial(item) ? "Check practice answer" : "Continue";
+    els.trialTitle.textContent = trialTitleText(item);
+    updateNextButtonLabel();
     els.progressFill.style.width = `${Math.max(0, (index / total) * 100)}%`;
     els.progressText.textContent = `${index} of ${total} completed`;
     els.railMode.textContent = formatTaskMode(els.taskMode.value);
@@ -1719,20 +1840,77 @@
   }
 
   function markAudioPlaybackStarted() {
-    const isReplay = Boolean(state.audioStartMs);
+    const isReplay = currentStagePlayed();
     if (isReplay) {
       state.replayCount += 1;
     } else {
-      state.audioStartMs = performance.now();
-      state.playedAtIso = new Date().toISOString();
+      const startedAtMs = performance.now();
+      const startedAtIso = new Date().toISOString();
+      state.audioStartMs = startedAtMs;
+      if (!state.playedAtIso) state.playedAtIso = startedAtIso;
+      if (usesStagedResponseFlow()) {
+        if (state.trialStage === "dictation") {
+          state.dictationAudioStartMs = startedAtMs;
+          state.dictationPlayedAtIso = startedAtIso;
+        } else if (state.trialStage === "ratings") {
+          state.ratingAudioStartMs = startedAtMs;
+          state.ratingPlayedAtIso = startedAtIso;
+        }
+      } else {
+        state.playedAtIso = startedAtIso;
+      }
     }
     return isReplay;
   }
 
+  function recordCurrentStageAudioDuration(duration) {
+    if (!Number.isFinite(duration)) return;
+    if (usesStagedResponseFlow()) {
+      if (state.trialStage === "dictation") {
+        state.dictationAudioDurationS = duration;
+      } else if (state.trialStage === "ratings") {
+        state.ratingAudioDurationS = duration;
+      }
+    }
+  }
+
+  function resetPlaybackAttemptAfterError() {
+    if (usesStagedResponseFlow()) {
+      if (state.trialStage === "dictation") {
+        state.dictationAudioStartMs = null;
+        state.dictationPlayedAtIso = "";
+        state.dictationAudioDurationS = null;
+      } else if (state.trialStage === "ratings") {
+        state.ratingAudioStartMs = null;
+        state.ratingPlayedAtIso = "";
+        state.ratingAudioDurationS = null;
+      }
+      state.playedAtIso = state.dictationPlayedAtIso || state.ratingPlayedAtIso || "";
+    } else {
+      state.playedAtIso = "";
+    }
+    state.audioStartMs = null;
+    els.railAudio.textContent = "Error";
+    setResponseInputsEnabled(false);
+    els.nextBtn.disabled = true;
+  }
+
+  function responsePromptAfterPlayback() {
+    const dictation = requiresDictation();
+    const ratings = requiresRatings();
+    if (usesStagedResponseFlow()) {
+      return state.trialStage === "ratings" ? "Choose both ratings." : "Type the word you heard.";
+    }
+    if (dictation && ratings) return "Type the word and choose both ratings.";
+    if (dictation) return "Type the word you heard.";
+    if (ratings) return "Choose both ratings.";
+    return "Continue when ready.";
+  }
+
   function enableResponsesAfterPlayback() {
-    els.playBtn.disabled = false;
-    els.playBtn.textContent = "Play again";
-    els.audioState.textContent = "Audio played. Type the word and choose both ratings.";
+    els.playBtn.disabled = !AUDIO_REPLAY_ALLOWED;
+    els.playBtn.textContent = AUDIO_REPLAY_ALLOWED ? "Play again" : "Audio played";
+    els.audioState.textContent = `Audio played. ${responsePromptAfterPlayback()}`;
     els.railAudio.textContent = "Played";
     setResponseInputsEnabled(true);
     if (requiresDictation()) {
@@ -1767,6 +1945,7 @@
       "placeholder_audio_play_start",
       {
         phase: state.phase,
+        trial_stage: state.trialStage,
         file_name: item.file_name,
         practice_kind: item.practice_kind,
         is_replay: isReplay,
@@ -1781,12 +1960,19 @@
       oscillator.stop(audioCtx.currentTime + 0.65);
     });
     await audioCtx.close();
+    recordCurrentStageAudioDuration(0.65);
     enableResponsesAfterPlayback();
   }
 
   async function playCurrentAudio() {
     const item = state.trials[state.currentIndex];
     if (!item) return;
+    if (!AUDIO_REPLAY_ALLOWED && currentStagePlayed()) {
+      els.playBtn.disabled = true;
+      els.playBtn.textContent = "Audio played";
+      els.audioState.textContent = `Audio already played. ${responsePromptAfterPlayback()}`;
+      return;
+    }
 
     cleanupAudio();
     if (item.placeholder_audio) {
@@ -1814,6 +2000,7 @@
       "audio_play_start",
       {
         file_name: item.file_name,
+        trial_stage: state.trialStage,
         is_replay: isReplay,
         play_rt_ms: rtCell(currentResponseRtMs()),
         replay_count: state.replayCount,
@@ -1826,22 +2013,25 @@
         "audio_play_end",
         {
           file_name: item.file_name,
+          trial_stage: state.trialStage,
           duration_s: Number.isFinite(audio.duration) ? audio.duration : "",
         },
         state.currentIndex + 1,
       );
+      recordCurrentStageAudioDuration(audio.duration);
       enableResponsesAfterPlayback();
     }, { once: true });
 
     audio.addEventListener("error", () => {
+      resetPlaybackAttemptAfterError();
       els.audioState.textContent = "This audio file could not be played.";
-      els.railAudio.textContent = "Error";
       els.playBtn.disabled = false;
       logServerEvent(
         "audio_play_error",
         {
           file_name: item.file_name,
           audio_url: item.audio_url || "",
+          trial_stage: state.trialStage,
         },
         state.currentIndex + 1,
       );
@@ -1890,6 +2080,7 @@
   }
 
   function updateNextState() {
+    updateNextButtonLabel();
     if (state.pendingPracticeFeedback) {
       const reasonReady =
         !practiceRequiresReason(state.pendingPracticeFeedback) ||
@@ -1897,7 +2088,7 @@
       els.nextBtn.disabled = !reasonReady;
       return;
     }
-    const played = Boolean(state.audioStartMs);
+    const played = currentStagePlayed();
     const dictationReady = !requiresDictation() ||
       Boolean(els.dictationInput.value.trim()) ||
       Boolean(els.dictationUnidentified?.checked);
@@ -1905,28 +2096,32 @@
       selectedScale("comprehensibility") &&
       selectedScale("accentedness")
     );
-    const ready = played && dictationReady && ratingReady;
+    let ready = played && dictationReady && ratingReady;
+    if (usesStagedResponseFlow()) {
+      ready = state.trialStage === "dictation"
+        ? played && dictationReady
+        : played && ratingReady;
+    }
     els.nextBtn.disabled = !ready;
   }
 
   function requiresDictation() {
-    const item = currentTrial();
-    if (isPracticeTrial(item)) return item.practice_kind === "combined";
-    return els.taskMode.value === "combined" || els.taskMode.value === "dictation";
+    return itemRequiresDictation(currentTrial());
   }
 
   function requiresRatings() {
-    const item = currentTrial();
-    if (isPracticeTrial(item)) return item.practice_kind === "combined";
-    return els.taskMode.value === "combined" || els.taskMode.value === "ratings";
+    return itemRequiresRatings(currentTrial());
   }
 
   function updateTaskModeVisibility() {
     const dictation = requiresDictation();
     const ratings = requiresRatings();
-    els.dictationBlock.classList.toggle("hidden", !dictation);
-    els.comprehensibilityBlock.classList.toggle("hidden", !ratings);
-    els.accentednessBlock.classList.toggle("hidden", !ratings);
+    const staged = usesStagedResponseFlow();
+    const dictationVisible = dictation && (!staged || state.trialStage === "dictation");
+    const ratingsVisible = ratings && (!staged || state.trialStage === "ratings");
+    els.dictationBlock.classList.toggle("hidden", !dictationVisible);
+    els.comprehensibilityBlock.classList.toggle("hidden", !ratingsVisible);
+    els.accentednessBlock.classList.toggle("hidden", !ratingsVisible);
     if (!dictation) {
       els.dictationInput.value = "";
       els.dictationInput.disabled = true;
@@ -1946,7 +2141,16 @@
     const normalizedTyped = normalizeResponse(typed);
     const normalizedTarget = normalizeResponse(target);
     const submitRt = state.audioStartMs ? performance.now() - state.audioStartMs : null;
+    const ratingSubmitRt = usesStagedResponseFlow() && state.ratingAudioStartMs
+      ? performance.now() - state.ratingAudioStartMs
+      : submitRt;
     const currentAudio = state.currentAudio;
+    const responseFlow = usesStagedResponseFlow() ? "staged_dictation_then_ratings" : "single_page";
+    const audioDuration = usesStagedResponseFlow()
+      ? state.ratingAudioDurationS || state.dictationAudioDurationS
+      : currentAudio && Number.isFinite(currentAudio.duration)
+        ? currentAudio.duration
+        : null;
     const intelligibilityStatus = dictationRequired
       ? unidentified
         ? "unidentified"
@@ -1970,6 +2174,8 @@
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
+      speaker_pattern_index: item.speaker_pattern_index || "",
+      speaker_pattern_speaker: item.speaker_pattern_speaker || "",
       block_index: item.block_index || "",
       block_list: item.block_list || "",
       within_block_index: item.within_block_index || "",
@@ -2003,9 +2209,20 @@
       intelligibility_response_status: intelligibilityStatus,
       intelligibility_unidentified: unidentified ? 1 : 0,
       first_key_rt_ms: state.firstKeyRtMs === null ? "" : state.firstKeyRtMs.toFixed(1),
-      submit_rt_ms: submitRt === null ? "" : submitRt.toFixed(1),
-      audio_duration_s: currentAudio && Number.isFinite(currentAudio.duration) ? currentAudio.duration.toFixed(3) : "",
+      submit_rt_ms: ratingSubmitRt === null ? "" : ratingSubmitRt.toFixed(1),
+      audio_duration_s: Number.isFinite(audioDuration) ? audioDuration.toFixed(3) : "",
       replay_count: state.replayCount,
+      response_flow: responseFlow,
+      dictation_played_at: state.dictationPlayedAtIso,
+      rating_played_at: state.ratingPlayedAtIso,
+      dictation_submit_rt_ms: rtCell(state.dictationSubmitRtMs),
+      rating_submit_rt_ms: rtCell(ratingSubmitRt),
+      dictation_audio_duration_s: Number.isFinite(state.dictationAudioDurationS)
+        ? state.dictationAudioDurationS.toFixed(3)
+        : "",
+      rating_audio_duration_s: Number.isFinite(state.ratingAudioDurationS)
+        ? state.ratingAudioDurationS.toFixed(3)
+        : "",
       ...responseTraceFields(),
       comprehensibility_1_9: requiresRatings() ? selectedScale("comprehensibility") : "",
       accentedness_1_9: requiresRatings() ? selectedScale("accentedness") : "",
@@ -2072,7 +2289,7 @@
     if (els.practiceReasonBlock) {
       els.practiceReasonBlock.classList.toggle("hidden", !feedback.requiresReason);
     }
-    els.nextBtn.textContent = "Continue";
+    updateNextButtonLabel();
     updateNextState();
   }
 
@@ -2083,6 +2300,11 @@
       row.practice_requires_reason = state.pendingPracticeFeedback?.requiresReason ? "1" : "0";
       row.practice_reason = els.practiceReason.value.trim();
       await persistRowAndAdvance(row);
+      return;
+    }
+
+    if (shouldAdvanceToRatingStage()) {
+      advanceToRatingStage();
       return;
     }
 
@@ -2426,7 +2648,7 @@
     if (!els.sessionId.value.trim()) els.sessionId.value = "practice_session";
     els.loadPracticeBtn.disabled = true;
     setSetupStatus("Loading");
-    setLog("Loading bundled demo materials...");
+    setLog("Loading selected ElevenLabs practice materials...");
 
     const manifestResponse = await fetch("practice_manifest.csv", { cache: "no-store" });
     if (!manifestResponse.ok) {
@@ -2443,8 +2665,7 @@
         throw new Error(`Could not load ${audioPath} (${response.status})`);
       }
       const blob = await response.blob();
-      const fallbackType = audioPath.toLowerCase().endsWith(".mp3") ? "audio/mpeg" : "audio/wav";
-      const file = new File([blob], fileKey(audioPath), { type: blob.type || fallbackType });
+      const file = new File([blob], fileKey(audioPath), { type: blob.type || "audio/wav" });
       fileRecords.push({ file, sourcePath: audioPath });
     }
 
@@ -2583,6 +2804,7 @@
   });
   els.playBtn.addEventListener("click", () => {
     playCurrentAudio().catch((error) => {
+      resetPlaybackAttemptAfterError();
       els.audioState.textContent = PARTICIPANT_MODE
         ? "The audio could not be played. Please try again."
         : `Playback failed: ${error.message}`;

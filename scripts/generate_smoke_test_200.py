@@ -25,13 +25,48 @@ VERSION = "pronunciation_rating_v0.5.0_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
 PRACTICE_ITEMS = [
-    ("lantern", "natural", 1, 1),
-    ("velvet", "natural", 2, 1),
-    ("kettle", "strong_accent", 8, 9),
-    ("marble", "strong_accent", 9, 8),
-    ("compass", "mild_accent", 4, 4),
-    ("pencil", "mild_accent", 5, 5),
+    (
+        "chocolate",
+        "ENG/natural",
+        "ENG",
+        "natural",
+        "eng_bella",
+        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3",
+        1,
+        1,
+    ),
+    (
+        "coffee",
+        "JPN/accented",
+        "JPN",
+        "accented",
+        "jpn_yusuke_stronger",
+        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/coffee__jpn_yusuke_stronger.mp3",
+        3,
+        4,
+    ),
+    (
+        "pizza",
+        "JPN/accented",
+        "JPN",
+        "accented",
+        "jpn_lia_stronger",
+        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/pizza__jpn_lia_stronger.mp3",
+        5,
+        6,
+    ),
+    (
+        "sofa",
+        "CHN/accented",
+        "CHN",
+        "accented",
+        "chn_deep_bass_stronger",
+        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/sofa__chn_deep_bass_stronger.mp3",
+        7,
+        8,
+    ),
 ]
+TRIAL_COUNT = len(PRACTICE_ITEMS) + 100
 
 COUNTERBALANCE_CELLS = [
     (1, "ABCD", "a"),
@@ -57,16 +92,16 @@ COUNTERBALANCE_CELLS = [
 ]
 
 LIST_SPECS = {
-    "A": {"AME": range(1, 6), "JPN": range(6, 16), "CHN": range(16, 26)},
-    "B": {"AME": range(26, 31), "JPN": range(31, 41), "CHN": range(41, 51)},
-    "C": {"AME": range(6, 11), "JPN": range(11, 21), "CHN": [*range(21, 26), *range(1, 6)]},
-    "D": {"AME": range(31, 36), "JPN": range(36, 46), "CHN": [*range(46, 51), *range(26, 31)]},
-    "E": {"AME": range(11, 16), "JPN": range(16, 26), "CHN": range(1, 11)},
-    "F": {"AME": range(36, 41), "JPN": range(41, 51), "CHN": range(26, 36)},
-    "G": {"AME": range(16, 21), "JPN": [*range(21, 26), *range(1, 6)], "CHN": range(6, 16)},
-    "H": {"AME": range(41, 46), "JPN": [*range(46, 51), *range(26, 31)], "CHN": range(31, 41)},
-    "I": {"AME": range(21, 26), "JPN": range(1, 11), "CHN": range(11, 21)},
-    "J": {"AME": range(46, 51), "JPN": range(26, 36), "CHN": range(36, 46)},
+    "A": {"ENG": range(1, 6), "JPN": range(6, 16), "CHN": range(16, 26)},
+    "B": {"ENG": range(26, 31), "JPN": range(31, 41), "CHN": range(41, 51)},
+    "C": {"ENG": range(6, 11), "JPN": range(11, 21), "CHN": [*range(21, 26), *range(1, 6)]},
+    "D": {"ENG": range(31, 36), "JPN": range(36, 46), "CHN": [*range(46, 51), *range(26, 31)]},
+    "E": {"ENG": range(11, 16), "JPN": range(16, 26), "CHN": range(1, 11)},
+    "F": {"ENG": range(36, 41), "JPN": range(41, 51), "CHN": range(26, 36)},
+    "G": {"ENG": range(16, 21), "JPN": [*range(21, 26), *range(1, 6)], "CHN": range(6, 16)},
+    "H": {"ENG": range(41, 46), "JPN": [*range(46, 51), *range(26, 31)], "CHN": range(31, 41)},
+    "I": {"ENG": range(21, 26), "JPN": range(1, 11), "CHN": range(11, 21)},
+    "J": {"ENG": range(46, 51), "JPN": range(26, 36), "CHN": range(36, 46)},
 }
 
 
@@ -76,7 +111,8 @@ RATINGS_COLUMNS = [
     "platform_version", "phase", "practice_kind", "practice_group",
     "counterbalance_cell", "list_comb", "pronunciation_style", "stimulus_list",
     "l1_condition", "pronunciation_condition", "block_index", "block_list",
-    "within_block_index", "block_trial_count", "trial_index", "trial_total",
+    "within_block_index", "block_trial_count", "speaker_pattern_index",
+    "speaker_pattern_speaker", "trial_index", "trial_total",
     "completed_at", "played_at", "server_received_at", "source_path",
     "audio_url", "file_name", "participant_id", "native_language",
     "accent_condition", "condition", "talker", "pass_number", "word_number",
@@ -89,7 +125,10 @@ RATINGS_COLUMNS = [
     "expert_accentedness_1_9", "practice_feedback",
     "practice_requires_reason", "practice_reason", "japanese_familiarity_1_6",
     "chinese_familiarity_1_6", "first_key_rt_ms", "submit_rt_ms",
-    "audio_duration_s", "replay_count", "response_order", "first_response_field",
+    "audio_duration_s", "replay_count", "response_flow", "dictation_played_at",
+    "rating_played_at", "dictation_submit_rt_ms", "rating_submit_rt_ms",
+    "dictation_audio_duration_s", "rating_audio_duration_s",
+    "response_order", "first_response_field",
     "first_response_rt_ms", "rating_order", "rating_interaction_sequence",
     "first_rating_field", "first_rating_rt_ms", "comprehensibility_first_rt_ms",
     "comprehensibility_last_rt_ms", "comprehensibility_selection_count",
@@ -120,7 +159,8 @@ ASSIGNMENTS_COLUMNS = [
     "source_format", "practice_kind", "practice_group", "counterbalance_cell",
     "list_comb", "pronunciation_style", "stimulus_list", "l1_condition",
     "pronunciation_condition", "block_index", "block_list",
-    "within_block_index", "block_trial_count", "expert_comprehensibility_1_9",
+    "within_block_index", "block_trial_count", "speaker_pattern_index",
+    "speaker_pattern_speaker", "expert_comprehensibility_1_9",
     "expert_accentedness_1_9", "created_at",
 ]
 
@@ -139,15 +179,18 @@ ANALYSIS_COLUMNS = [
     "analysis_participant_id", "session_status", "counterbalance_cell",
     "list_comb", "pronunciation_style", "japanese_familiarity_1_6",
     "chinese_familiarity_1_6", "trial_index", "block_index", "block_list",
-    "within_block_index", "block_trial_count", "stimulus_list",
+    "within_block_index", "block_trial_count", "speaker_pattern_index",
+    "speaker_pattern_speaker", "stimulus_list",
     "l1_condition", "pronunciation_condition", "participant_id", "talker",
     "target_word", "word_number", "trial_number", "take_number", "file_name",
     "typed_response", "normalized_response", "normalized_target",
     "intelligibility_exact", "intelligibility_needs_manual_review",
     "intelligibility_response_status", "intelligibility_unidentified",
     "comprehensibility_1_9", "accentedness_1_9", "first_key_rt_ms",
-    "submit_rt_ms", "audio_duration_s", "replay_count", "response_order",
-    "first_response_field", "first_response_rt_ms", "rating_order",
+    "submit_rt_ms", "audio_duration_s", "replay_count", "response_flow",
+    "dictation_played_at", "rating_played_at", "dictation_submit_rt_ms",
+    "rating_submit_rt_ms", "dictation_audio_duration_s", "rating_audio_duration_s",
+    "response_order", "first_response_field", "first_response_rt_ms", "rating_order",
     "rating_interaction_sequence", "first_rating_field", "first_rating_rt_ms",
     "comprehensibility_first_rt_ms", "comprehensibility_last_rt_ms",
     "comprehensibility_selection_count", "accentedness_first_rt_ms",
@@ -231,7 +274,7 @@ def word_label(number: int) -> str:
 
 def condition_rows(block_list: str, style: str) -> list[dict]:
     specs = LIST_SPECS[block_list]
-    ame_numbers = list(specs["AME"])
+    eng_numbers = list(specs["ENG"])
     jpn_nat, jpn_acc = split_word_numbers(specs["JPN"])
     chn_nat, chn_acc = split_word_numbers(specs["CHN"])
     if style == "b":
@@ -241,7 +284,7 @@ def condition_rows(block_list: str, style: str) -> list[dict]:
     rows = []
     for index in range(5):
         rows.extend([
-            {"l1": "AME", "pron": "natural", "word": ame_numbers[index]},
+            {"l1": "ENG", "pron": "natural", "word": eng_numbers[index]},
             {"l1": "JPN", "pron": "natural", "word": jpn_nat[index]},
             {"l1": "CHN", "pron": "natural", "word": chn_nat[index]},
             {"l1": "JPN", "pron": "accented", "word": jpn_acc[index]},
@@ -252,36 +295,36 @@ def condition_rows(block_list: str, style: str) -> list[dict]:
 
 def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
     rows = []
-    for index, (word, group, expert_comp, expert_accent) in enumerate(PRACTICE_ITEMS, start=1):
+    for index, (word, group, l1, pron, talker, audio_path, expert_comp, expert_accent) in enumerate(PRACTICE_ITEMS, start=1):
         rows.append({
             "id": f"{session_id}:practice:{index}",
             "session_id": session_id,
             "phase": "practice",
             "trial_index": index,
-            "source_path": f"practice_training_audio/smoke_{word}.mp3",
-            "audio_url": f"practice_training_audio/smoke_{word}.mp3",
-            "file_name": f"practice_smoke_{index:02d}_{word}.mp3",
+            "source_path": audio_path,
+            "audio_url": audio_path,
+            "file_name": Path(audio_path).name,
             "target_word": word,
-            "participant_id": "PRACTICE",
-            "native_language": "",
-            "accent_condition": group,
-            "condition": group,
-            "talker": "practice",
+            "participant_id": f"practice_{talker}",
+            "native_language": l1,
+            "accent_condition": pron,
+            "condition": "practice",
+            "talker": talker,
             "pass_number": "",
             "word_number": "",
             "trial_number": str(index),
             "take_number": "1",
             "spoken_form": word,
-            "practice_note": "smoke practice item",
-            "source_format": "smoke",
+            "practice_note": "selected ElevenLabs practice item in smoke dataset",
+            "source_format": "selected_elevenlabs_practice",
             "practice_kind": "combined",
             "practice_group": group,
             "counterbalance_cell": "",
             "list_comb": "",
             "pronunciation_style": "",
             "stimulus_list": "",
-            "l1_condition": "",
-            "pronunciation_condition": "",
+            "l1_condition": l1,
+            "pronunciation_condition": pron,
             "block_index": "",
             "block_list": "",
             "within_block_index": "",
@@ -304,7 +347,7 @@ def build_main_assignment(session_id: str, cell_id: int, list_comb: str, style: 
             word = word_label(item["word"])
             l1 = item["l1"]
             pron = item["pron"]
-            file_name = f"{l1.lower()}_{pron}_{block_list}_{word}.mp3"
+            file_name = f"{l1.lower()}_{pron}_{block_list}_{word}.wav"
             rows.append({
                 "id": f"{session_id}:main:{trial_index}",
                 "session_id": session_id,
@@ -338,6 +381,8 @@ def build_main_assignment(session_id: str, cell_id: int, list_comb: str, style: 
                 "block_list": block_list,
                 "within_block_index": within_index,
                 "block_trial_count": 25,
+                "speaker_pattern_index": ((seed + block_index - 2) % 10) + 1,
+                "speaker_pattern_speaker": f"{l1}{((within_index - 1) % (5 if l1 == 'ENG' else 10)) + 1}",
                 "expert_comprehensibility_1_9": "",
                 "expert_accentedness_1_9": "",
                 "created_at": created_at,
@@ -390,8 +435,8 @@ def response_for(row: dict, participant_index: int) -> dict:
     else:
         l1 = row["l1_condition"]
         pron = row["pronunciation_condition"]
-        base_comp = {"AME": 2, "JPN": 5, "CHN": 5}.get(l1, 4)
-        base_accent = {"AME": 1, "JPN": 5, "CHN": 5}.get(l1, 4)
+        base_comp = {"ENG": 2, "JPN": 5, "CHN": 5}.get(l1, 4)
+        base_accent = {"ENG": 1, "JPN": 5, "CHN": 5}.get(l1, 4)
         if pron == "accented":
             base_comp += 2
             base_accent += 3
@@ -472,8 +517,10 @@ def assignment_to_trial(row: dict, session: dict, participant_index: int, saved_
         "block_list": row["block_list"] or None,
         "within_block_index": row["within_block_index"] or None,
         "block_trial_count": row["block_trial_count"] or None,
+        "speaker_pattern_index": row.get("speaker_pattern_index") or None,
+        "speaker_pattern_speaker": row.get("speaker_pattern_speaker") or None,
         "trial_index": row["trial_index"],
-        "trial_total": 106,
+        "trial_total": TRIAL_COUNT,
         "completed_at": iso(saved_at_ms),
         "played_at": iso(saved_at_ms - submit_rt_ms),
         "source_path": row["source_path"],
@@ -503,6 +550,13 @@ def assignment_to_trial(row: dict, session: dict, participant_index: int, saved_
         "submit_rt_ms": submit_rt_ms,
         "audio_duration_s": round(0.72 + (int(row["trial_index"]) % 9) * 0.04, 2),
         "replay_count": replay_count,
+        "response_flow": "staged_dictation_then_ratings",
+        "dictation_played_at": iso(saved_at_ms - submit_rt_ms - 1400),
+        "rating_played_at": iso(saved_at_ms - submit_rt_ms),
+        "dictation_submit_rt_ms": round(submit_rt_ms * 0.45, 1),
+        "rating_submit_rt_ms": round(submit_rt_ms * 0.55, 1),
+        "dictation_audio_duration_s": round(0.72 + (int(row["trial_index"]) % 9) * 0.04, 2),
+        "rating_audio_duration_s": round(0.72 + (int(row["trial_index"]) % 9) * 0.04, 2),
         "client_saved_at": iso(saved_at_ms),
         "server_received_at": iso(saved_at_ms + 110),
         "raw_json": json.dumps({"smoke": True, "phase": row["phase"], "trial_index": row["trial_index"]}, separators=(",", ":")),
@@ -547,9 +601,9 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
         completed_ms = started_ms + 45 * 60_000 + (participant_index % 10) * 12_000
         is_dropout = participant_index in dropouts
         saved_limit = 0 if participant_index in abandoned_dropouts else (
-            dropout_saved_trial_count(participant_index) if is_dropout else 106
+            dropout_saved_trial_count(participant_index) if is_dropout else TRIAL_COUNT
         )
-        saved_limit = max(0, min(106, saved_limit))
+        saved_limit = max(0, min(TRIAL_COUNT, saved_limit))
         saved_main_count = max(0, saved_limit - len(PRACTICE_ITEMS))
         saved_practice_count = min(saved_limit, len(PRACTICE_ITEMS))
         if is_dropout:
@@ -607,7 +661,7 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "last_seen_at": iso(last_seen_ms),
             "last_seen_at_ms": last_seen_ms,
             "status": status,
-            "trial_count": 106,
+            "trial_count": TRIAL_COUNT,
             "completed_trial_count": saved_limit,
             "completion_url_issued_at": completion_issued_at,
             "completion_url_issued_at_ms": completion_issued_at_ms,
@@ -659,7 +713,7 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
                     })
 
         add_event(conn, f"{session_id}:event:start", session_id, prolific_pid, "session_start", None, started_ms, {
-            "trial_count": 106,
+            "trial_count": TRIAL_COUNT,
             "counterbalance_cell": cell_id,
         })
         for block_end in (25, 50, 75):
@@ -672,8 +726,8 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
                 })
         if not is_dropout:
             add_event(conn, f"{session_id}:event:complete", session_id, prolific_pid, "session_complete", None, completed_ms, {
-                "trial_count": 106,
-                "completed_trial_count": 106,
+                "trial_count": TRIAL_COUNT,
+                "completed_trial_count": TRIAL_COUNT,
                 "status": "completed",
             })
 
@@ -735,6 +789,8 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           rt.block_list,
           rt.within_block_index,
           rt.block_trial_count,
+          rt.speaker_pattern_index,
+          rt.speaker_pattern_speaker,
           rt.stimulus_list,
           rt.l1_condition,
           rt.pronunciation_condition,
@@ -758,6 +814,13 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           rt.submit_rt_ms,
           rt.audio_duration_s,
           rt.replay_count,
+          rt.response_flow,
+          rt.dictation_played_at,
+          rt.rating_played_at,
+          rt.dictation_submit_rt_ms,
+          rt.rating_submit_rt_ms,
+          rt.dictation_audio_duration_s,
+          rt.rating_audio_duration_s,
           rt.response_order,
           rt.first_response_field,
           rt.first_response_rt_ms,
@@ -880,7 +943,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "assignments": scalar(conn, "SELECT COUNT(*) FROM rating_assignments"),
         "allocations": scalar(conn, "SELECT COUNT(*) FROM counterbalance_allocations"),
         "incomplete_allocations": scalar(conn, "SELECT COUNT(*) FROM counterbalance_allocations WHERE status = 'incomplete'"),
-        "ame_accented_rows": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE l1_condition = 'AME' AND pronunciation_condition = 'accented'"),
+        "eng_accented_rows": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE l1_condition = 'ENG' AND pronunciation_condition = 'accented'"),
         "unidentified_trials": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE intelligibility_unidentified = 1"),
         "manual_review_trials": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE intelligibility_needs_manual_review = 1"),
         "replayed_trials": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE replay_count > 0"),
@@ -908,15 +971,15 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "rating_trials": expected_total_trials,
         "main_trials": expected_main,
         "practice_trials": expected_practice,
-        "assignments": participant_count * 106,
+        "assignments": participant_count * TRIAL_COUNT,
         "allocations": participant_count,
         "incomplete_allocations": dropout_count,
-        "ame_accented_rows": 0,
+        "eng_accented_rows": 0,
         "blank_without_unidentified": 0,
         "missing_saved_trials": dropout_count,
         "completion_urls_issued": completed_count,
         "ratings.csv": expected_total_trials,
-        "assignments.csv": participant_count * 106,
+        "assignments.csv": participant_count * TRIAL_COUNT,
         "sessions.csv": participant_count,
         "counterbalance.csv": participant_count,
         "analysis.csv": expected_analysis,

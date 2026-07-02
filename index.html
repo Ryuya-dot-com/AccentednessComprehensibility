@@ -143,10 +143,12 @@
               <ol>
                 <li>Press <strong>Play audio</strong>.</li>
                 <li>Type the English word you heard.</li>
+                <li>Continue to the rating page.</li>
+                <li>Press <strong>Play audio</strong> again.</li>
                 <li>Rate how easy the word was to understand.</li>
                 <li>Rate how strong the speaker's accent sounded.</li>
               </ol>
-              <p>Use <strong>Play again</strong> only when needed. Practice comes first.</p>
+              <p>Each page allows one playback. Practice comes first.</p>
             </div>
             <div class="scale-summary-grid">
               <div>
@@ -184,7 +186,7 @@
             </div>
             <div id="turnstile-widget" class="turnstile-widget hidden" aria-label="Security check"></div>
             <div class="actions">
-              <button id="load-practice-btn" class="secondary researcher-only">Load demo materials</button>
+              <button id="load-practice-btn" class="secondary researcher-only">Load selected practice</button>
               <button id="prepare-btn" class="researcher-only">Prepare trials</button>
               <button id="ready-back-btn" class="secondary participant-only" type="button">Back</button>
               <button id="start-btn" disabled>Start practice</button>
@@ -221,13 +223,13 @@
             <div class="upload-grid">
               <label class="upload-card">
                 <span>Audio files</span>
-                <input id="audio-files" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" multiple />
+                <input id="audio-files" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" multiple />
                 <small>Select exported participant recordings.</small>
               </label>
 
               <label class="upload-card">
                 <span>Audio folder</span>
-                <input id="audio-folder" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" webkitdirectory multiple />
+                <input id="audio-folder" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" webkitdirectory multiple />
                 <small>Import a folder while preserving relative paths.</small>
               </label>
 

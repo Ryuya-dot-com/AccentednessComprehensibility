@@ -1,8 +1,19 @@
 import { cleanText, nullableText, safeJson } from "./_utils.js";
 
-const L1_ORDER = ["AME", "JPN", "CHN"];
+const L1_ORDER = ["ENG", "JPN", "CHN"];
 const CONSTRAINED_RUN_L1 = new Set(L1_ORDER);
 const MAX_CONSTRAINED_RUN = 2;
+const SPEAKER_PATTERN_COUNT = 10;
+const SPEAKER_PATTERN_SPEAKER_COUNT = {
+  ENG: 5,
+  JPN: 10,
+  CHN: 10,
+};
+const SPEAKER_PATTERN_PREFIX = {
+  ENG: "eng",
+  JPN: "jpn",
+  CHN: "chn",
+};
 const LIST_COMBINATIONS = [
   "ABCD",
   "BCDE",
@@ -16,40 +27,42 @@ const LIST_COMBINATIONS = [
   "JABC",
 ];
 const DEFAULT_COUNTERBALANCE_MANIFEST = "remote_manifest.csv";
-const MANIFEST_FILE_COLUMNS = ["audio_file", "file", "filename", "path"];
+const SELECTED_PRACTICE_AUDIO_ROOT =
+  "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703";
+const MANIFEST_FILE_COLUMNS = [
+  "audio_file",
+  "osf_audio_file",
+  "standardized_audio_file",
+  "new_relative_path",
+  "file",
+  "filename",
+  "path",
+];
 const MANIFEST_URL_COLUMNS = ["audio_url", "url", "source_url", "raw_url"];
 const DRY_RUN_PLACEHOLDER_AUDIO = {
-  AME: [
-    "practice_audio/english/chocolate.mp3",
-    "practice_audio/english/coffee.mp3",
-    "practice_audio/english/pizza.mp3",
-    "practice_audio/english/sofa.mp3",
+  ENG: [
+    `${SELECTED_PRACTICE_AUDIO_ROOT}/chocolate__eng_bella.mp3`,
   ],
   JPN: [
-    "practice_audio/japanese/chocolate.mp3",
-    "practice_audio/japanese/coffee.mp3",
-    "practice_audio/japanese/pizza.mp3",
-    "practice_audio/japanese/sofa.mp3",
+    `${SELECTED_PRACTICE_AUDIO_ROOT}/coffee__jpn_yusuke_stronger.mp3`,
+    `${SELECTED_PRACTICE_AUDIO_ROOT}/pizza__jpn_lia_stronger.mp3`,
   ],
   CHN: [
-    "practice_audio/chinese/chocolate.mp3",
-    "practice_audio/chinese/coffee.mp3",
-    "practice_audio/chinese/pizza.mp3",
-    "practice_audio/chinese/sofa.mp3",
+    `${SELECTED_PRACTICE_AUDIO_ROOT}/sofa__chn_deep_bass_stronger.mp3`,
   ],
 };
 
 const LIST_SPECS = {
-  A: { AME: range(1, 5), JPN: range(6, 15), CHN: range(16, 25) },
-  B: { AME: range(26, 30), JPN: range(31, 40), CHN: range(41, 50) },
-  C: { AME: range(6, 10), JPN: range(11, 20), CHN: [...range(21, 25), ...range(1, 5)] },
-  D: { AME: range(31, 35), JPN: range(36, 45), CHN: [...range(46, 50), ...range(26, 30)] },
-  E: { AME: range(11, 15), JPN: range(16, 25), CHN: range(1, 10) },
-  F: { AME: range(36, 40), JPN: range(41, 50), CHN: range(26, 35) },
-  G: { AME: range(16, 20), JPN: [...range(21, 25), ...range(1, 5)], CHN: range(6, 15) },
-  H: { AME: range(41, 45), JPN: [...range(46, 50), ...range(26, 30)], CHN: range(31, 40) },
-  I: { AME: range(21, 25), JPN: range(1, 10), CHN: range(11, 20) },
-  J: { AME: range(46, 50), JPN: range(26, 35), CHN: range(36, 45) },
+  A: { ENG: range(1, 5), JPN: range(6, 15), CHN: range(16, 25) },
+  B: { ENG: range(26, 30), JPN: range(31, 40), CHN: range(41, 50) },
+  C: { ENG: range(6, 10), JPN: range(11, 20), CHN: [...range(21, 25), ...range(1, 5)] },
+  D: { ENG: range(31, 35), JPN: range(36, 45), CHN: [...range(46, 50), ...range(26, 30)] },
+  E: { ENG: range(11, 15), JPN: range(16, 25), CHN: range(1, 10) },
+  F: { ENG: range(36, 40), JPN: range(41, 50), CHN: range(26, 35) },
+  G: { ENG: range(16, 20), JPN: [...range(21, 25), ...range(1, 5)], CHN: range(6, 15) },
+  H: { ENG: range(41, 45), JPN: [...range(46, 50), ...range(26, 30)], CHN: range(31, 40) },
+  I: { ENG: range(21, 25), JPN: range(1, 10), CHN: range(11, 20) },
+  J: { ENG: range(46, 50), JPN: range(26, 35), CHN: range(36, 45) },
 };
 
 export const COUNTERBALANCE_CELLS = [
@@ -191,6 +204,33 @@ function pickOne(items, seedText) {
   return items[Math.floor(rng() * items.length)];
 }
 
+function sheet2PatternIndex(seedText, cell, stimulusList, blockIndex) {
+  return (hashString(`${seedText}:${cell.cell_id}:${stimulusList}:speaker-pattern:${blockIndex}`) % SPEAKER_PATTERN_COUNT) + 1;
+}
+
+function speakerPatternTarget(l1, wordPositionWithinL1, patternIndex) {
+  const speakerCount = SPEAKER_PATTERN_SPEAKER_COUNT[l1] || 0;
+  const prefix = SPEAKER_PATTERN_PREFIX[l1] || l1.toLowerCase();
+  if (!speakerCount || !wordPositionWithinL1 || !patternIndex) return null;
+  const speakerIndex = ((wordPositionWithinL1 - 1 + patternIndex - 1) % speakerCount) + 1;
+  return {
+    speaker_id: `${prefix}_s${String(speakerIndex).padStart(2, "0")}`,
+    label: `${l1}${speakerIndex}`,
+  };
+}
+
+function normalizeSpeakerId(value) {
+  return cleanText(value).toLowerCase();
+}
+
+function candidatesForSpeakerPattern(candidates, target) {
+  if (!target?.speaker_id) return candidates;
+  const matched = candidates.filter((item) => item._speaker_id === target.speaker_id);
+  if (matched.length) return matched;
+  if (candidates.every((item) => item.source_format === "dry_run_placeholder")) return candidates;
+  return [];
+}
+
 function readField(row, names) {
   for (const name of names) {
     const normalized = name.toLowerCase();
@@ -313,7 +353,7 @@ function manifestRowToMaterial(row, manifestUrl, index) {
   const l1 = normalizeL1(l1Raw) || l1Raw;
   const pronunciation = normalizePronunciation(pronunciationRaw) || pronunciationRaw;
   const sourcePath = filePath || audioUrl;
-  const fileName = fileNameFromPath(sourcePath || audioUrl, `server_manifest_${index + 1}.mp3`);
+  const fileName = fileNameFromPath(sourcePath || audioUrl, `server_manifest_${index + 1}.wav`);
 
   return {
     id: index + 1,
@@ -322,13 +362,20 @@ function manifestRowToMaterial(row, manifestUrl, index) {
     audio_url: audioUrl,
     file_name: fileName,
     target_word: readField(row, ["target_word", "word", "item", "expected_word"]),
-    participant_id: readField(row, ["participant_id", "participant", "speaker_id", "speaker"]),
+    participant_id: readField(row, [
+      "participant_id",
+      "participant",
+      "proposed_speaker_id",
+      "l1_speaker_id",
+      "speaker_id",
+      "speaker",
+    ]),
     native_language: l1,
     l1_condition: l1,
     pronunciation_condition: pronunciation,
     accent_condition: pronunciation,
     condition: readField(row, ["condition", "pass_condition", "variability_condition"]),
-    talker: readField(row, ["talker", "talker_id", "voice", "voice_alias"]),
+    talker: readField(row, ["talker", "global_speaker_id", "talker_id", "voice", "voice_alias"]),
     pass_number: readField(row, ["pass_number", "pass"]),
     word_number: readField(row, ["word_number", "word_id", "item_id", "word_no"]),
     trial_number: readField(row, ["trial_number", "trial"]),
@@ -366,8 +413,8 @@ async function fetchManifest(context, source) {
 
 export function normalizeL1(value) {
   const text = cleanText(value).toLowerCase();
-  if (["ame", "american", "us", "usa", "english", "native_english"].includes(text)) {
-    return "AME";
+  if (["eng", "english", "native_english", "ame", "american", "us", "usa"].includes(text)) {
+    return "ENG";
   }
   if (["jpn", "jp", "japanese", "japan"].includes(text)) return "JPN";
   if (["chn", "cn", "zh", "chinese", "china", "mandarin"].includes(text)) return "CHN";
@@ -384,7 +431,7 @@ export function normalizePronunciation(value) {
 }
 
 function expectedPronunciation(l1, wordNumber, pronunciationStyle, wordNumbers = []) {
-  if (l1 === "AME") return "natural";
+  if (l1 === "ENG") return "natural";
   const index = wordNumbers.indexOf(wordNumber);
   if (index < 0) throw new Error(`Word number ${wordNumber} is not in the current ${l1} list.`);
   const evenPosition = index % 2 === 0;
@@ -412,6 +459,16 @@ function normalizeMaterial(item, index) {
   const stimulusList = cleanText(
     readField(item, ["stimulus_list", "list", "list_id", "counterbalance_list"]),
   ).toUpperCase();
+  const speakerId = normalizeSpeakerId(
+    readField(item, [
+      "participant_id",
+      "participant",
+      "proposed_speaker_id",
+      "l1_speaker_id",
+      "speaker_id",
+      "speaker",
+    ]),
+  );
   return {
     ...item,
     _source_index: index,
@@ -419,6 +476,7 @@ function normalizeMaterial(item, index) {
     _l1_condition: l1,
     _pronunciation_condition: pronunciation,
     _stimulus_list: /^[A-J]$/.test(stimulusList) ? stimulusList : "",
+    _speaker_id: speakerId,
   };
 }
 
@@ -426,7 +484,7 @@ function materialMatches(material, stimulusList, l1, wordNumber, expected) {
   if (material._stimulus_list && material._stimulus_list !== stimulusList) return false;
   if (material._l1_condition !== l1) return false;
   if (material._word_number_number !== wordNumber) return false;
-  if (l1 === "AME") {
+  if (l1 === "ENG") {
     return material._pronunciation_condition === "natural";
   }
   return material._pronunciation_condition === expected;
@@ -450,6 +508,8 @@ function canonicalizeAssignmentItem(item, metadata) {
     word_number: String(metadata.word_number),
     block_index: metadata.block_index,
     block_list: metadata.stimulus_list,
+    speaker_pattern_index: metadata.speaker_pattern_index,
+    speaker_pattern_speaker: metadata.speaker_pattern_speaker,
   };
 }
 
@@ -498,7 +558,7 @@ export async function loadCounterbalanceMaterials(context) {
 }
 
 function dryRunPlaceholderAudio(l1, wordNumber) {
-  const pool = DRY_RUN_PLACEHOLDER_AUDIO[l1] || DRY_RUN_PLACEHOLDER_AUDIO.AME;
+  const pool = DRY_RUN_PLACEHOLDER_AUDIO[l1] || DRY_RUN_PLACEHOLDER_AUDIO.ENG;
   return pool[(wordNumber - 1) % pool.length];
 }
 
@@ -509,7 +569,7 @@ export function dryRunPlaceholderCounterbalanceMaterials(context, fallbackReason
     for (const l1 of L1_ORDER) {
       const wordNumbers = spec[l1] || [];
       for (const wordNumber of wordNumbers) {
-        const pronunciations = l1 === "AME" ? ["natural"] : ["natural", "accented"];
+        const pronunciations = l1 === "ENG" ? ["natural"] : ["natural", "accented"];
         for (const pronunciation of pronunciations) {
           const audioPath = dryRunPlaceholderAudio(l1, wordNumber);
           const targetWord = `dryrun_${stimulusList.toLowerCase()}_${l1.toLowerCase()}_${wordNumber}_${pronunciation}`;
@@ -517,7 +577,7 @@ export function dryRunPlaceholderCounterbalanceMaterials(context, fallbackReason
             id: materials.length + 1,
             source_path: audioPath,
             audio_url: new URL(audioPath, origin).toString(),
-            file_name: fileNameFromPath(audioPath, `dry_run_${materials.length + 1}.mp3`),
+            file_name: fileNameFromPath(audioPath, `dry_run_${materials.length + 1}.wav`),
             target_word: targetWord,
             participant_id: `dryrun_${l1.toLowerCase()}`,
             native_language: l1,
@@ -573,6 +633,12 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
           SELECT COUNT(*)
           FROM counterbalance_allocations ca
           WHERE ca.cell_id = c.cell_id
+            AND ca.status IN (?, ?)
+        ) ASC,
+        (
+          SELECT COUNT(*)
+          FROM counterbalance_allocations ca
+          WHERE ca.cell_id = c.cell_id
             AND ca.status = ?
         ) ASC,
         (
@@ -584,7 +650,16 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
         c.cell_id ASC
       LIMIT 1`,
     )
-    .bind(allocationId, sessionId, startedStatus, assignedAt, assignedAt, completedStatus)
+    .bind(
+      allocationId,
+      sessionId,
+      startedStatus,
+      assignedAt,
+      assignedAt,
+      startedStatus,
+      completedStatus,
+      completedStatus,
+    )
     .run();
 
   const row = await db
@@ -623,25 +698,30 @@ export function buildCounterbalancedAssignment(materials, cell, seedText) {
   for (const [listIndex, stimulusList] of cell.list_comb.split("").entries()) {
     const spec = LIST_SPECS[stimulusList];
     if (!spec) throw new Error(`Unknown counterbalance list: ${stimulusList}`);
+    const speakerPatternIndex = sheet2PatternIndex(seedText, cell, stimulusList, listIndex + 1);
     const blockItems = [];
     for (const l1 of L1_ORDER) {
       const wordNumbers = spec[l1];
-      for (const wordNumber of wordNumbers) {
+      for (const [wordPositionIndex, wordNumber] of wordNumbers.entries()) {
         const expected = expectedPronunciation(
           l1,
           wordNumber,
           cell.pronunciation_style,
           wordNumbers,
         );
-        const candidates = normalized.filter((item) =>
-          materialMatches(item, stimulusList, l1, wordNumber, expected),
+        const speakerTarget = speakerPatternTarget(l1, wordPositionIndex + 1, speakerPatternIndex);
+        const candidates = candidatesForSpeakerPattern(
+          normalized.filter((item) =>
+            materialMatches(item, stimulusList, l1, wordNumber, expected),
+          ),
+          speakerTarget,
         );
         const picked = pickOne(
           candidates,
-          `${seedText}:${cell.cell_id}:${stimulusList}:${l1}:${wordNumber}:${expected}`,
+          `${seedText}:${cell.cell_id}:${stimulusList}:${l1}:${wordNumber}:${expected}:speaker:${speakerTarget?.speaker_id || ""}`,
         );
         if (!picked) {
-          missing.push(`${stimulusList}/${l1}/word${wordNumber}/${expected}`);
+          missing.push(`${stimulusList}/${l1}/word${wordNumber}/${expected}/${speakerTarget?.speaker_id || "any_speaker"}`);
           continue;
         }
         blockItems.push(
@@ -652,6 +732,8 @@ export function buildCounterbalancedAssignment(materials, cell, seedText) {
             l1,
             word_number: wordNumber,
             expected_pronunciation: expected,
+            speaker_pattern_index: speakerPatternIndex,
+            speaker_pattern_speaker: speakerTarget?.label || "",
           }),
         );
       }

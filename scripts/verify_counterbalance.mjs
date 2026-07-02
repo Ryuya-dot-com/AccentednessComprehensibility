@@ -6,42 +6,50 @@ import {
 const lists = "ABCDEFGHIJ".split("");
 const materials = [];
 
+function speakerIds(l1) {
+  const count = l1 === "ENG" ? 5 : 10;
+  const prefix = l1.toLowerCase();
+  return Array.from({ length: count }, (_, index) => `${prefix}_s${String(index + 1).padStart(2, "0")}`);
+}
+
 for (const stimulusList of lists) {
   for (let wordNumber = 1; wordNumber <= 50; wordNumber += 1) {
-    materials.push({
-      audio_url: `ame/${stimulusList}/${wordNumber}.mp3`,
-      target_word: `word${wordNumber}`,
-      participant_id: "AME_S01",
-      l1_condition: "AME",
-      pronunciation_condition: "natural",
-      stimulus_list: stimulusList,
-      word_number: String(wordNumber),
-      file_name: `ame_${stimulusList}_${wordNumber}.mp3`,
-    });
-
-    for (const pronunciation of ["natural", "accented"]) {
+    for (const participantId of speakerIds("ENG")) {
       materials.push({
-        audio_url: `jpn/${pronunciation}/${stimulusList}/${wordNumber}.mp3`,
+        audio_url: `eng/${participantId}/${stimulusList}/${wordNumber}.wav`,
         target_word: `word${wordNumber}`,
-        participant_id: "JPN_S01",
-        l1_condition: "JPN",
-        pronunciation_condition: pronunciation,
+        participant_id: participantId,
+        l1_condition: "ENG",
+        pronunciation_condition: "natural",
         stimulus_list: stimulusList,
         word_number: String(wordNumber),
-        file_name: `jpn_${pronunciation}_${stimulusList}_${wordNumber}.mp3`,
-      });
-      materials.push({
-        audio_url: `chn/${pronunciation}/${stimulusList}/${wordNumber}.mp3`,
-        target_word: `word${wordNumber}`,
-        participant_id: "CHN_S01",
-        l1_condition: "CHN",
-        pronunciation_condition: pronunciation,
-        stimulus_list: stimulusList,
-        word_number: String(wordNumber),
-        file_name: `chn_${pronunciation}_${stimulusList}_${wordNumber}.mp3`,
+        file_name: `${participantId}_${stimulusList}_${wordNumber}.wav`,
       });
     }
+
+    for (const pronunciation of ["natural", "accented"]) {
+      for (const l1 of ["JPN", "CHN"]) {
+        for (const participantId of speakerIds(l1)) {
+          materials.push({
+            audio_url: `${l1.toLowerCase()}/${participantId}/${pronunciation}/${stimulusList}/${wordNumber}.wav`,
+            target_word: `word${wordNumber}`,
+            participant_id: participantId,
+            l1_condition: l1,
+            pronunciation_condition: pronunciation,
+            stimulus_list: stimulusList,
+            word_number: String(wordNumber),
+            file_name: `${participantId}_${pronunciation}_${stimulusList}_${wordNumber}.wav`,
+          });
+        }
+      }
+    }
   }
+}
+
+function speakerIdFromPatternLabel(label) {
+  const match = String(label || "").match(/^(ENG|JPN|CHN)(\d+)$/);
+  if (!match) return "";
+  return `${match[1].toLowerCase()}_s${String(Number(match[2])).padStart(2, "0")}`;
 }
 
 function assertNoLongConstrainedRun(assignment, label) {
@@ -51,7 +59,7 @@ function assertNoLongConstrainedRun(assignment, label) {
     const l1 = item.l1_condition;
     runLength = l1 === previous ? runLength + 1 : 1;
     previous = l1;
-    if (["AME", "JPN", "CHN"].includes(l1) && runLength >= 3) {
+    if (["ENG", "JPN", "CHN"].includes(l1) && runLength >= 3) {
       throw new Error(`Found ${l1} run of ${runLength} in ${label} at trial ${item.trial_index}.`);
     }
   }
@@ -89,6 +97,15 @@ for (const cell of COUNTERBALANCE_CELLS) {
       if (item.trial_index !== (blockIndex - 1) * 25 + index + 1) {
         throw new Error(`Cell ${cell.cell_id} block ${blockIndex} has incorrect trial_index.`);
       }
+      if (!item.speaker_pattern_index || Number(item.speaker_pattern_index) < 1 || Number(item.speaker_pattern_index) > 10) {
+        throw new Error(`Cell ${cell.cell_id} block ${blockIndex} is missing Sheet2 speaker_pattern_index.`);
+      }
+      const expectedSpeakerId = speakerIdFromPatternLabel(item.speaker_pattern_speaker);
+      if (expectedSpeakerId && String(item.participant_id).toLowerCase() !== expectedSpeakerId) {
+        throw new Error(
+          `Cell ${cell.cell_id} block ${blockIndex} expected ${expectedSpeakerId} for ${item.speaker_pattern_speaker}, got ${item.participant_id}.`,
+        );
+      }
     });
     assertNoLongConstrainedRun(block, `cell ${cell.cell_id} block ${blockIndex}`);
 
@@ -96,19 +113,19 @@ for (const cell of COUNTERBALANCE_CELLS) {
       acc[item.l1_condition] = (acc[item.l1_condition] || 0) + 1;
       return acc;
     }, {});
-    if (counts.AME !== 5 || counts.JPN !== 10 || counts.CHN !== 10) {
+    if (counts.ENG !== 5 || counts.JPN !== 10 || counts.CHN !== 10) {
       throw new Error(`Cell ${cell.cell_id} block ${blockIndex} has wrong L1 counts: ${JSON.stringify(counts)}.`);
     }
 
-    const amePronunciationCounts = block
-      .filter((item) => item.l1_condition === "AME")
+    const engPronunciationCounts = block
+      .filter((item) => item.l1_condition === "ENG")
       .reduce((acc, item) => {
         acc[item.pronunciation_condition] = (acc[item.pronunciation_condition] || 0) + 1;
         return acc;
       }, {});
-    if (amePronunciationCounts.natural !== 5 || Object.keys(amePronunciationCounts).length !== 1) {
+    if (engPronunciationCounts.natural !== 5 || Object.keys(engPronunciationCounts).length !== 1) {
       throw new Error(
-        `Cell ${cell.cell_id} block ${blockIndex} AME is not natural-only: ${JSON.stringify(amePronunciationCounts)}.`,
+        `Cell ${cell.cell_id} block ${blockIndex} ENG is not natural-only: ${JSON.stringify(engPronunciationCounts)}.`,
       );
     }
 
@@ -133,7 +150,7 @@ for (const cell of COUNTERBALANCE_CELLS) {
   }, {});
   console.log(
     `cell ${cell.cell_id}: ${assignment.length} trials in 4 blocks, ` +
-      `AME=${counts.AME || 0}, JPN=${counts.JPN || 0}, CHN=${counts.CHN || 0}`,
+      `ENG=${counts.ENG || 0}, JPN=${counts.JPN || 0}, CHN=${counts.CHN || 0}`,
   );
 }
 

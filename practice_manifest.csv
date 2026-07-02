@@ -1,13 +1,5 @@
-audio_file,target_word,participant_id,native_language,condition,accent_condition,talker,pass_number,trial_number,word_number,take_number,spoken_form,practice_note
-practice_audio/english/chocolate.mp3,chocolate,practice,english,practice,english,Samantha,,1,1,,chocolate,Native English TTS practice sample
-practice_audio/japanese/chocolate.mp3,chocolate,practice,japanese,practice,japanese,Kyoko,,1,1,,チョコレート,Japanese katakana-shaped practice sample
-practice_audio/chinese/chocolate.mp3,chocolate,practice,chinese,practice,chinese,Tingting,,1,1,,巧克力,Chinese cognate/loanword-shaped practice sample
-practice_audio/english/coffee.mp3,coffee,practice,english,practice,english,Samantha,,2,2,,coffee,Native English TTS practice sample
-practice_audio/japanese/coffee.mp3,coffee,practice,japanese,practice,japanese,Kyoko,,2,2,,コーヒー,Japanese katakana-shaped practice sample
-practice_audio/chinese/coffee.mp3,coffee,practice,chinese,practice,chinese,Tingting,,2,2,,咖啡,Chinese cognate/loanword-shaped practice sample
-practice_audio/english/pizza.mp3,pizza,practice,english,practice,english,Samantha,,3,3,,pizza,Native English TTS practice sample
-practice_audio/japanese/pizza.mp3,pizza,practice,japanese,practice,japanese,Kyoko,,3,3,,ピザ,Japanese katakana-shaped practice sample
-practice_audio/chinese/pizza.mp3,pizza,practice,chinese,practice,chinese,Tingting,,3,3,,披萨,Chinese cognate/loanword-shaped practice sample
-practice_audio/english/sofa.mp3,sofa,practice,english,practice,english,Samantha,,4,4,,sofa,Native English TTS practice sample
-practice_audio/japanese/sofa.mp3,sofa,practice,japanese,practice,japanese,Kyoko,,4,4,,ソファ,Japanese katakana-shaped practice sample
-practice_audio/chinese/sofa.mp3,sofa,practice,chinese,practice,chinese,Tingting,,4,4,,沙发,Chinese cognate/loanword-shaped practice sample
+audio_file,target_word,participant_id,native_language,l1_condition,condition,accent_condition,pronunciation_condition,talker,pass_number,trial_number,word_number,take_number,spoken_form,expert_comprehensibility_1_9,expert_accentedness_1_9,practice_note,source_format
+practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3,chocolate,practice_eng_bella,ENG,ENG,practice,natural,natural,eng_bella,,1,1,,chocolate,1,1,Selected ElevenLabs practice MP3; loudness-normalized with ffmpeg loudnorm I=-23 LRA=7 TP=-2,selected_elevenlabs_practice
+practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/coffee__jpn_yusuke_stronger.mp3,coffee,practice_jpn_yusuke_stronger,JPN,JPN,practice,accented,accented,jpn_yusuke_stronger,,2,2,,coffee,3,4,Selected stronger Japanese-accent candidate; reference ratings are provisional until researcher review,selected_elevenlabs_practice
+practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/pizza__jpn_lia_stronger.mp3,pizza,practice_jpn_lia_stronger,JPN,JPN,practice,accented,accented,jpn_lia_stronger,,3,3,,pizza,5,6,Selected stronger Japanese-accent candidate; reference ratings are provisional until researcher review,selected_elevenlabs_practice
+practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/sofa__chn_deep_bass_stronger.mp3,sofa,practice_chn_deep_bass_stronger,CHN,CHN,practice,accented,accented,chn_deep_bass_stronger,,4,4,,sofa,7,8,Selected stronger Chinese-accent candidate; reference ratings are provisional until researcher review,selected_elevenlabs_practice

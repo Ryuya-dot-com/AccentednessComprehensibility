@@ -44,6 +44,7 @@ export async function onRequestPost(context) {
     const finalizedAtMs = nowMs();
     const finalizedAt = new Date(finalizedAtMs).toISOString();
     const cutoffMs = finalizedAtMs - minutes * 60_000;
+    const cutoffAt = new Date(cutoffMs).toISOString();
 
     const staleRows = await db
       .prepare(
@@ -64,8 +65,21 @@ export async function onRequestPost(context) {
       )
       .bind(cutoffMs)
       .all();
+    const orphanAllocationRows = await db
+      .prepare(
+        `SELECT ca.id
+         FROM counterbalance_allocations ca
+         LEFT JOIN sessions s ON s.id = ca.session_id
+         WHERE s.id IS NULL
+           AND ca.status IN ('started', 'dry_run_started')
+           AND ca.updated_at <= ?
+         ORDER BY ca.updated_at, ca.assigned_at`,
+      )
+      .bind(cutoffAt)
+      .all();
 
     const rows = staleRows.results || [];
+    const orphanAllocations = orphanAllocationRows.results || [];
     const statements = [];
     let abandoned = 0;
     let incompleteDropout = 0;
@@ -114,6 +128,23 @@ export async function onRequestPost(context) {
           .bind(finalizedAt, row.id, row.id, finalizedAtMs),
       );
     });
+    orphanAllocations.forEach((row) => {
+      statements.push(
+        db
+          .prepare(
+            `UPDATE counterbalance_allocations
+             SET status = CASE
+                   WHEN status = 'dry_run_started' THEN 'dry_run_incomplete'
+                   ELSE 'incomplete'
+                 END,
+                 completed_at = NULL,
+                 updated_at = ?
+             WHERE id = ?
+               AND status IN ('started', 'dry_run_started')`,
+          )
+          .bind(finalizedAt, row.id),
+      );
+    });
 
     for (let index = 0; index < statements.length; index += 50) {
       await db.batch(statements.slice(index, index + 50));
@@ -144,11 +175,12 @@ export async function onRequestPost(context) {
       payload: {
         stale_after_minutes: minutes,
         cutoff_ms: cutoffMs,
-        cutoff_at: new Date(cutoffMs).toISOString(),
+        cutoff_at: cutoffAt,
         candidate_total: rows.length,
         finalized_total: finalizedTotal,
         incomplete_dropout: incompleteDropout,
         abandoned,
+        orphan_allocation_finalized_total: orphanAllocations.length,
       },
     });
 
@@ -156,13 +188,14 @@ export async function onRequestPost(context) {
       ok: true,
       stale_after_minutes: minutes,
       cutoff_ms: cutoffMs,
-      cutoff_at: new Date(cutoffMs).toISOString(),
+      cutoff_at: cutoffAt,
       finalized_at: finalizedAt,
       finalized_at_ms: finalizedAtMs,
       candidate_total: rows.length,
       finalized_total: finalizedTotal,
       incomplete_dropout: incompleteDropout,
       abandoned,
+      orphan_allocation_finalized_total: orphanAllocations.length,
     });
   } catch (error) {
     return errorResponse(error.message || "Could not finalize stale sessions.", error.status || 500);

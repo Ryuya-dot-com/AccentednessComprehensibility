@@ -4,19 +4,19 @@ This guide describes deployment paths for confirming that the rating platform wo
 
 There are two supported deployment styles:
 
-- **GitHub integration**: recommended after pushing this repository to `Ryuya-dot-com/Accentedness_Rating`.
+- **GitHub integration**: recommended after pushing this repository to `Ryuya-dot-com/AccentednessComprehensibility`.
 - **Direct Upload**: useful for a quick CLI-only feasibility test.
 
-If deploying from the local Dropbox workspace, use the project directory as the deployment root:
+If deploying from the local Dropbox workspace, use the current repository directory as the deployment root:
 
 ```sh
-cd /Users/tohokusla/Dropbox/Accentedness/Experiment/Rating_Platform
+cd /Users/tohokusla/Dropbox/Accentedness/AccentednessComprehensibility
 ```
 
 The expected Cloudflare structure is:
 
 ```text
-Rating_Platform/
+AccentednessComprehensibility/
   index.html
   app.js
   styles.css
@@ -28,7 +28,7 @@ Rating_Platform/
 
 Do not deploy from `/Users/tohokusla/Dropbox/Accentedness` or `/Users/tohokusla/Dropbox/Accentedness/Experiment`. The `functions/` directory must be at the Pages project root.
 
-If deploying from `Ryuya-dot-com/Accentedness_Rating`, the repository root is already the Pages project root.
+If deploying from `Ryuya-dot-com/AccentednessComprehensibility`, the repository root is already the Pages project root.
 
 ## GitHub Integration
 
@@ -39,7 +39,7 @@ Use this route for normal Cloudflare Pages deployment.
 3. Connect the GitHub repository:
 
 ```text
-Ryuya-dot-com/Accentedness_Rating
+Ryuya-dot-com/AccentednessComprehensibility
 ```
 
 4. Use these build settings:
@@ -91,10 +91,10 @@ If `whoami` shows your Cloudflare account, the CLI is ready.
 For a CLI-only feasibility test, use Direct Upload from Wrangler:
 
 ```sh
-npx wrangler pages project create accentedness-rating-platform --production-branch main
+npx wrangler pages project create accentednesscomprehensibility --production-branch main
 ```
 
-This creates a Pages project named `accentedness-rating-platform`.
+This creates a Pages project named `accentednesscomprehensibility`.
 
 Relevant Cloudflare docs:
 
@@ -215,7 +215,106 @@ If the database was created before response-order and rating-process metrics wer
 npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0009_response_order_metrics.sql
 ```
 
-## 6. Set Secrets and Production Variables
+If the database was created before staged word-identification/rating pages were added, run this migration once:
+
+```sh
+npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0010_staged_response_flow.sql
+```
+
+If the database was created before Sheet2 speaker-pattern metadata was added, run this migration once:
+
+```sh
+npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql
+```
+
+## 6. Host Production Audio
+
+Do not commit the 2,497 main production audio files to the Pages repository. Use Cloudflare R2 or another approved static HTTPS host for production audio. Keep the four built-in practice MP3 files in `practice_training_audio/`; they are small and are part of the app UI.
+
+The recommended R2 bucket name is:
+
+```text
+accentedness-production-stimuli
+```
+
+Create the bucket:
+
+```sh
+npx wrangler r2 bucket create accentedness-production-stimuli
+```
+
+Upload the OSF-standardized package audio under the same relative paths used by the package manifest. For bulk upload, use `rclone` or another S3-compatible tool. For a single-object smoke test, Wrangler supports:
+
+```sh
+npx wrangler r2 object put accentedness-production-stimuli/main/eng/natural/eng_s08/eng_s08_natural_pass01_word021_pacifier_take01_trial0021.wav \
+  --file /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/main/eng/natural/eng_s08/eng_s08_natural_pass01_word021_pacifier_take01_trial0021.wav \
+  --content-type audio/wav
+```
+
+For the full package, the local source root is:
+
+```text
+/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
+```
+
+The generated upload command batch is:
+
+```text
+/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/upload_to_r2_accentedness_production_stimuli.sh
+```
+
+Regenerate it with:
+
+```sh
+python3 scripts/generate_r2_upload_commands.py
+```
+
+It uploads 2,545 audio objects from `metadata/r2_upload_plan.csv`. Run `npx wrangler login` first; the current local Wrangler check reports that this machine is not authenticated.
+
+Expose the bucket with a production custom domain when possible, for example:
+
+```text
+https://stimuli.example.edu/
+```
+
+Cloudflare's `r2.dev` public URL is acceptable for development checks, but Cloudflare documents it as non-production and rate-limited. For production, use a custom domain so Cloudflare cache, WAF, access controls, and bot-management options can be applied.
+
+Generate the production manifest with absolute audio URLs after the public audio base URL is known:
+
+```sh
+python3 scripts/generate_production_manifest_from_crosswalk.py \
+  --path-mode osf \
+  --audio-base-url https://stimuli.example.edu \
+  --out /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_r2_20260703.csv
+```
+
+Validate the manifest before setting it in Cloudflare:
+
+```sh
+node scripts/validate_production_manifest.mjs \
+  --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_r2_20260703.csv
+```
+
+Set the manifest URL as a Pages secret if the manifest is hosted outside the repository:
+
+```sh
+npx wrangler pages secret put COUNTERBALANCE_MANIFEST_URL --project-name accentednesscomprehensibility
+```
+
+Set allowed hosts to the manifest host and audio host:
+
+```text
+COUNTERBALANCE_ALLOWED_HOSTS=accentednesscomprehensibility.pages.dev,stimuli.example.edu
+```
+
+Official references:
+
+- Cloudflare R2 bucket creation: https://developers.cloudflare.com/r2/buckets/create-buckets/
+- Cloudflare R2 public buckets and custom domains: https://developers.cloudflare.com/r2/buckets/public-buckets/
+- Cloudflare Wrangler command syntax: https://developers.cloudflare.com/workers/wrangler/commands/
+- Cloudflare R2 object upload: https://developers.cloudflare.com/r2/objects/upload-objects/
+
+## 7. Set Secrets and Production Variables
 
 Generate a token:
 
@@ -226,7 +325,7 @@ openssl rand -base64 32
 Set it as a Cloudflare Pages secret:
 
 ```sh
-npx wrangler pages secret put ADMIN_TOKEN --project-name accentedness-rating-platform
+npx wrangler pages secret put ADMIN_TOKEN --project-name accentednesscomprehensibility
 ```
 
 Paste the generated token when prompted. Save the token securely; it is required for `/admin/`.
@@ -238,7 +337,7 @@ The admin API fails closed when `ADMIN_TOKEN` is not configured.
 Set the Prolific completion code as a Cloudflare Pages secret. Do not put it in the participant URL:
 
 ```sh
-npx wrangler pages secret put PROLIFIC_COMPLETION_CODE --project-name accentedness-rating-platform
+npx wrangler pages secret put PROLIFIC_COMPLETION_CODE --project-name accentednesscomprehensibility
 ```
 
 Set production mode so participant starts require Prolific identifiers:
@@ -274,12 +373,12 @@ During live collection, use a conservative value that is longer than the plausib
 If the production stimulus manifest should not be stored as a public `remote_manifest.csv`, set the server-side manifest URL as a Pages secret:
 
 ```sh
-npx wrangler pages secret put COUNTERBALANCE_MANIFEST_URL --project-name accentedness-rating-platform
+npx wrangler pages secret put COUNTERBALANCE_MANIFEST_URL --project-name accentednesscomprehensibility
 ```
 
 When this secret is set, `/api/session/start` uses it as the authoritative counterbalance manifest. The browser-side custom manifest field is only a preview/manual-workflow aid.
 
-## 7. Protect Admin with Cloudflare Access
+## 8. Protect Admin with Cloudflare Access
 
 Create Cloudflare Access protection before production:
 
@@ -287,13 +386,13 @@ Create Cloudflare Access protection before production:
 2. Create a **Self-hosted** application for the admin UI path:
 
 ```text
-https://accentedness-rating-platform.pages.dev/admin/*
+https://accentednesscomprehensibility.pages.dev/admin/*
 ```
 
 3. Create another Self-hosted application for the admin API path, or include this path in the same Access application if your Cloudflare plan/configuration supports the desired path coverage:
 
 ```text
-https://accentedness-rating-platform.pages.dev/api/admin/*
+https://accentednesscomprehensibility.pages.dev/api/admin/*
 ```
 
 4. Use an Allow policy that includes only named researcher email addresses or a controlled researcher email domain. Do not use `Include Everyone` or `Include all valid emails`.
@@ -308,21 +407,35 @@ CF_ACCESS_ALLOWED_EMAILS=researcher1@example.edu,researcher2@example.edu
 
 Keep `ADMIN_TOKEN` enabled. The admin API requires both the Cloudflare Access JWT and `ADMIN_TOKEN` when `CF_ACCESS_*` variables are configured.
 
-## 8. Deploy
+## 9. Deploy
 
 Deploy the current directory:
 
 ```sh
-npx wrangler pages deploy . --project-name accentedness-rating-platform --branch main
+npx wrangler pages deploy . --project-name accentednesscomprehensibility --branch main
 ```
 
 Wrangler will print the deployed URL, usually in this form:
 
 ```text
-https://accentedness-rating-platform.pages.dev/
+https://accentednesscomprehensibility.pages.dev/
 ```
 
-## 9. Configure Edge Protection
+Immediately verify that the public URL is serving the same implementation that was just deployed:
+
+```sh
+node scripts/check_live_deployment.mjs --allow-turnstile-off
+```
+
+Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a pilot. For production, omit that flag if `REQUIRE_TURNSTILE=1` is configured. The script writes:
+
+```text
+/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
+```
+
+The current public deployment fails this check: live `/app.js` is older than the local implementation, live `/remote_manifest.csv` is still the 12-row demo manifest, and the selected ElevenLabs practice MP3 path returns the HTML app shell rather than audio. Do not run Prolific participants until this live check passes or the remaining pilot-only exception is explicitly documented.
+
+## 10. Configure Edge Protection
 
 Before production collection, add Cloudflare WAF rate limiting rules for these paths:
 
@@ -341,18 +454,18 @@ Use thresholds that allow normal Prolific progress but challenge or throttle bur
 - `/api/session/complete`: very low repeat tolerance per IP/session.
 - `/api/admin/*`: very low tolerance and restricted access; Cloudflare Access is recommended for `/admin/*`.
 
-## 10. Smoke Test
+## 11. Smoke Test
 
 Open the participant page:
 
 ```text
-https://accentedness-rating-platform.pages.dev/
+https://accentednesscomprehensibility.pages.dev/
 ```
 
 Open the researcher admin page:
 
 ```text
-https://accentedness-rating-platform.pages.dev/admin/
+https://accentednesscomprehensibility.pages.dev/admin/
 ```
 
 Enter the `ADMIN_TOKEN` on the admin page and confirm that summary counts load.
@@ -379,27 +492,35 @@ On `/admin/`, confirm that these CSV downloads work:
 - `events.csv`
 - `counterbalance.csv`
 
-To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count.
+To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
 To test unintelligible-word handling, complete a pilot trial using `I could not identify the word`. Confirm that the row is saved with `intelligibility_response_status=unidentified`, `intelligibility_unidentified=1`, `intelligibility_exact=0`, and no increase in `manual_review_count`.
 
-## 11. Prolific Test URL
+To stress-test local simultaneous counterbalance allocation before the Cloudflare dry run:
+
+```sh
+python3 scripts/stress_counterbalance_concurrency.py --participants 200
+```
+
+The current local result is 10 assignments per cell for 200 simultaneous starts, with duplicate participant keys rejected. This verifies the SQL-level invariant; still run at least one live Cloudflare dry run because D1, Pages Functions, secrets, and public asset hosting are external state.
+
+## 12. Prolific Test URL
 
 For a Prolific-style test, use URL parameters such as:
 
 ```text
-https://accentedness-rating-platform.pages.dev/?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
+https://accentednesscomprehensibility.pages.dev/?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
 ```
 
 Do not include the completion code in the Prolific participant URL. Store it in `PROLIFIC_COMPLETION_CODE`.
 
-After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. If completion saving fails, the server detects missing trials, the session is implausibly fast, or `PROLIFIC_COMPLETION_CODE` is missing, the participant sees `CONTACT_RESEARCHER` instead.
+After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side `rating_assignments` row has a matching saved `rating_trials` row. If completion saving fails, the server detects missing assignments/trials, the session is implausibly fast, or `PROLIFIC_COMPLETION_CODE` is missing, the participant sees `CONTACT_RESEARCHER` instead.
 
-## 12. Important Checks Before Production
+## 13. Important Checks Before Production
 
 Before running the actual study:
 
-- Replace placeholder practice audio and expert ratings in `app.js`.
+- Confirm collaborator review of the selected ElevenLabs practice MP3 files and revise provisional reference ratings in `app.js` if needed.
 - Set `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
 - Apply `db/migrations/0005_session_security.sql` to existing D1 databases.
@@ -407,16 +528,25 @@ Before running the actual study:
 - Apply `db/migrations/0007_stale_session_index.sql` to existing D1 databases.
 - Apply `db/migrations/0008_intelligibility_unidentified.sql` to existing D1 databases.
 - Apply `db/migrations/0009_response_order_metrics.sql` to existing D1 databases.
+- Apply `db/migrations/0010_staged_response_flow.sql` to existing D1 databases.
+- Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
 - Confirm the Prolific Study URL includes `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
 - Protect `/admin/*` and `/api/admin/*` with Cloudflare Access; set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`.
 - Configure WAF rate limiting rules for participant and admin API paths.
 - Enable Turnstile with `REQUIRE_TURNSTILE=1` unless the ethics/pilot setup requires a no-challenge flow.
 - Set `MIN_COMPLETION_SECONDS` to a conservative minimum plausible full-session duration after timing the pilot.
 - Set `STALE_SESSION_MINUTES` to a conservative inactivity window and verify the `/admin/` stale-session finalization workflow.
-- Confirm that the server-side manifest source points to the final audio files: either public `remote_manifest.csv` or the `COUNTERBALANCE_MANIFEST_URL` Pages secret.
+- Confirm that the server-side manifest source points to the final R2/custom-domain audio files through either public `remote_manifest.csv` or the `COUNTERBALANCE_MANIFEST_URL` Pages secret.
+- Confirm that the production manifest generated with `--audio-base-url` has reachable HTTPS `audio_url` values.
 - Confirm that the server-side manifest includes `word_number`, `l1_condition`, and `pronunciation_condition` for the counterbalanced stimulus pool.
-- Confirm that `AME` rows are explicitly `natural`, never blank or `accented`; `JPN` and `CHN` rows must be explicitly labeled `natural` or `accented`.
+- Confirm that `word_number` is the CounterBalance lexical item number from `stimuli/CounterBalance.xlsx`; source filename positions must be stored only as `source_word_number`.
+- Confirm that `ENG` rows are explicitly `natural`, never blank or `accented`; `JPN` and `CHN` rows must be explicitly labeled `natural` or `accented`.
 - If using an external manifest, set `COUNTERBALANCE_ALLOWED_HOSTS` to the expected manifest/audio hostnames.
+- Run `python3 scripts/audit_lexical_balance.py` and confirm `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/lexical_balance_pairwise_differences.csv` has no unresolved imbalance flags.
+- Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report flags one clipped selectable main stimulus: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav`.
+- Run `node scripts/preflight_production.mjs`. It must pass before Prolific launch. It currently fails until production audio hosting is configured, the clipped selectable stimulus is resolved or explicitly accepted, and provisional practice reference ratings are reviewed.
+- Run `node scripts/check_live_deployment.mjs` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off` and document that exception.
+- Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.
 - Review `EXPERIMENTAL_DESIGN_REVIEW.md` and resolve all final-stimulus placeholders before production launch.
@@ -436,7 +566,7 @@ python3 -m http.server 8765
 Then open:
 
 ```text
-http://127.0.0.1:8765/?local=1
+http://127.0.0.1:8765/?manual=1&local=1
 ```
 
 This mode is only for UI testing. It should not be used for Prolific data collection.

@@ -16,7 +16,6 @@
     PROLIFIC_PID: dryRunId,
     STUDY_ID: "DRY_RUN",
     SESSION_ID: dryRunId + "_SESSION",
-    completion_code: "DRY-RUN",
   });
   const target = "/?" + params.toString();
   const link = document.getElementById("dry-run-link");

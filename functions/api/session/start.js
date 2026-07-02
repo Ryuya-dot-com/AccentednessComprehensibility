@@ -37,7 +37,8 @@ const ASSIGNMENT_SELECT = `
     practice_note, source_format, practice_kind, practice_group,
     counterbalance_cell, list_comb, pronunciation_style, stimulus_list,
     l1_condition, pronunciation_condition, block_index, block_list,
-    within_block_index, block_trial_count, expert_comprehensibility_1_9,
+    within_block_index, block_trial_count, speaker_pattern_index,
+    speaker_pattern_speaker, expert_comprehensibility_1_9,
     expert_accentedness_1_9
   FROM rating_assignments
   WHERE session_id = ? AND phase = ?
@@ -203,7 +204,9 @@ async function cleanupFailedStart(db, sessionId, allocationId) {
   if (allocationId) {
     statements.push(
       db
-        .prepare("DELETE FROM counterbalance_allocations WHERE id = ? AND status = 'started'")
+        .prepare(
+          "DELETE FROM counterbalance_allocations WHERE id = ? AND status IN ('started', 'dry_run_started')",
+        )
         .bind(allocationId),
     );
   }
@@ -374,9 +377,10 @@ export async function onRequestPost(context) {
               pronunciation_style, stimulus_list, l1_condition,
               pronunciation_condition, block_index, block_list,
               within_block_index, block_trial_count,
+              speaker_pattern_index, speaker_pattern_speaker,
               expert_comprehensibility_1_9, expert_accentedness_1_9,
               created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             `${sessionId}:${phase}:${trialIndex}`,
@@ -411,6 +415,8 @@ export async function onRequestPost(context) {
             nullableText(item.block_list),
             nullableInt(item.within_block_index),
             nullableInt(item.block_trial_count),
+            nullableInt(item.speaker_pattern_index),
+            nullableText(item.speaker_pattern_speaker),
             nullableInt(item.expert_comprehensibility_1_9),
             nullableInt(item.expert_accentedness_1_9),
             startedAt,

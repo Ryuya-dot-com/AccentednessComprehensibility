@@ -51,13 +51,15 @@ Priority:
 - [ ] Enforce production mode server-side.
   - Add an environment flag such as `ENVIRONMENT=production`.
   - Done in code: in `ENVIRONMENT=production`, `/api/session/start` rejects browser-provided manual assignments and requires server-side counterbalancing.
-  - Remaining: hide or block `?local=1` in the production static UI unless an explicit preview/admin flag is present.
+  - Done in code: the static UI blocks start in production mode when `?local=1` or `?manual=1` would bypass server persistence or counterbalancing.
   - Done in code: in `ENVIRONMENT=production`, `/api/session/start` requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
   - Acceptance: production URL cannot bypass D1 persistence or server-side counterbalancing via query parameters.
 
 - [ ] Remove placeholder study values before production.
   - Replace placeholder practice audio paths and expert ratings.
   - Done in code/docs: client-supplied `completion_code` was removed from the participant URL flow; use `PROLIFIC_COMPLETION_CODE` instead.
+  - Live-check blocker: the current public `/app.js` still contains old URL-query completion-code reads until Cloudflare is redeployed.
+  - Verify with `node scripts/check_live_deployment.mjs` after deployment.
   - Acceptance: grep finds no `PLACEHOLDER`, demo-only manifest paths, or production-ineligible practice notes in production config.
 
 ## P1 - Data Protection
@@ -166,6 +168,9 @@ Priority:
 
 - [ ] Add security smoke tests.
   - Test missing D1 binding, missing `ADMIN_TOKEN`, invalid admin token, duplicate Prolific starts, invalid trial index, replayed trial save, missing session token, and production `?local=1`.
+  - Added production preflight: `node scripts/preflight_production.mjs` checks production manifest shape, demo-manifest leakage, audio QC failures, lexical balance flags, provisional practice ratings, duration summary, and static security files.
+  - Added live deployment check: `node scripts/check_live_deployment.mjs` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, and admin dry-run protection.
+  - Added local simultaneous-start stress test: `python3 scripts/stress_counterbalance_concurrency.py --participants 200` checks counterbalance spread and duplicate participant-key rejection under same-timestamp starts.
   - Acceptance: documented command or checklist passes before each production deployment.
 
 - [ ] Document incident response.

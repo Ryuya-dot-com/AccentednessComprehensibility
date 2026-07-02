@@ -6,11 +6,11 @@ This document states the current Cloudflare-delivered rating-task design from th
 
 The current design is defensible only if the following distinction is maintained throughout the implementation, documentation, export files, and statistical model:
 
-- `AME` is a native-speaker natural reference condition. It is not an accented condition.
+- `ENG` is a native-speaker natural reference condition. It is not an accented condition.
 - `JPN` and `CHN` are nonnative-speaker groups with two pronunciation conditions: `natural` and `accented`.
-- The primary pronunciation contrast is therefore within `JPN` and `CHN`; `AME` should be used as a reference baseline, not as one level of the same accentedness manipulation.
+- The primary pronunciation contrast is therefore within `JPN` and `CHN`; `ENG` should be used as a reference baseline, not as one level of the same accentedness manipulation.
 
-A reviewer would reject a design that labels `AME` as `accented`, because that would collapse native-speaker status and pronunciation condition into an incoherent factor.
+A reviewer would reject a design that labels `ENG` as `accented`, because that would collapse native-speaker status and pronunciation condition into an incoherent factor.
 
 ## Current Task Structure
 
@@ -50,9 +50,9 @@ audio_file,audio_url,target_word,participant_id,l1_condition,pronunciation_condi
 
 Required labels:
 
-- `l1_condition`: `AME`, `JPN`, or `CHN`.
+- `l1_condition`: `ENG`, `JPN`, or `CHN`.
 - `pronunciation_condition`:
-  - `AME`: `natural`.
+  - `ENG`: `natural`.
   - `JPN`: `natural` or `accented`.
   - `CHN`: `natural` or `accented`.
 - `stimulus_list`: `A` through `J`.
@@ -62,7 +62,7 @@ Minimum slot coverage for the production manifest:
 
 | L1 | Pronunciation | Required per list | Required across A-J |
 | --- | --- | ---: | ---: |
-| AME | natural | 5 | 50 |
+| ENG | natural | 5 | 50 |
 | JPN | natural | 10 | 100 |
 | JPN | accented | 10 | 100 |
 | CHN | natural | 10 | 100 |
@@ -101,7 +101,7 @@ Each participant receives 100 main trials:
 | Blocks | 4 |
 | Trials per block | 25 |
 | Main trials total | 100 |
-| AME natural trials | 20 |
+| ENG natural trials | 20 |
 | JPN natural trials | 20 |
 | JPN accented trials | 20 |
 | CHN natural trials | 20 |
@@ -111,7 +111,7 @@ Each block contains:
 
 | Condition | Count per block |
 | --- | ---: |
-| AME natural | 5 |
+| ENG natural | 5 |
 | JPN natural | 5 |
 | JPN accented | 5 |
 | CHN natural | 5 |
@@ -138,6 +138,13 @@ Required final check:
 - For every list and L1 group, compare positions assigned to style `a` natural vs style `a` accented on lexical frequency, word length, syllable count, neighborhood density, concreteness/familiarity, and phonological complexity.
 - If any large imbalance remains, reorder `word_number` within the list before launch, then rerun the simulation.
 
+Current implementation guard:
+
+- In the production manifest, `word_number` is the CounterBalance lexical item number from `stimuli/CounterBalance.xlsx`.
+- The source-audio filename value, such as `word018`, is stored separately as `source_word_number` because it reflects source recording order, not the experiment's lexical item ID.
+- `scripts/validate_production_manifest.mjs` rejects manifests where one `word_number` maps to multiple `target_word` values.
+- `scripts/audit_lexical_balance.py` writes lexical balance tables and `LEXICAL_BALANCE_REPORT_20260703.md`. Current local proxy metrics show no style `a`/`b` lexical imbalance at `|standardized_diff| >= 0.25`, but neighborhood density, concreteness, familiarity, and Japanese/Chinese loanword exposure still require external metadata if the team wants those reported before launch.
+
 ## Randomization
 
 The 100 main trials are not globally shuffled. They are presented as four list blocks. Within each 25-trial block, trials are randomized.
@@ -147,7 +154,10 @@ The randomizer enforces:
 - No 3 or more consecutive trials from the same L1 group.
 - Fixed block size of 25.
 - Fixed per-block counts for all five analytic cells.
+- One deterministic Sheet2 speaker pattern per 25-trial block.
 - Stable assignment from participant/session seed.
+
+Each block's Sheet2 pattern index is saved as `speaker_pattern_index`. The expected speaker for each pre-shuffle word position is saved as `speaker_pattern_speaker`; the concrete selected stimulus still carries `participant_id` and `talker`.
 
 This is a reviewer-facing advantage over unconstrained randomization: it prevents accidental stretches such as several `JPN` or several `CHN` items in a row, which could encourage short-term adaptation or response anchoring.
 
@@ -219,7 +229,7 @@ Required checks:
 
 - No systematic lexical imbalance across `JPN natural`, `JPN accented`, `CHN natural`, and `CHN accented` slots.
 - No systematic lexical imbalance across block positions.
-- `AME natural` reference words should be drawn from the same target-word universe, not a simpler or acoustically cleaner subset.
+- `ENG natural` reference words should be drawn from the same target-word universe, not a simpler or acoustically cleaner subset.
 
 ### Acoustic Controls
 
@@ -257,16 +267,17 @@ Minimum defensible requirement:
 
 - Multiple speakers per nonnative L1 group and pronunciation condition.
 - Speaker IDs included in the exported data.
+- Sheet2 speaker-pattern metadata included in assignment and trial exports.
 - Mixed-effects models with random intercepts for rater, target word, and speaker whenever the data support them.
 
 If the final design intentionally uses a small number of speakers, the manuscript must describe the study as stimulus-specific and avoid broad claims about L1 groups.
 
 ## Practice Trials
 
-Practice trials are currently placeholders. Before production launch:
+Practice trials currently use selected ElevenLabs MP3 files for `chocolate`, `coffee`, `pizza`, and `sofa`. Before production launch:
 
-- Replace placeholder practice audio.
-- Replace placeholder reference ratings.
+- Confirm the selected practice audio by collaborator listening review.
+- Confirm or revise the provisional reference ratings.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.
 - Keep practice feedback separate from main-trial data.
@@ -323,7 +334,7 @@ Recommended primary models:
 Candidate fixed effects:
 
 - L1/pronunciation cell:
-  - `AME natural`.
+  - `ENG natural`.
   - `JPN natural`.
   - `JPN accented`.
   - `CHN natural`.
@@ -349,8 +360,8 @@ Candidate random effects:
 
 Critical modeling point:
 
-- Do not model `AME accented`. That condition does not exist.
-- Do not treat `AME natural`, `JPN natural`, and `CHN natural` as equivalent levels of one simple nativeness factor without acknowledging that `JPN/CHN natural` are nonnative productions judged to be more natural, whereas `AME natural` is native-speaker reference speech.
+- Do not model `ENG accented`. That condition does not exist.
+- Do not treat `ENG natural`, `JPN natural`, and `CHN natural` as equivalent levels of one simple nativeness factor without acknowledging that `JPN/CHN natural` are nonnative productions judged to be more natural, whereas `ENG natural` is native-speaker reference speech.
 
 ## Exclusion And Quality Rules
 
@@ -369,13 +380,14 @@ Do not change exclusion thresholds after looking at condition effects.
 
 | Risk | Severity | Current mitigation | Remaining action |
 | --- | --- | --- | --- |
-| AME mislabeled as accented | High | Server and templates now require AME natural | Audit final manifest before launch |
+| ENG mislabeled as accented | High | Server and templates now require ENG natural | Audit final manifest before launch |
 | Global 100-trial shuffle would destroy block design | High | Current implementation uses 4 fixed list blocks | Keep verification in deployment checklist |
 | Early blocks dominated by natural tokens | High | Every block has 5 cells x 5 trials | Verify with placeholder and final manifests |
 | List identity confounded with fatigue | Medium | Cyclic list combinations balance list position | Report final cell counts |
 | A/B word-position lexical imbalance | Medium | Complementary style assignment | Run lexical checks after final word list |
 | Speaker identity confounded with condition | High | Speaker metadata exported | Ensure multiple speakers and model speaker effects |
 | Acoustic quality confounded with condition | High | Manifest can store metadata | Run acoustic audit before launch |
+| Public deployment differs from reviewed local app | High | Live deployment check script compares deployed app, manifest, practice audio, config, and admin protection | Run after every deployment and before Prolific launch |
 | Adaptation within blocks | Medium | No 3 same-L1 run; distractors between blocks | Include order covariates/sensitivity checks |
 | Fatigue or repeated listening changes rating behavior | Medium | Trial order, response order, rating RTs, and replay count are exported | Model process covariates and inspect late-trial sensitivity |
 | Dropout-induced cell imbalance | Medium | Completion-balanced allocation | Use rolling recruitment to completed target; report assigned/completed/excluded by cell |
@@ -393,9 +405,20 @@ node --check scripts/verify_counterbalance.mjs
 node --check scripts/simulate_counterbalance_design.mjs
 node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
+python3 scripts/stress_counterbalance_concurrency.py --participants 200
+node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest.csv --audio-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
+python3 scripts/audit_lexical_balance.py
+python3 scripts/audit_audio_qc.py
+node scripts/estimate_task_duration.mjs
+node scripts/preflight_production.mjs
+node scripts/check_live_deployment.mjs --allow-turnstile-off
 ```
 
-The final two commands currently use placeholder materials. After final stimuli are ready, a manifest-level validator should be added to confirm that the real manifest satisfies the same slot, balance, lexical, and acoustic requirements.
+The production manifest validator confirms that the real manifest satisfies the same slot, balance, lexical item ID, and Sheet2 speaker-pattern requirements. The concurrency stress script verifies the SQL-level allocation invariant under a same-timestamp start wave; the current 200-participant local result is exactly 10 assignments per cell. The lexical, acoustic, and duration scripts write tables under `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`; the current reports are `LEXICAL_BALANCE_REPORT_20260703.md`, `AUDIO_QC_REPORT_20260703.md`, `DURATION_ESTIMATE_REPORT_20260703.md`, and `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
+
+The live deployment check writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the same metadata directory. Use `--allow-turnstile-off` only for pilot phases where Turnstile is intentionally disabled; omit it for the final production check if Turnstile is required.
+
+Current acoustic QC has one launch-blocking failure: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav` has full-scale clipping and can be selected by the Sheet2 assignment. Before launch, also decide whether peak amplitude 0.99 remains an enforceable preprocessing target, because most main files are consistent with intensity normalization rather than peak normalization.
 
 ## Final-Stimulus Placeholder Checklist
 

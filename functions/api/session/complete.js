@@ -55,17 +55,48 @@ export async function onRequestPost(context) {
       });
     }
 
-    const countRow = await db
-      .prepare("SELECT COUNT(*) AS count FROM rating_trials WHERE session_id = ?")
-      .bind(sessionId)
+    const coverageRow = await db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*)
+            FROM rating_assignments
+            WHERE session_id = ?) AS assignment_count,
+           (SELECT COUNT(*)
+            FROM rating_trials
+            WHERE session_id = ?) AS completed_count,
+           (SELECT COUNT(*)
+            FROM rating_assignments ra
+            LEFT JOIN rating_trials rt
+              ON rt.session_id = ra.session_id
+             AND rt.phase = ra.phase
+             AND rt.trial_index = ra.trial_index
+            WHERE ra.session_id = ?
+              AND rt.id IS NULL) AS missing_assignment_count,
+           (SELECT COUNT(*)
+            FROM rating_trials rt
+            LEFT JOIN rating_assignments ra
+              ON ra.session_id = rt.session_id
+             AND ra.phase = rt.phase
+             AND ra.trial_index = rt.trial_index
+            WHERE rt.session_id = ?
+              AND ra.id IS NULL) AS orphan_trial_count`,
+      )
+      .bind(sessionId, sessionId, sessionId, sessionId)
       .first();
-    const completedCount = Number(countRow?.count || 0);
+    const assignmentCount = Number(coverageRow?.assignment_count || 0);
+    const completedCount = Number(coverageRow?.completed_count || 0);
+    const missingAssignmentCount = Number(coverageRow?.missing_assignment_count || 0);
+    const orphanTrialCount = Number(coverageRow?.orphan_trial_count || 0);
+    const expectedTrialCount = Number(session.trial_count || 0);
     const completedAtMs = nowMs();
     const completedAt = new Date(completedAtMs).toISOString();
-    let status =
-      completedCount >= Number(session.trial_count || 0)
-        ? "completed"
-        : "completed_with_missing_trials";
+    const hasCompleteAssignmentCoverage =
+      expectedTrialCount > 0 &&
+      assignmentCount === expectedTrialCount &&
+      completedCount === expectedTrialCount &&
+      missingAssignmentCount === 0 &&
+      orphanTrialCount === 0;
+    let status = hasCompleteAssignmentCoverage ? "completed" : "completed_with_missing_trials";
     const minimumSeconds = minCompletionSeconds(context.env);
     const elapsed = elapsedSeconds(session.started_at, completedAt);
     const startedAtMs = Number(session.started_at_ms || 0);
@@ -147,7 +178,10 @@ export async function onRequestPost(context) {
       event_at: completedAt,
       payload: {
         trial_count: session.trial_count,
+        assignment_count: assignmentCount,
         completed_trial_count: completedCount,
+        missing_assignment_count: missingAssignmentCount,
+        orphan_trial_count: orphanTrialCount,
         status,
         elapsed_seconds: elapsed,
         elapsed_ms: elapsedMs,
@@ -162,7 +196,10 @@ export async function onRequestPost(context) {
       session_id: sessionId,
       status,
       trial_count: Number(session.trial_count || 0),
+      assignment_count: assignmentCount,
       completed_trial_count: completedCount,
+      missing_assignment_count: missingAssignmentCount,
+      orphan_trial_count: orphanTrialCount,
       completion_code: completion.code,
       completion_url: completion.url,
       redirect_after_ms: completion.url ? 1200 : 0,
