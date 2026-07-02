@@ -442,6 +442,14 @@ Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a
 
 The current public deployment fails the full check because live `/remote_manifest.csv` is still the 12-row demo manifest and the remote D1 database has not yet received `db/migrations/0011_speaker_pattern.sql`; live `/api/session/start` currently returns `D1_ERROR: table rating_assignments has no column named speaker_pattern_index`. Live `/app.js`, the selected ElevenLabs practice MP3 path, production config endpoint, security headers, and admin dry-run protection pass. Do not run Prolific participants until the live API dry-run start passes with the production manifest path.
 
+After Wrangler authentication is available, run the aggregate readiness audit:
+
+```sh
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
+```
+
+It writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/CLOUDFLARE_READINESS_REPORT_20260703.md` and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, and live API dry-run checks. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+
 ## 10. Configure Edge Protection
 
 Before production collection, add Cloudflare WAF rate limiting rules for these paths:
@@ -554,6 +562,7 @@ Before running the actual study:
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
 - Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
 - Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
+- Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.

@@ -538,4 +538,12 @@ Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is in
 
 The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. The current full live result is `FAIL`: public static `/remote_manifest.csv` is still the 12-row demo manifest, and live D1 has not yet received `db/migrations/0011_speaker_pattern.sql`. Live `app.js` and the selected practice MP3 path pass.
 
+After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
+
+```sh
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
+```
+
+This writes `CLOUDFLARE_READINESS_REPORT_20260703.md` to the OSF metadata directory and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, and the live API dry-run check. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+
 For local-only testing without a Cloudflare API, open the page with `?manual=1&local=1`. Do not use `?local=1` for Prolific data collection because it permits advancing without server persistence.

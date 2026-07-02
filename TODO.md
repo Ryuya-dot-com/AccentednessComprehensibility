@@ -52,6 +52,7 @@ This list tracks the remaining work before using
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
     - Live selected practice MP3 path returns `audio/mpeg`.
   - Run after every deployment:
+    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
     - `node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required.
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
@@ -256,6 +257,7 @@ node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 python3 scripts/generate_elevenlabs_practice_audio.py --dry-run

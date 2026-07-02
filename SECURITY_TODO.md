@@ -58,8 +58,8 @@ Priority:
 - [ ] Remove placeholder study values before production.
   - Replace placeholder practice audio paths and expert ratings.
   - Done in code/docs: client-supplied `completion_code` was removed from the participant URL flow; use `PROLIFIC_COMPLETION_CODE` instead.
-  - Live-check blocker: the current public `/app.js` still contains old URL-query completion-code reads until Cloudflare is redeployed.
-  - Verify with `node scripts/check_live_deployment.mjs` after deployment.
+  - Current live blockers are external configuration/state: public `remote_manifest.csv` is still demo-sized and remote D1 is missing `speaker_pattern_index` until schema updates are applied.
+  - Verify with `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after deployment while Turnstile is intentionally disabled; omit `--allow-turnstile-off` before production if Turnstile is required.
   - Acceptance: grep finds no `PLACEHOLDER`, demo-only manifest paths, or production-ineligible practice notes in production config.
 
 ## P1 - Data Protection
@@ -171,6 +171,7 @@ Priority:
   - Added production preflight: `node scripts/preflight_production.mjs` checks production manifest shape, demo-manifest leakage, audio QC failures, lexical balance flags, provisional practice ratings, duration summary, and static security files.
   - Added live deployment check: `node scripts/check_live_deployment.mjs --api-dry-run-start` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, admin dry-run protection, live D1 schema compatibility, and server-side counterbalance assignment.
   - Added guarded D1 schema updater: `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply` checks live columns, exports a SQL backup, and applies only missing additive columns.
+  - Added aggregate Cloudflare readiness audit: `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, production preflight, and live API dry-run checks.
   - Added local simultaneous-start stress test: `python3 scripts/stress_counterbalance_concurrency.py --participants 200` checks counterbalance spread and duplicate participant-key rejection under same-timestamp starts.
   - Acceptance: documented command or checklist passes before each production deployment.
 
