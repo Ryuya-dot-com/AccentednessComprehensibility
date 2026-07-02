@@ -99,6 +99,8 @@ function checkRequiredAppSnippets(appText) {
     "speaker_pattern_index",
     "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703",
     "response_flow",
+    "error.data?.retryable === true",
+    "Confirming saved responses...",
   ];
   const forbidden = [
     'params.get("completion_code")',
