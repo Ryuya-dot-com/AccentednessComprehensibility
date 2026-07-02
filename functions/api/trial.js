@@ -65,6 +65,7 @@ export async function onRequestPost(context) {
       .prepare(
         `SELECT id, rater_id, session_label, task_mode, platform_version,
           prolific_pid, prolific_study_id, prolific_session_id, trial_count,
+          japanese_familiarity_1_6, chinese_familiarity_1_6,
           session_token_hash, status
          FROM sessions WHERE id = ?`,
       )
@@ -122,8 +123,12 @@ export async function onRequestPost(context) {
       "single_page",
       "staged_dictation_then_ratings",
     ]);
-    assertRequiredIntRange("japanese_familiarity_1_6", row.japanese_familiarity_1_6, 1, 6);
-    assertRequiredIntRange("chinese_familiarity_1_6", row.chinese_familiarity_1_6, 1, 6);
+    const japaneseFamiliarity = nullableInt(session.japanese_familiarity_1_6) ||
+      nullableInt(row.japanese_familiarity_1_6);
+    const chineseFamiliarity = nullableInt(session.chinese_familiarity_1_6) ||
+      nullableInt(row.chinese_familiarity_1_6);
+    assertRequiredIntRange("japanese_familiarity_1_6", japaneseFamiliarity, 1, 6);
+    assertRequiredIntRange("chinese_familiarity_1_6", chineseFamiliarity, 1, 6);
     assertOptionalAllowed("first_response_field", row.first_response_field, [
       "dictation",
       "unidentified",
@@ -283,8 +288,8 @@ export async function onRequestPost(context) {
         nullableText(row.practice_feedback),
         boolToInt(row.practice_requires_reason),
         nullableText(row.practice_reason),
-        nullableInt(row.japanese_familiarity_1_6),
-        nullableInt(row.chinese_familiarity_1_6),
+        japaneseFamiliarity,
+        chineseFamiliarity,
         nullableNumber(row.first_key_rt_ms),
         nullableNumber(row.submit_rt_ms),
         nullableNumber(row.audio_duration_s),

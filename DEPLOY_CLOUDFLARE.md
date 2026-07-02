@@ -525,6 +525,8 @@ On `/admin/`, confirm that these CSV downloads work:
 
 To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
+To test reload recovery, start a pilot session from a Prolific-style URL, save several practice/main trials, then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, the browser resumes at the first unsaved trial rather than the beginning, already completed block distractors are not repeated, and completion is issued only after the remaining assignments are saved.
+
 To test unintelligible-word handling, complete a pilot trial using `I could not identify the word`. Confirm that the row is saved with `intelligibility_response_status=unidentified`, `intelligibility_unidentified=1`, `intelligibility_exact=0`, and no increase in `manual_review_count`.
 
 To stress-test local simultaneous counterbalance allocation before the Cloudflare dry run:
@@ -533,7 +535,7 @@ To stress-test local simultaneous counterbalance allocation before the Cloudflar
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 ```
 
-The current local result is 10 assignments per cell for 200 simultaneous starts, with duplicate participant keys rejected. This verifies the SQL-level invariant; still run at least one live Cloudflare dry run because D1, Pages Functions, secrets, and public asset hosting are external state.
+The current local result is 10 assignments per cell for 200 simultaneous starts, with duplicate participant keys rejected. The allocation query balances active-or-completed counts and uses a session-derived tie-breaker among equal-count cells. This verifies the local SQL-level invariant; still run at least one live Cloudflare dry run because D1, Pages Functions, secrets, and public asset hosting are external state.
 
 ## 12. Prolific Test URL
 
@@ -582,6 +584,7 @@ Before running the actual study:
 - Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.
 - For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress`.
+- Complete a live pilot reload test: save trials, reload the same Prolific-style URL, confirm resume at the first unsaved trial, then finish and verify completion/export rows.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.

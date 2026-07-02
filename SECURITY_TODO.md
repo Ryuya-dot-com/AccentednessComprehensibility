@@ -39,6 +39,9 @@ Priority:
   - D1 enforces `idx_sessions_participant_key_unique`.
   - Done in code: production requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
   - Done in code: duplicate starts for open sessions resume the same session; duplicate starts for closed sessions return 409 and no new token.
+  - Done in code: duplicate starts for open sessions return saved trial keys and resume at the first unsaved trial, including pending block distractors.
+  - Done in code: resumed trial saves keep session-level familiarity covariates fixed to the originally stored values.
+  - Done in code: same-count counterbalance ties use a session-derived offset so simultaneous starts do not all prefer the first cell.
   - Done in code/schema: store millisecond audit fields for start, last seen, completion, completion URL issue, and duplicate starts.
   - Acceptance: two simultaneous starts for the same Prolific participant produce one session row and one counterbalance allocation.
 
@@ -167,7 +170,7 @@ Priority:
   - Acceptance: each export can be tied to an authorized researcher account or admin session.
 
 - [ ] Add security smoke tests.
-  - Test missing D1 binding, missing `ADMIN_TOKEN`, invalid admin token, duplicate Prolific starts, invalid trial index, replayed trial save, missing session token, and production `?local=1`.
+  - Test missing D1 binding, missing `ADMIN_TOKEN`, invalid admin token, duplicate Prolific starts, reload resume, invalid trial index, replayed trial save, missing session token, and production `?local=1`.
   - Added production preflight: `node scripts/preflight_production.mjs` checks production manifest shape, demo-manifest leakage, audio QC failures, lexical balance flags, provisional practice ratings, duration summary, and static security files.
   - Added live deployment check: `node scripts/check_live_deployment.mjs --api-dry-run-start` checks public app-bundle drift, demo/static manifest exposure, selected practice audio deployment, production config, admin dry-run protection, live D1 schema compatibility, and server-side counterbalance assignment.
   - Added guarded D1 schema updater: `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply` checks live columns, exports a SQL backup, and applies only missing additive columns.

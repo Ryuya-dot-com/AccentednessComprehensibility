@@ -155,11 +155,11 @@ Main trials are randomized within each 25-trial block. The 100 main trials are n
 
 The block-level randomizer rejects within-block orders where the same L1 group (`ENG`, `JPN`, or `CHN`) occurs 3 or more times consecutively.
 
-The server balances cells by active-or-completed sessions first, then completed sessions, then total assigned sessions. This keeps simultaneous or slow in-flight starts from piling into the same cell while still allowing finalized dropouts to be replaced later. Incomplete or dropped sessions are not counted as completed.
+The server balances cells at session start by active-or-completed sessions first, then completed sessions, then total assigned sessions. Ties use a session-derived offset instead of fixed `cell_id` order, so same-timestamp starts do not all prefer the first cell if they momentarily see the same counts. Incomplete or dropped sessions are not counted as completed after finalization.
 
 This works best as rolling recruitment: continue recruiting until the target number of completed sessions is reached, then finalize stale sessions and check the completed count per cell. If a fixed batch of participants is launched all at once and recruitment stops before replacing dropouts, the assigned counts can be balanced while completed counts are still uneven. The counterbalance algorithm can compensate only when later participants are allowed to enter after dropouts are known or finalized.
 
-If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
+If a participant reloads or reopens the Prolific URL while the session is still `started`, the server issues a fresh session token for the same session and returns the first unsaved `phase + trial_index`. The browser resumes from that item, including any pending block distractor, and trial rows continue to use the familiarity values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
 
 Counterbalance reference files:
 
@@ -429,7 +429,7 @@ Rater responses are saved trial-by-trial to D1. The local ZIP download remains a
 
 Each saved trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Audio replay starts are also logged in `events.csv` with replay status and relative play time.
 
-Mid-task dropouts keep their partial rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
+Mid-task reloads resume at the first unsaved trial for still-open sessions. Mid-task dropouts keep their partial rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
 
 The researcher export page is:
 
@@ -540,7 +540,7 @@ node scripts/preflight_production.mjs \
   --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 ```
 
-The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured and provisional practice reference ratings are reviewed.
+The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start/resume handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured and provisional practice reference ratings are reviewed.
 
 After each Cloudflare deployment, run the live deployment check against the public URL:
 

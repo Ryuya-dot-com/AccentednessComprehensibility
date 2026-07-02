@@ -202,6 +202,10 @@
     serverSessionId: "",
     serverSessionToken: "",
     serverSaveFailed: false,
+    existingServerSession: false,
+    serverResume: null,
+    serverCompletedTrialKeys: new Set(),
+    serverCompletedDistractorIndexes: new Set(),
     productionMode: false,
     onboardingStep: "identity",
     securityConfigLoaded: false,
@@ -332,11 +336,25 @@
     return selected ? selected.value : "";
   }
 
+  function setRadioValue(name, value) {
+    const normalized = String(value || "");
+    if (!normalized) return;
+    document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+      input.checked = input.value === normalized;
+    });
+  }
+
   function familiarityValues() {
     return {
       japanese_familiarity_1_6: selectedRadioValue("japanese-familiarity"),
       chinese_familiarity_1_6: selectedRadioValue("chinese-familiarity"),
     };
+  }
+
+  function applyServerFamiliarityValues(data) {
+    setRadioValue("japanese-familiarity", data?.japanese_familiarity_1_6);
+    setRadioValue("chinese-familiarity", data?.chinese_familiarity_1_6);
+    updateSelectedMaterialSummary();
   }
 
   function familiarityComplete() {
@@ -586,6 +604,16 @@
     els.sessionId.value =
       prolific.prolific_session_id ||
       `session_${sanitizeName(raterId)}_${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  }
+
+  function trialKey(phase, trialIndex) {
+    const normalizedPhase = String(phase || "").trim() || "main";
+    const index = Number.parseInt(trialIndex, 10);
+    return Number.isFinite(index) && index > 0 ? `${normalizedPhase}:${index}` : "";
+  }
+
+  function savedTrialKeyFromRow(row) {
+    return trialKey(row?.phase || state.phase, row?.trial_index);
   }
 
   function buildPracticeTrials() {
@@ -839,6 +867,23 @@
     const data = await postJson("/api/session/start", payload);
     state.serverSessionId = data.session_id;
     state.serverSessionToken = data.session_token || "";
+    if (data.existing_session === true) applyServerFamiliarityValues(data);
+    state.existingServerSession = data.existing_session === true;
+    state.serverResume = data.resume || null;
+    state.serverCompletedTrialKeys = new Set(
+      Array.isArray(data.saved_trials)
+        ? data.saved_trials
+            .map((row) => trialKey(row.phase, row.trial_index))
+            .filter(Boolean)
+        : [],
+    );
+    state.serverCompletedDistractorIndexes = new Set(
+      Array.isArray(data.distractor_completed_trial_indexes)
+        ? data.distractor_completed_trial_indexes
+            .map((value) => Number.parseInt(value, 10))
+            .filter((value) => Number.isFinite(value))
+        : [],
+    );
     if (data.counterbalance) {
       state.counterbalance.assigned = data.counterbalance;
     }
@@ -852,6 +897,50 @@
     }
     state.serverSaveFailed = false;
     return state.serverSessionId;
+  }
+
+  async function resumeExistingServerSessionIfNeeded() {
+    if (!state.existingServerSession || !state.serverResume) return false;
+    const resume = state.serverResume;
+    if (resume.next_phase === "complete") {
+      state.phase = "main";
+      state.trials = state.mainTrials;
+      setLog("All saved responses were found. Confirming completion with the server.");
+      showOnly(els.taskPanel);
+      await completeSession();
+      return true;
+    }
+
+    const nextIndex = Math.max(0, Number.parseInt(resume.next_trial_index, 10) - 1);
+    if (resume.next_phase === "main") {
+      state.phase = "main";
+      state.trials = state.mainTrials;
+    } else {
+      state.phase = "practice";
+      state.trials = state.practiceTrials;
+    }
+
+    if (!state.trials.length) return false;
+    if (nextIndex >= state.trials.length) {
+      if (state.phase === "practice") startMainTrials();
+      else await completeSession();
+      return true;
+    }
+
+    setLog(`Resuming saved session at ${state.phase} item ${nextIndex + 1}.`);
+    showOnly(els.taskPanel);
+    if (
+      state.phase === "main" &&
+      resume.pending_distractor === true &&
+      Number.parseInt(resume.pending_distractor_index, 10) === nextIndex
+    ) {
+      showDistractor(nextIndex);
+    } else if (state.phase === "main" && shouldShowBlockDistractor(nextIndex)) {
+      showDistractor(nextIndex);
+    } else {
+      showTrial(nextIndex);
+    }
+    return true;
   }
 
   async function logServerEvent(eventType, payload = {}, trialIndex = null) {
@@ -1302,6 +1391,10 @@
     state.serverSessionId = "";
     state.serverSessionToken = "";
     state.serverSaveFailed = false;
+    state.existingServerSession = false;
+    state.serverResume = null;
+    state.serverCompletedTrialKeys = new Set();
+    state.serverCompletedDistractorIndexes = new Set();
     state.distractor = null;
     state.counterbalance.enabled = true;
     state.counterbalance.assigned = null;
@@ -1525,6 +1618,10 @@
     state.serverSessionId = "";
     state.serverSessionToken = "";
     state.serverSaveFailed = false;
+    state.existingServerSession = false;
+    state.serverResume = null;
+    state.serverCompletedTrialKeys = new Set();
+    state.serverCompletedDistractorIndexes = new Set();
     state.distractor = null;
     resetDownload();
 
@@ -1759,8 +1856,9 @@
       }
     }
     state.running = true;
-    state.phase = "practice";
     state.practiceTrials = buildPracticeTrials();
+    if (await resumeExistingServerSessionIfNeeded()) return;
+    state.phase = "practice";
     state.trials = state.practiceTrials;
     showOnly(els.taskPanel);
     showTrial(0);
@@ -2275,6 +2373,8 @@
       }
     }
 
+    const savedKey = savedTrialKeyFromRow(row);
+    if (savedKey) state.serverCompletedTrialKeys.add(savedKey);
     state.rows.push(row);
 
     const nextIndex = state.currentIndex + 1;
@@ -2284,7 +2384,7 @@
         startMainTrials();
         return;
       }
-      completeSession();
+      await completeSession();
       return;
     }
     if (shouldShowBlockDistractor(nextIndex)) {
@@ -2356,7 +2456,17 @@
   }
 
   function completedRowsForPhase(phase) {
-    return state.rows.filter((row) => row.phase === phase).length;
+    const keys = new Set(
+      [...state.serverCompletedTrialKeys]
+        .filter((key) => key.startsWith(`${phase}:`)),
+    );
+    state.rows
+      .filter((row) => row.phase === phase)
+      .forEach((row) => {
+        const key = savedTrialKeyFromRow(row);
+        if (key) keys.add(key);
+      });
+    return keys.size;
   }
 
   function showBreak(nextIndex) {
@@ -2374,6 +2484,7 @@
   function shouldShowBlockDistractor(nextIndex) {
     if (state.phase !== "main" || !state.counterbalance.enabled) return false;
     if (nextIndex <= 0 || nextIndex >= state.trials.length) return false;
+    if (state.serverCompletedDistractorIndexes.has(nextIndex)) return false;
     const completed = state.trials[nextIndex - 1];
     const upcoming = state.trials[nextIndex];
     return Boolean(
@@ -2518,6 +2629,7 @@
         payload,
       });
       state.serverSaveFailed = false;
+      state.serverCompletedDistractorIndexes.add(state.distractor.nextIndex);
     } catch (error) {
       state.serverSaveFailed = true;
       els.distractorStatus.textContent = PARTICIPANT_MODE
@@ -2729,6 +2841,10 @@
     state.serverSessionId = "";
     state.serverSessionToken = "";
     state.serverSaveFailed = false;
+    state.existingServerSession = false;
+    state.serverResume = null;
+    state.serverCompletedTrialKeys = new Set();
+    state.serverCompletedDistractorIndexes = new Set();
     state.distractor = null;
     els.startBtn.disabled = true;
     els.downloadBtn.disabled = true;

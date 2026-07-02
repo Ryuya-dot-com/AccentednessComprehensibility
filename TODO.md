@@ -24,6 +24,7 @@ This list tracks the remaining work before using
 - [x] Dictation and rating are separated into staged pages within each combined trial.
 - [x] Audio replay is disabled after successful playback.
 - [x] The Sheet2 talker-pattern constraints are explicitly enforced and exported.
+- [x] Started sessions can resume after reload at the first unsaved practice/main trial.
 
 ## P0: Must Finish Before Any Participant Launch
 
@@ -177,6 +178,7 @@ This list tracks the remaining work before using
   - Live script: `scripts/stress_live_counterbalance_concurrency.mjs`.
   - Current report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
   - Current result: 200 simultaneous starts produced exactly 10 assignments per cell; duplicate `participant_key` insertion was rejected.
+  - Same-count cell ties now use a session-derived offset rather than fixed `cell_id` order.
   - This local SQLite-compatible stress test is now paired with a live D1-backed dry-run stress command before launch.
 
 - [x] Audit lexical balance for style `a` versus style `b` assignments.
@@ -236,7 +238,8 @@ This list tracks the remaining work before using
   - Current preflight report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured and three practice reference ratings remain provisional.
-  - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation, and stale/dropout finalization.
+  - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
+  - Started-session resume guards pass locally at source level: duplicate starts return saved `phase + trial_index` keys, pending block distractors are preserved, familiarity covariates stay fixed to the original session values, and the browser resumes at the first unsaved item.
   - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv` and live D1 is missing the `0011_speaker_pattern.sql` columns.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 

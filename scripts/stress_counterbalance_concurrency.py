@@ -3,8 +3,8 @@
 
     This is a local SQLite analogue of the D1 allocation query. It verifies that
     many sessions with the same timestamp are still spread across the 20 cells by
-    the active-or-completed / completed / assigned ordering used by the Pages
-    Function.
+    the active-or-completed / completed / assigned ordering and session-based
+    tie-breaker used by the Pages Function.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ PROJECT_ROOT = ROOT.parent
 DROPBOX_PACKAGE_ROOT = Path("/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703")
 SCHEMA = ROOT / "db" / "schema.sql"
 FIXED_TIMESTAMP = "2026-07-03T00:00:00.000Z"
+CELL_COUNT = 20
 
 
 def default_package_root() -> Path:
@@ -53,6 +54,14 @@ def init_db(path: Path) -> None:
         conn.close()
 
 
+def hash_string(value: str) -> int:
+    h = 2166136261
+    for char in str(value):
+        h ^= ord(char)
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h
+
+
 def allocate(path: Path, worker_id: int, barrier: threading.Barrier, timeout_s: float) -> int:
     conn = sqlite3.connect(path, timeout=timeout_s, isolation_level=None)
     try:
@@ -60,6 +69,7 @@ def allocate(path: Path, worker_id: int, barrier: threading.Barrier, timeout_s: 
         barrier.wait(timeout=timeout_s)
         session_id = f"simultaneous-session-{worker_id:05d}"
         allocation_id = str(uuid.uuid4())
+        tie_breaker_offset = hash_string(session_id) % CELL_COUNT
         conn.execute(
             """
             INSERT INTO counterbalance_allocations (
@@ -86,10 +96,11 @@ def allocate(path: Path, worker_id: int, barrier: threading.Barrier, timeout_s: 
                 WHERE ca.cell_id = c.cell_id
                   AND ca.status NOT LIKE 'dry_run_%'
               ) ASC,
+              ((c.cell_id + ?) % 20) ASC,
               c.cell_id ASC
             LIMIT 1
             """,
-            (allocation_id, session_id, FIXED_TIMESTAMP, FIXED_TIMESTAMP),
+            (allocation_id, session_id, FIXED_TIMESTAMP, FIXED_TIMESTAMP, tie_breaker_offset),
         )
         row = conn.execute(
             "SELECT cell_id FROM counterbalance_allocations WHERE id = ?",

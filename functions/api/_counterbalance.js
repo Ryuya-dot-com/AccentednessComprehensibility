@@ -621,6 +621,7 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
   const startedStatus = dryRun ? "dry_run_started" : "started";
   const completedStatus = dryRun ? "dry_run_completed" : "completed";
   const scopedAllocations = allocationScopeSql(dryRun);
+  const tieBreakerOffset = hashString(sessionId) % COUNTERBALANCE_CELLS.length;
   await db
     .prepare(
       `INSERT INTO counterbalance_allocations (
@@ -647,6 +648,7 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
           WHERE ca.cell_id = c.cell_id
             AND ${scopedAllocations}
         ) ASC,
+        ((c.cell_id + ?) % ${COUNTERBALANCE_CELLS.length}) ASC,
         c.cell_id ASC
       LIMIT 1`,
     )
@@ -659,6 +661,7 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
       startedStatus,
       completedStatus,
       completedStatus,
+      tieBreakerOffset,
     )
     .run();
 

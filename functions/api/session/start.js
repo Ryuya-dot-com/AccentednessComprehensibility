@@ -160,10 +160,73 @@ async function recordDuplicateStart(db, sessionId, timestampIso, timestampMs) {
 }
 
 async function existingSessionResponse(db, session, sessionToken) {
-  const { results } = await db
-    .prepare(ASSIGNMENT_SELECT)
-    .bind(session.id, "main")
-    .all();
+  const [practiceAssignment, mainAssignment, completedTrials, distractorEvents] = await Promise.all([
+    db.prepare(ASSIGNMENT_SELECT).bind(session.id, "practice").all(),
+    db.prepare(ASSIGNMENT_SELECT).bind(session.id, "main").all(),
+    db
+      .prepare(
+        `SELECT phase, trial_index
+         FROM rating_trials
+         WHERE session_id = ?
+         ORDER BY CASE phase WHEN 'practice' THEN 0 WHEN 'main' THEN 1 ELSE 2 END, trial_index`,
+      )
+      .bind(session.id)
+      .all(),
+    db
+      .prepare(
+        `SELECT DISTINCT trial_index
+         FROM event_logs
+         WHERE session_id = ?
+           AND event_type = 'distractor_complete'
+           AND trial_index IS NOT NULL
+         ORDER BY trial_index`,
+      )
+      .bind(session.id)
+      .all(),
+  ]);
+  const practiceRows = practiceAssignment.results || [];
+  const mainRows = mainAssignment.results || [];
+  const savedTrials = (completedTrials.results || []).map((row) => ({
+    phase: cleanText(row.phase),
+    trial_index: nullableInt(row.trial_index),
+  }));
+  const savedKeys = new Set(
+    savedTrials
+      .filter((row) => row.phase && row.trial_index)
+      .map((row) => `${row.phase}:${row.trial_index}`),
+  );
+  const distractorCompletedIndexes = (distractorEvents.results || [])
+    .map((row) => nullableInt(row.trial_index))
+    .filter(Boolean);
+  const distractorCompletedIndexSet = new Set(distractorCompletedIndexes);
+  const nextAssignment = [...practiceRows, ...mainRows].find((row) => {
+    const phase = cleanText(row.phase);
+    const trialIndex = nullableInt(row.trial_index);
+    return phase && trialIndex && !savedKeys.has(`${phase}:${trialIndex}`);
+  });
+  const resume = nextAssignment
+    ? {
+        next_phase: cleanText(nextAssignment.phase),
+        next_trial_index: nullableInt(nextAssignment.trial_index),
+      }
+    : {
+        next_phase: "complete",
+        next_trial_index: null,
+      };
+  if (resume.next_phase === "main" && resume.next_trial_index > 1) {
+    const previousMain = mainRows.find((row) => nullableInt(row.trial_index) === resume.next_trial_index - 1);
+    const upcomingMain = mainRows.find((row) => nullableInt(row.trial_index) === resume.next_trial_index);
+    const pendingDistractorIndex = resume.next_trial_index - 1;
+    const crossesBlockBoundary = Boolean(
+      previousMain?.block_index &&
+        upcomingMain?.block_index &&
+        String(previousMain.block_index) !== String(upcomingMain.block_index),
+    );
+    if (crossesBlockBoundary && !distractorCompletedIndexSet.has(pendingDistractorIndex)) {
+      resume.pending_distractor = true;
+      resume.pending_distractor_index = pendingDistractorIndex;
+    }
+  }
   return {
     ok: true,
     existing_session: true,
@@ -171,9 +234,15 @@ async function existingSessionResponse(db, session, sessionToken) {
     status: session.status,
     completed_trial_count: Number(session.completed_trial_count || 0),
     trial_count: Number(session.trial_count || 0),
+    japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6),
+    chinese_familiarity_1_6: nullableInt(session.chinese_familiarity_1_6),
     session_token: sessionToken,
     counterbalance: counterbalancePayload(counterbalanceFromSession(session)),
-    main_assignment: results || [],
+    practice_assignment: practiceRows,
+    main_assignment: mainRows,
+    saved_trials: savedTrials,
+    distractor_completed_trial_indexes: distractorCompletedIndexes,
+    resume,
   };
 }
 
