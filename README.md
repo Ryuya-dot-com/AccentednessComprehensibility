@@ -255,7 +255,7 @@ Current practice audio uses selected ElevenLabs MP3 files:
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate ease of understanding, and rate accent strength.
 - Practice feedback shows the correct word and reference ratings. It does not ask participants to justify their ratings.
 
-Practice audio paths are under `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`. The current reference ratings are provisional and should be confirmed by collaborator listening review before launch.
+Practice audio paths are under `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`. The current non-ENG reference ratings are temporary researcher-selected values for dry-run and can be revised after collaborator listening review.
 
 The top-level `practice_manifest.csv` also points to these four selected MP3 files so local researcher demo loading cannot silently fall back to the legacy macOS TTS WAV set.
 
@@ -550,7 +550,7 @@ node scripts/preflight_production.mjs \
   --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 ```
 
-The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start/resume handling, counterbalance allocation, and stale-session dropout finalization. The current expected result is `FAIL` until production audio hosting is configured and provisional practice reference ratings are reviewed.
+The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start/resume handling, counterbalance allocation, and stale-session dropout finalization. With the production R2 manifest and external manifest secret configured, the current expected result is `PASS`.
 
 After each Cloudflare deployment, run the live deployment check against the public URL:
 
@@ -560,7 +560,7 @@ node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 
 Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, and duplicate-start resume metadata by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
 
-The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. The current full live result is `FAIL`: public static `/remote_manifest.csv` is still the 12-row demo manifest, and live D1 has not yet received `db/migrations/0011_speaker_pattern.sql`. Live `app.js` and the selected practice MP3 path pass.
+The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`; the current live API dry-run result is `PASS`.
 
 After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 

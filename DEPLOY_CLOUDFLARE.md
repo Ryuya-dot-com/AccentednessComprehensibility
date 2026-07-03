@@ -557,7 +557,7 @@ After Cloudflare marks the session as `completed`, `/api/session/complete` retur
 
 Before running the actual study:
 
-- Confirm collaborator review of the selected ElevenLabs practice MP3 files and revise provisional reference ratings in `app.js` if needed.
+- Confirm collaborator review of the selected ElevenLabs practice MP3 files and revise the temporary practice reference ratings in `app.js` if needed.
 - Set `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
 - Apply `db/migrations/0005_session_security.sql` to existing D1 databases.
@@ -583,7 +583,7 @@ Before running the actual study:
 - Run `python3 scripts/audit_lexical_balance.py` and confirm `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/lexical_balance_pairwise_differences.csv` has no unresolved imbalance flags.
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
 - Run `node scripts/validate_audio_hosting.mjs --sample 80` after production HTTPS audio URLs are generated, and use `--sample 0` for the final full-row probe before launch.
-- Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. It currently fails until production audio hosting is configured and provisional practice reference ratings are reviewed.
+- Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. When the production R2 manifest is provided through `COUNTERBALANCE_MANIFEST_URL`, pass `--production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret`.
 - Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
 - Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.

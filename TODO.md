@@ -20,7 +20,7 @@ This list tracks the remaining work before using
 - [ ] Deployed `remote_manifest.csv` still points to demo materials until the production audio host/path is chosen or `COUNTERBALANCE_MANIFEST_URL` is configured.
 - [x] Placeholder practice tones are removed; `app.js` now uses 4 selected ElevenLabs MP3 practice items: `chocolate`, `coffee`, `pizza`, and `sofa`.
 - [x] Top-level local `practice_manifest.csv` and dry-run placeholder audio now point to the selected ElevenLabs MP3 set, not the legacy macOS TTS WAV set.
-- [ ] The selected practice reference ratings still need collaborator listening review before participant launch.
+- [ ] The selected practice reference ratings are temporary researcher-selected values for dry-run; collaborator listening review can revise them before final launch if needed.
 - [x] Dictation and rating are separated into staged pages within each combined trial.
 - [x] Audio replay is disabled after successful playback.
 - [x] The Sheet2 talker-pattern constraints are explicitly enforced and exported.
@@ -145,7 +145,7 @@ This list tracks the remaining work before using
 
 - [ ] Blind-review selected ElevenLabs practice ratings with collaborators.
   - Confirm that the Japanese-like and Chinese-like accents are strong enough for practice.
-  - Confirm or revise the provisional reference ratings stored in `app.js` and `practice_manifest.csv`.
+  - Confirm or revise the temporary reference ratings stored in `app.js` and `practice_manifest.csv`.
   - Review packet generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`.
   - Review templates:
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/practice_reference_rating_review_template.csv`.
@@ -238,7 +238,7 @@ This list tracks the remaining work before using
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current preflight report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current preflight result: FAIL, as intended before launch, because production audio hosting is not configured and three practice reference ratings remain provisional.
+  - Current preflight result: PASS when run with the production R2 manifest and `--using-external-manifest-secret`.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
   - Started-session resume guards pass locally at source level: duplicate starts return saved `phase + trial_index` keys, pending block distractors are preserved, familiarity covariates stay fixed to the original session values, and the browser resumes at the first unsaved item.
   - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv` and live D1 is missing the `0011_speaker_pattern.sql` columns.

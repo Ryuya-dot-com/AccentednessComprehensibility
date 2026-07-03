@@ -1,5 +1,5 @@
 trial_index,target_word,l1_condition,pronunciation_condition,voice_variant,audio_file,expert_comprehensibility_1_9,expert_accentedness_1_9,source_note
 1,chocolate,ENG,natural,eng_bella,chocolate__eng_bella.mp3,1,1,selected ElevenLabs practice MP3; loudness-normalized with ffmpeg loudnorm I=-23 LRA=7 TP=-2
-2,coffee,JPN,accented,jpn_yusuke_stronger,coffee__jpn_yusuke_stronger.mp3,3,4,selected stronger Japanese-accent candidate; reference ratings are provisional until researcher review
-3,pizza,JPN,accented,jpn_lia_stronger,pizza__jpn_lia_stronger.mp3,5,6,selected stronger Japanese-accent candidate; reference ratings are provisional until researcher review
-4,sofa,CHN,accented,chn_deep_bass_stronger,sofa__chn_deep_bass_stronger.mp3,7,8,selected stronger Chinese-accent candidate; reference ratings are provisional until researcher review
+2,coffee,JPN,accented,jpn_yusuke_stronger,coffee__jpn_yusuke_stronger.mp3,3,4,selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run
+3,pizza,JPN,accented,jpn_lia_stronger,pizza__jpn_lia_stronger.mp3,5,6,selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run
+4,sofa,CHN,accented,chn_deep_bass_stronger,sofa__chn_deep_bass_stronger.mp3,7,8,selected stronger Chinese-accent candidate; reference ratings are temporary researcher-selected values for dry-run

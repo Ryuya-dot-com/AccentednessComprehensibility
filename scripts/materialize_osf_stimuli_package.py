@@ -43,8 +43,8 @@ SELECTED_PRACTICE_ROWS = [
         ),
         "expert_comprehensibility_1_9": "3",
         "expert_accentedness_1_9": "4",
-        "status": "selected_provisional_rating",
-        "note": "Selected stronger Japanese-accent candidate; reference ratings need researcher review.",
+        "status": "selected",
+        "note": "Selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
     },
     {
         "trial_index": "3",
@@ -59,8 +59,8 @@ SELECTED_PRACTICE_ROWS = [
         ),
         "expert_comprehensibility_1_9": "5",
         "expert_accentedness_1_9": "6",
-        "status": "selected_provisional_rating",
-        "note": "Selected stronger Japanese-accent candidate; reference ratings need researcher review.",
+        "status": "selected",
+        "note": "Selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
     },
     {
         "trial_index": "4",
@@ -75,8 +75,8 @@ SELECTED_PRACTICE_ROWS = [
         ),
         "expert_comprehensibility_1_9": "7",
         "expert_accentedness_1_9": "8",
-        "status": "selected_provisional_rating",
-        "note": "Selected stronger Chinese-accent candidate; reference ratings need researcher review.",
+        "status": "selected",
+        "note": "Selected stronger Chinese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
     },
 ]
 CONTENT_TYPES = {
@@ -149,7 +149,7 @@ def package_readme(package_root: Path, counts: Counter, manifest_name: str) -> s
         "",
         "The app practice session uses four selected ElevenLabs MP3 files listed in",
         "`metadata/selected_practice_manifest.csv`: `chocolate`, `coffee`, `pizza`, and `sofa`.",
-        "The non-ENG reference ratings in this manifest are provisional until collaborator listening review.",
+        "The non-ENG reference ratings are temporary researcher-selected values for dry-run.",
         "",
         "## Audio Counts",
         "",

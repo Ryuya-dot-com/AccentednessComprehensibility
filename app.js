@@ -58,7 +58,7 @@
       voice_variant: "jpn_yusuke_stronger",
       expert_comprehensibility_1_9: 3,
       expert_accentedness_1_9: 4,
-      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
+      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
     },
     {
       practice_kind: "combined",
@@ -72,7 +72,7 @@
       voice_variant: "jpn_lia_stronger",
       expert_comprehensibility_1_9: 5,
       expert_accentedness_1_9: 6,
-      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
+      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
     },
     {
       practice_kind: "combined",
@@ -86,7 +86,7 @@
       voice_variant: "chn_deep_bass_stronger",
       expert_comprehensibility_1_9: 7,
       expert_accentedness_1_9: 8,
-      practice_note: "Selected stronger Chinese-accent ElevenLabs candidate. Reference ratings are provisional until researcher review.",
+      practice_note: "Selected stronger Chinese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
     },
   ];
 
