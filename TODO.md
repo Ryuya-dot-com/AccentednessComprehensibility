@@ -49,9 +49,9 @@ This list tracks the remaining work before using
   - Current live blockers:
     - Live `/remote_manifest.csv` is still a 12-row demo manifest.
     - Live `/api/session/start` dry-run currently fails because the remote D1 `rating_assignments` table is missing `speaker_pattern_index`; apply `db/migrations/0011_speaker_pattern.sql`.
-      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0010_staged_response_flow.sql`.
-      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql`.
-      - Safer partially-migrated DB path: `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply`.
+      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0010_staged_response_flow.sql`.
+      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0011_speaker_pattern.sql`.
+      - Safer partially-migrated DB path: `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`.
   - Current live passes:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
     - Live selected practice MP3 path returns `audio/mpeg`.
@@ -266,7 +266,7 @@ node scripts/verify_counterbalance.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
-node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
+node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility
 node scripts/build_hosted_manifest.mjs --audio-base-url https://stimuli.example.edu --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
 node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress
 node scripts/validate_audio_hosting.mjs --sample 80

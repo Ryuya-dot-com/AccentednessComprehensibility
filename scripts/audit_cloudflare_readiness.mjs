@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_PROJECT = "accentednesscomprehensibility";
-const DEFAULT_DATABASE = "accentedness-rating";
+const DEFAULT_DATABASE = "accentedness-comprehensibility";
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
 const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703";

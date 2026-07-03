@@ -106,13 +106,13 @@ Relevant Cloudflare docs:
 If EU data location is desired for the feasibility test, create the database with the EU jurisdiction option:
 
 ```sh
-npx wrangler d1 create accentedness-rating --jurisdiction=eu
+npx wrangler d1 create accentedness-comprehensibility --jurisdiction=eu
 ```
 
 If a specific jurisdiction is not needed for the first test, use:
 
 ```sh
-npx wrangler d1 create accentedness-rating
+npx wrangler d1 create accentedness-comprehensibility
 ```
 
 Wrangler returns a D1 database UUID. Copy that value for the next step.
@@ -158,7 +158,7 @@ Relevant Cloudflare docs:
 Create the tables in the remote D1 database:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/schema.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/schema.sql
 ```
 
 This creates tables for sessions, assignments, trial responses, and event logs.
@@ -166,13 +166,13 @@ This creates tables for sessions, assignments, trial responses, and event logs.
 If you already created the D1 database before the counterbalance tables/columns were added, run the one-time migration instead:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0002_counterbalance.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0002_counterbalance.sql
 ```
 
 For an existing database, apply the hardening migration after `0002_counterbalance.sql`. It adds Prolific duplicate-start protection indexes and can be run more than once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0003_hardening.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0003_hardening.sql
 ```
 
 If this fails because duplicate Prolific IDs already exist in a pilot database, export `sessions.csv`, resolve or archive the duplicate pilot rows, and rerun the migration.
@@ -180,19 +180,19 @@ If this fails because duplicate Prolific IDs already exist in a pilot database, 
 If the database was created before block-level counterbalancing was added, run the block metadata migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0004_block_counterbalance.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0004_block_counterbalance.sql
 ```
 
 If the database was created before session-token hardening was added, run the security migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0005_session_security.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0005_session_security.sql
 ```
 
 If the database was created before strict participant locking and millisecond audit fields were added, run this migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0006_participant_lock_ms.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0006_participant_lock_ms.sql
 ```
 
 If `0006_participant_lock_ms.sql` fails while creating `idx_sessions_participant_key_unique`, export `sessions.csv`, resolve duplicate `participant_key` rows in the pilot database, and rerun the migration. Do not start production with duplicate Prolific participant keys.
@@ -200,38 +200,38 @@ If `0006_participant_lock_ms.sql` fails while creating `idx_sessions_participant
 For existing databases, add the stale-session lookup index used by the admin finalization endpoint:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0007_stale_session_index.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0007_stale_session_index.sql
 ```
 
 If the database was created before the explicit unidentified-word response was added, run this migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0008_intelligibility_unidentified.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0008_intelligibility_unidentified.sql
 ```
 
 If the database was created before response-order and rating-process metrics were added, run this migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0009_response_order_metrics.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0009_response_order_metrics.sql
 ```
 
 If the database was created before staged word-identification/rating pages were added, run this migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0010_staged_response_flow.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0010_staged_response_flow.sql
 ```
 
 If the database was created before Sheet2 speaker-pattern metadata was added, run this migration once:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --file=./db/migrations/0011_speaker_pattern.sql
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0011_speaker_pattern.sql
 ```
 
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
 ```sh
-node scripts/apply_d1_schema_updates.mjs --database accentedness-rating
-node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply
+node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility
+node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply
 ```
 
 ## 6. Host Production Audio
@@ -510,11 +510,11 @@ Then complete a short test session from the participant page. Do not add `?local
 After saving a few trials, confirm records exist in D1:
 
 ```sh
-npx wrangler d1 execute accentedness-rating --remote --command "SELECT COUNT(*) AS sessions FROM sessions;"
-npx wrangler d1 execute accentedness-rating --remote --command "SELECT COUNT(*) AS trials FROM rating_trials;"
-npx wrangler d1 execute accentedness-rating --remote --command "SELECT COUNT(*) AS events FROM event_logs;"
-npx wrangler d1 execute accentedness-rating --remote --command "SELECT cell_id, status, COUNT(*) AS n FROM counterbalance_allocations GROUP BY cell_id, status;"
-npx wrangler d1 execute accentedness-rating --remote --command "SELECT block_index, block_list, COUNT(*) AS n FROM rating_assignments WHERE phase = 'main' GROUP BY block_index, block_list ORDER BY block_index;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS sessions FROM sessions;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS trials FROM rating_trials;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS events FROM event_logs;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT cell_id, status, COUNT(*) AS n FROM counterbalance_allocations GROUP BY cell_id, status;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT block_index, block_list, COUNT(*) AS n FROM rating_assignments WHERE phase = 'main' GROUP BY block_index, block_list ORDER BY block_index;"
 ```
 
 On `/admin/`, confirm that these CSV downloads work:
@@ -567,7 +567,7 @@ Before running the actual study:
 - Apply `db/migrations/0009_response_order_metrics.sql` to existing D1 databases.
 - Apply `db/migrations/0010_staged_response_flow.sql` to existing D1 databases.
 - Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
-- For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-rating --apply --backup-before-apply`; it exports a SQL backup first and adds only missing columns.
+- For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`; it exports a SQL backup first and adds only missing columns.
 - Confirm the Prolific Study URL includes `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
 - Protect `/admin/*` and `/api/admin/*` with Cloudflare Access; set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`.
 - Configure WAF rate limiting rules for participant and admin API paths.

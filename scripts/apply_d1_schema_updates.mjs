@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const DEFAULT_DATABASE = "accentedness-rating";
+const DEFAULT_DATABASE = "accentedness-comprehensibility";
 
 const REQUIRED_COLUMNS = {
   sessions: [
@@ -148,7 +148,7 @@ function hasFlag(name) {
 
 function usage() {
   return `Usage:
-  node scripts/apply_d1_schema_updates.mjs [--database accentedness-rating] [--remote|--local] [--apply]
+  node scripts/apply_d1_schema_updates.mjs [--database accentedness-comprehensibility] [--remote|--local] [--apply]
   node scripts/apply_d1_schema_updates.mjs --print-sql
 
 Options:
@@ -350,8 +350,9 @@ async function main() {
   console.log(`missing_column_statements: ${missingStatements.length}`);
   console.log(`setup_statements: ${REQUIRED_SETUP_SQL.length}`);
 
-  if (!statements.length) {
-    console.log("schema_status: no missing schema updates detected");
+  if (!missingStatements.length && !apply) {
+    console.log("schema_status: no missing columns; setup SQL is idempotent");
+    for (const statement of REQUIRED_SETUP_SQL) console.log(`${statement};`);
     return;
   }
 
