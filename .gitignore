@@ -23,3 +23,7 @@ counterbalance_allocations.csv
 private_audio/
 production_audio/
 exports/
+
+# Generated ElevenLabs candidate pools (only the selected subset is tracked)
+practice_training_audio/elevenlabs_multi_20260703/
+practice_training_audio/elevenlabs_demo_practice_multi_20260703_mp3_norm/

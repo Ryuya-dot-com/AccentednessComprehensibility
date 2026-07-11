@@ -246,6 +246,7 @@ This list tracks the remaining work before using
 
 - [ ] Review production secrets and access controls.
   - Confirm `ADMIN_TOKEN`, Prolific completion settings, D1 binding, and Cloudflare Access protection for `/admin/*` and `/api/admin/*`.
+  - 2026-07-12: `PROLIFIC_COMPLETION_CODE` Pages secret is configured for production (Prolific "Copy and paste code" completion path); the completion URL is derived server-side by `prolificCompletionConfig`.
   - Confirm `.env`, `.dev.vars`, private manifests, and private audio URLs are not committed.
   - Completion: production deployment has no secret leakage and admin routes are protected.
 
