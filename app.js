@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.5.0";
+  const VERSION = "pronunciation_rating_v0.5.1";
   const DEFAULT_REMOTE_MANIFEST_URL = "remote_manifest.csv";
   const AUDIO_EXTENSIONS = /\.(wav|mp3|m4a|ogg|webm)$/i;
   const REQUIRED_MANIFEST_FILE_COLUMNS = [
@@ -1660,8 +1660,8 @@
   }
 
   function renderScales() {
-    renderScale(els.comprehensibilityScale, "comprehensibility");
     renderScale(els.accentednessScale, "accentedness");
+    renderScale(els.comprehensibilityScale, "comprehensibility");
   }
 
   function renderScale(container, name) {
@@ -1696,7 +1696,7 @@
       .forEach((input) => {
         input.disabled = disabled;
       });
-    [els.comprehensibilityBlock, els.accentednessBlock].forEach((block) => {
+    [els.accentednessBlock, els.comprehensibilityBlock].forEach((block) => {
       if (block) block.classList.toggle("disabled", disabled);
     });
   }
@@ -1758,8 +1758,8 @@
       text:
         `Correct word: ${item.target_word}\n` +
         `Your answer: ${answerText} ${exact ? "(matched)" : "(not an exact match)"}\n` +
-        `Understanding reference: ${expertComp}; your rating: ${userComp}.\n` +
-        `Accent reference: ${expertAccent}; your rating: ${userAccent}.\n` +
+        `Accentedness reference: ${expertAccent}; your rating: ${userAccent}.\n` +
+        `Comprehensibility reference: ${expertComp}; your rating: ${userComp}.\n` +
         "These reference ratings are only for practice.",
     };
   }
@@ -1904,8 +1904,8 @@
     resetResponseTrace();
     hidePracticeFeedback();
 
-    clearSelectedScale("comprehensibility");
     clearSelectedScale("accentedness");
+    clearSelectedScale("comprehensibility");
     els.dictationInput.value = "";
     els.dictationInput.disabled = true;
     if (els.dictationUnidentified) {
@@ -2240,8 +2240,8 @@
     const dictationVisible = dictation && (!staged || state.trialStage === "dictation");
     const ratingsVisible = ratings && (!staged || state.trialStage === "ratings");
     els.dictationBlock.classList.toggle("hidden", !dictationVisible);
-    els.comprehensibilityBlock.classList.toggle("hidden", !ratingsVisible);
     els.accentednessBlock.classList.toggle("hidden", !ratingsVisible);
+    els.comprehensibilityBlock.classList.toggle("hidden", !ratingsVisible);
     if (!dictation) {
       els.dictationInput.value = "";
       els.dictationInput.disabled = true;

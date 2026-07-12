@@ -2,8 +2,8 @@
 
 This static browser platform collects three listener-based measures from participant speech recordings:
 
-- `comprehensibility_1_9`: 1 = very easy to understand, 9 = extremely difficult to understand.
-- `accentedness_1_9`: 1 = no noticeable accent, 9 = extremely strong accent.
+- `accentedness_1_9`: 1 = no accent, 9 = extremely strong accent.
+- `comprehensibility_1_9`: 1 = easy to understand, 9 = extremely difficult to understand.
 - `intelligibility`: typed spelling of the heard word, with exact-match auto-scoring when the target word is available.
 
 The design follows the listener-based word-level measurement logic in Uchihara (2022), adapted to a 9-point scale and a combined trial format.
@@ -40,7 +40,7 @@ http://127.0.0.1:8765/?manual=1&local=1
    - Each trial first asks for the typed English word, then shows a separate rating page.
    - If the word cannot be identified, participants can mark `I could not identify the word` instead of typing a forced guess.
    - The correct word and reference ratings are shown after each practice response.
-9. For each sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then complete both ratings.
+9. For each sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then rate accentedness followed by comprehensibility as displayed from top to bottom.
 10. In the server-backed counterbalanced task, complete a short calculation distractor task between main stimulus-list blocks.
 11. At the end, the participant is returned to Prolific only after the server marks the session as completed. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved trials remain in D1, but no Prolific completion URL is issued.
 
@@ -252,7 +252,7 @@ Current practice audio uses selected ElevenLabs MP3 files:
   - `coffee`: `JPN/accented`
   - `pizza`: `JPN/accented`
   - `sofa`: `CHN/accented`
-- Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate ease of understanding, and rate accent strength.
+- Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
 - Practice feedback shows the correct word and reference ratings. It does not ask participants to justify their ratings.
 
 Practice audio paths are under `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`. The current non-ENG reference ratings are temporary researcher-selected values for dry-run and can be revised after collaborator listening review.

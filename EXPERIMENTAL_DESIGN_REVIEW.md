@@ -18,8 +18,8 @@ Participants complete a browser-based word-level listening task delivered throug
 
 Main measures:
 
-- Comprehensibility rating, 1-9.
 - Accentedness rating, 1-9.
+- Comprehensibility rating, 1-9.
 - Intelligibility response, typed word.
 - Response-time and event metadata.
 - Required Japanese and Chinese familiarity ratings.
@@ -32,7 +32,7 @@ Each participant completes:
 4. A short arithmetic distractor task between Blocks 1-3.
 5. Completion and D1 persistence checks.
 
-The main task is fixed to a combined-trial format: the participant hears one audio token and then provides intelligibility, comprehensibility, and accentedness responses for that token. If the word cannot be identified, the participant can explicitly mark `I could not identify the word` rather than entering a forced guess.
+The main task is fixed to a combined-trial format: the participant hears one audio token and then provides intelligibility, accentedness, and comprehensibility responses for that token. On the rating page, accentedness is displayed above comprehensibility. If the word cannot be identified, the participant can explicitly mark `I could not identify the word` rather than entering a forced guess.
 
 ## Placeholder Stimulus Universe
 
@@ -290,9 +290,12 @@ Reviewer concern:
 
 ## Dependent Variables
 
-Primary outcomes:
+Primary outcome:
 
 - `accentedness_1_9`.
+
+Secondary outcomes:
+
 - `comprehensibility_1_9`.
 - `intelligibility`, preferably manually cleaned after exact-match preflagging.
 
@@ -305,7 +308,7 @@ Intelligibility coding should distinguish at least four states:
 
 The explicit unidentified state is theoretically different from misspelling. It should not be folded into manual spelling review, although it can be analyzed as an incorrect intelligibility response.
 
-Secondary outcomes:
+Secondary process and quality outcomes:
 
 - First-key response time.
 - Submit response time.
@@ -316,8 +319,8 @@ Secondary outcomes:
 
 Scale direction must be reported:
 
-- Comprehensibility: 1 = easy, 9 = difficult.
-- Accentedness: 1 = no noticeable accent, 9 = very strong accent.
+- Accentedness: 1 = no accent, 9 = extremely strong accent.
+- Comprehensibility: 1 = easy to understand, 9 = extremely difficult to understand.
 
 ## Analysis Plan
 
@@ -343,7 +346,7 @@ Candidate fixed effects:
 - Trial index within block.
 - Full trial index and block position as fatigue/adaptation covariates.
 - Replay count, first-response RT, first-rating RT, and rating selection counts as process/fatigue covariates.
-- Response order and rating order, especially whether accentedness is rated before comprehensibility.
+- The displayed rating order is fixed as accentedness followed by comprehensibility. The saved `rating_order` records the participant's actual first interactions and may be used as a process diagnostic or sensitivity variable, but not as a randomized causal order effect.
 - Japanese familiarity rating.
 - Chinese familiarity rating.
 - Audio duration and intensity if available.
