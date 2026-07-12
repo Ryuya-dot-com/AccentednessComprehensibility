@@ -259,14 +259,17 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status_last_seen_ms ON sessions(status, 
 CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance ON sessions(counterbalance_cell, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_key_unique
   ON sessions(participant_key)
-  WHERE participant_key IS NOT NULL AND participant_key != '';
+  WHERE participant_key IS NOT NULL AND participant_key != ''
+    AND status != 'start_failed';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_prolific_session_unique
   ON sessions(prolific_session_id)
-  WHERE prolific_session_id IS NOT NULL AND prolific_session_id != '';
+  WHERE prolific_session_id IS NOT NULL AND prolific_session_id != ''
+    AND status != 'start_failed';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_prolific_pid_study_unique
   ON sessions(prolific_pid, prolific_study_id)
   WHERE prolific_pid IS NOT NULL AND prolific_pid != ''
-    AND prolific_study_id IS NOT NULL AND prolific_study_id != '';
+    AND prolific_study_id IS NOT NULL AND prolific_study_id != ''
+    AND status != 'start_failed';
 CREATE INDEX IF NOT EXISTS idx_assignments_session ON rating_assignments(session_id, phase, trial_index);
 CREATE INDEX IF NOT EXISTS idx_trials_session ON rating_trials(session_id, phase, trial_index);
 CREATE INDEX IF NOT EXISTS idx_trials_participant ON rating_trials(participant_id);

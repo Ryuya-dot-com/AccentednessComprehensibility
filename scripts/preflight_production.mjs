@@ -40,7 +40,9 @@ const DEFAULTS = {
   adminJs: path.join(REPO_ROOT, "admin", "admin.js"),
   schema: path.join(REPO_ROOT, "db", "schema.sql"),
   wordFamiliarityMigration: path.join(REPO_ROOT, "db", "migrations", "0013_word_familiarity.sql"),
+  archivedSessionMigration: path.join(REPO_ROOT, "db", "migrations", "0014_archived_session_locks.sql"),
   schemaUpdater: path.join(REPO_ROOT, "scripts", "apply_d1_schema_updates.mjs"),
+  archivedSessionLockTest: path.join(REPO_ROOT, "scripts", "test_archived_session_lock.py"),
   backgroundLocalTest: path.join(REPO_ROOT, "scripts", "test_background_questionnaire_local.mjs"),
   liveCheck: path.join(REPO_ROOT, "scripts", "check_live_deployment.mjs"),
   stressCheck: path.join(REPO_ROOT, "scripts", "stress_live_counterbalance_concurrency.mjs"),
@@ -399,7 +401,9 @@ function checkProlificFlowSourceGuards(options) {
   const adminJs = readTextIfExists(options.adminJs);
   const schema = readTextIfExists(options.schema);
   const wordFamiliarityMigration = readTextIfExists(options.wordFamiliarityMigration);
+  const archivedSessionMigration = readTextIfExists(options.archivedSessionMigration);
   const schemaUpdater = readTextIfExists(options.schemaUpdater);
+  const archivedSessionLockTest = readTextIfExists(options.archivedSessionLockTest);
   const backgroundLocalTest = readTextIfExists(options.backgroundLocalTest);
   const liveCheck = readTextIfExists(options.liveCheck);
   const stressCheck = readTextIfExists(options.stressCheck);
@@ -421,7 +425,9 @@ function checkProlificFlowSourceGuards(options) {
     ["admin/admin.js", adminJs],
     ["db/schema.sql", schema],
     ["db/migrations/0013_word_familiarity.sql", wordFamiliarityMigration],
+    ["db/migrations/0014_archived_session_locks.sql", archivedSessionMigration],
     ["scripts/apply_d1_schema_updates.mjs", schemaUpdater],
+    ["scripts/test_archived_session_lock.py", archivedSessionLockTest],
     ["scripts/test_background_questionnaire_local.mjs", backgroundLocalTest],
     ["scripts/check_live_deployment.mjs", liveCheck],
     ["scripts/stress_live_counterbalance_concurrency.mjs", stressCheck],
@@ -625,6 +631,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "db/schema.sql", schema, "word_familiarity_required INTEGER NOT NULL DEFAULT 0");
   requireSnippet(problems, "db/schema.sql", schema, "CREATE TABLE IF NOT EXISTS word_familiarity_responses");
   requireSnippet(problems, "db/migrations/0013_word_familiarity.sql", wordFamiliarityMigration, "ALTER TABLE sessions ADD COLUMN word_familiarity_required");
+  requireSnippet(problems, "db/schema.sql", schema, "AND status != 'start_failed'");
+  requireSnippet(problems, "db/migrations/0014_archived_session_locks.sql", archivedSessionMigration, "DROP INDEX IF EXISTS idx_sessions_prolific_pid_study_unique");
+  requireSnippet(problems, "db/migrations/0014_archived_session_locks.sql", archivedSessionMigration, "AND status != 'start_failed'");
+  requireSnippet(problems, "scripts/test_archived_session_lock.py", archivedSessionLockTest, "archived_session_releases_lock: true");
+  requireSnippet(problems, "scripts/test_archived_session_lock.py", archivedSessionLockTest, "active_session_lock_preserved: true");
 
   return problems;
 }
@@ -684,7 +695,9 @@ const options = {
   adminJs: path.resolve(argValue("--admin-js", DEFAULTS.adminJs)),
   schema: path.resolve(argValue("--schema", DEFAULTS.schema)),
   wordFamiliarityMigration: path.resolve(argValue("--word-familiarity-migration", DEFAULTS.wordFamiliarityMigration)),
+  archivedSessionMigration: path.resolve(argValue("--archived-session-migration", DEFAULTS.archivedSessionMigration)),
   schemaUpdater: path.resolve(argValue("--schema-updater", DEFAULTS.schemaUpdater)),
+  archivedSessionLockTest: path.resolve(argValue("--archived-session-lock-test", DEFAULTS.archivedSessionLockTest)),
   backgroundLocalTest: path.resolve(argValue("--background-local-test", DEFAULTS.backgroundLocalTest)),
   liveCheck: path.resolve(argValue("--live-check", DEFAULTS.liveCheck)),
   stressCheck: path.resolve(argValue("--stress-check", DEFAULTS.stressCheck)),
