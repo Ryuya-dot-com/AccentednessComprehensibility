@@ -44,9 +44,10 @@
       pronunciation_condition: "natural",
       talker: "practice_eng_female",
       voice_variant: "eng_female",
+      spoken_form: "appreciation",
       expert_accentedness_range: "1–3",
-      source_format: "researcher_calibration_wav",
-      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 1–3.",
+      source_format: "researcher_provided_calibration_wav",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 1–3.",
     },
     {
       practice_kind: "combined",
@@ -58,9 +59,10 @@
       pronunciation_condition: "accented",
       talker: "practice_jpn_male",
       voice_variant: "jpn_male",
+      spoken_form: "pesticide",
       expert_accentedness_range: "3–5",
-      source_format: "researcher_calibration_wav",
-      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 3–5.",
+      source_format: "researcher_provided_calibration_wav",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 3–5.",
     },
     {
       practice_kind: "combined",
@@ -72,9 +74,10 @@
       pronunciation_condition: "accented",
       talker: "practice_jpn_female",
       voice_variant: "jpn_female",
+      spoken_form: "quality",
       expert_accentedness_range: "5–7",
-      source_format: "researcher_calibration_wav",
-      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 5–7.",
+      source_format: "researcher_provided_calibration_wav",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 5–7.",
     },
     {
       practice_kind: "combined",
@@ -84,11 +87,12 @@
       audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
       l1_condition: "CHN",
       pronunciation_condition: "accented",
-      talker: "practice_chn_female",
-      voice_variant: "chn_female",
+      talker: "macos_tts_tingting",
+      voice_variant: "macos_tingting",
+      spoken_form: "披萨",
       expert_accentedness_range: "7–9",
-      source_format: "researcher_calibration_wav",
-      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 7–9.",
+      source_format: "macos_say_tingting_tts_wav",
+      practice_note: "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨. Expert Accentedness reference range: 7–9.",
     },
   ];
 
@@ -901,7 +905,7 @@
       word_number: String(index + 1),
       trial_number: String(index + 1),
       take_number: "",
-      spoken_form: item.word,
+      spoken_form: item.spoken_form || item.word,
       practice_note: item.practice_note || "",
       source_format: item.source_format || "practice_elevenlabs_mp3_norm",
       stimulus_list: "practice",
@@ -3426,7 +3430,7 @@
     if (!els.sessionId.value.trim()) els.sessionId.value = "practice_session";
     els.loadPracticeBtn.disabled = true;
     setSetupStatus("Loading");
-    setLog("Loading researcher-supplied practice materials...");
+    setLog("Loading selected practice materials...");
 
     const manifestResponse = await fetch("practice_manifest.csv", { cache: "no-store" });
     if (!manifestResponse.ok) {

@@ -444,7 +444,7 @@ export async function onRequestPost(context) {
     const taskMode = cleanText(body.task_mode) || "combined";
     const platformVersion = cleanText(body.platform_version) || "unknown";
     const counterbalanceEnabled = body.counterbalance?.enabled === true;
-    const practiceAssignment = Array.isArray(body.practice_assignment)
+    let practiceAssignment = Array.isArray(body.practice_assignment)
       ? body.practice_assignment
       : [];
     let assignment = Array.isArray(body.assignment) ? body.assignment : [];
@@ -467,6 +467,10 @@ export async function onRequestPost(context) {
     }
     if (counterbalanceEnabled && body.resume_only !== true) {
       requireCanonicalPracticeAssignment(practiceAssignment);
+      practiceAssignment = CANONICAL_PRACTICE_ASSIGNMENT.map((item) => ({
+        ...item,
+        source_path: item.audio_url,
+      }));
     }
     client = requestClientContext(context.request, body);
     requireProlificIdentity(client, context.env);

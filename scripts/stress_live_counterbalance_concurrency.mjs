@@ -7,10 +7,10 @@ const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ target_word: "appreciation", audio_file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", range: "1–3" }),
-  Object.freeze({ target_word: "pesticide", audio_file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", range: "3–5" }),
-  Object.freeze({ target_word: "quality", audio_file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", range: "5–7" }),
-  Object.freeze({ target_word: "pizza", audio_file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", range: "7–9" }),
+  Object.freeze({ target_word: "appreciation", audio_file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spoken_form: "appreciation", source_format: "researcher_provided_calibration_wav", range: "1–3" }),
+  Object.freeze({ target_word: "pesticide", audio_file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spoken_form: "pesticide", source_format: "researcher_provided_calibration_wav", range: "3–5" }),
+  Object.freeze({ target_word: "quality", audio_file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spoken_form: "quality", source_format: "researcher_provided_calibration_wav", range: "5–7" }),
+  Object.freeze({ target_word: "pizza", audio_file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spoken_form: "披萨", source_format: "macos_say_tingting_tts_wav", range: "7–9" }),
 ]);
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
@@ -70,9 +70,11 @@ function practiceAssignment() {
     talker: item.talker,
     word_number: String(index + 1),
     trial_number: String(index + 1),
-    spoken_form: item.target_word,
-    practice_note: `Expert Accentedness reference range: ${item.range}.`,
-    source_format: "researcher_calibration_wav",
+    spoken_form: item.spoken_form,
+    practice_note: item.source_format === "macos_say_tingting_tts_wav"
+      ? `Synthetic macOS say Tingting Mandarin form 披萨; expert Accentedness reference range: ${item.range}.`
+      : `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.range}.`,
+    source_format: item.source_format,
     practice_kind: "combined",
     practice_group: `accent_band_${item.range.replace("–", "_")}`,
   }));

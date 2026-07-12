@@ -31,40 +31,52 @@ PRACTICE_ITEMS = [
         "accent_band_1_3",
         "ENG",
         "natural",
-        "eng_female",
+        "practice_eng_female",
         f"{PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav",
         1,
         3,
+        "appreciation",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 1–3",
     ),
     (
         "pesticide",
         "accent_band_3_5",
         "JPN",
         "accented",
-        "jpn_male",
+        "practice_jpn_male",
         f"{PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav",
         3,
         5,
+        "pesticide",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 3–5",
     ),
     (
         "quality",
         "accent_band_5_7",
         "JPN",
         "accented",
-        "jpn_female",
+        "practice_jpn_female",
         f"{PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav",
         5,
         7,
+        "quality",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 5–7",
     ),
     (
         "pizza",
         "accent_band_7_9",
         "CHN",
         "accented",
-        "chn_female",
+        "macos_tts_tingting",
         f"{PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav",
         7,
         9,
+        "披萨",
+        "macos_say_tingting_tts_wav",
+        "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨; expert Accentedness reference range 7–9",
     ),
 ]
 TRIAL_COUNT = len(PRACTICE_ITEMS) + 100
@@ -369,7 +381,19 @@ def condition_rows(block_list: str, style: str) -> list[dict]:
 
 def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
     rows = []
-    for index, (word, group, l1, pron, talker, audio_path, accent_min, accent_max) in enumerate(PRACTICE_ITEMS, start=1):
+    for index, (
+        word,
+        group,
+        l1,
+        pron,
+        talker,
+        audio_path,
+        accent_min,
+        accent_max,
+        spoken_form,
+        source_format,
+        practice_note,
+    ) in enumerate(PRACTICE_ITEMS, start=1):
         rows.append({
             "id": f"{session_id}:practice:{index}",
             "session_id": session_id,
@@ -379,7 +403,7 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "audio_url": audio_path,
             "file_name": Path(audio_path).name,
             "target_word": word,
-            "participant_id": f"practice_{talker}",
+            "participant_id": talker,
             "native_language": l1,
             "accent_condition": pron,
             "condition": "practice",
@@ -388,9 +412,9 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "word_number": "",
             "trial_number": str(index),
             "take_number": "1",
-            "spoken_form": word,
-            "practice_note": f"Researcher-supplied calibration WAV; expert Accentedness reference range {accent_min}–{accent_max}",
-            "source_format": "researcher_calibration_wav",
+            "spoken_form": spoken_form,
+            "practice_note": practice_note,
+            "source_format": source_format,
             "practice_kind": "combined",
             "practice_group": group,
             "counterbalance_cell": "",
@@ -1192,6 +1216,9 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             "pronunciation_condition": item[3],
             "audio_url": item[5],
             "range": f"{item[6]}–{item[7]}",
+            "talker": item[4],
+            "spoken_form": item[8],
+            "source_format": item[9],
         }
         for index, item in enumerate(PRACTICE_ITEMS, start=1)
     }
@@ -1199,7 +1226,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         conn,
         """
         SELECT trial_index, target_word, practice_group, l1_condition,
-               pronunciation_condition, audio_url, practice_note, source_format,
+               pronunciation_condition, audio_url, participant_id, talker,
+               spoken_form, practice_note, source_format,
                expert_comprehensibility_1_9, expert_accentedness_1_9
         FROM rating_assignments
         WHERE phase = 'practice'
@@ -1215,8 +1243,11 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             or row["l1_condition"] != expected_item["l1_condition"]
             or row["pronunciation_condition"] != expected_item["pronunciation_condition"]
             or row["audio_url"] != expected_item["audio_url"]
+            or row["participant_id"] != expected_item["talker"]
+            or row["talker"] != expected_item["talker"]
+            or row["spoken_form"] != expected_item["spoken_form"]
             or expected_item["range"] not in str(row["practice_note"] or "")
-            or row["source_format"] != "researcher_calibration_wav"
+            or row["source_format"] != expected_item["source_format"]
             or row["expert_comprehensibility_1_9"] is not None
             or row["expert_accentedness_1_9"] is not None
         ):

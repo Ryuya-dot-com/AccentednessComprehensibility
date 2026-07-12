@@ -6,10 +6,10 @@ const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", range: "1–3" }),
-  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", range: "3–5" }),
-  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", range: "5–7" }),
-  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", range: "7–9" }),
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", range: "1–3" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", range: "3–5" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", range: "5–7" }),
+  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", range: "7–9" }),
 ]);
 
 function argValue(name, fallback = "") {
@@ -106,9 +106,11 @@ function practiceAssignment() {
     talker: item.talker,
     word_number: String(index + 1),
     trial_number: String(index + 1),
-    spoken_form: item.word,
-    practice_note: `Expert Accentedness reference range: ${item.range}.`,
-    source_format: "researcher_calibration_wav",
+    spoken_form: item.spokenForm,
+    practice_note: item.sourceFormat === "macos_say_tingting_tts_wav"
+      ? `Synthetic macOS say Tingting Mandarin form 披萨; expert Accentedness reference range: ${item.range}.`
+      : `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.range}.`,
+    source_format: item.sourceFormat,
     practice_kind: "combined",
     practice_group: `accent_band_${item.range.replace("–", "_")}`,
     l1_condition: item.l1,
@@ -685,6 +687,15 @@ async function main() {
       primaryPracticeOne?.comprehensibility_1_9 === "4" &&
       primaryPracticeOne?.accentedness_1_9 === "2",
     "Replaying saved practice overwrote the original primary-session response.",
+  );
+  const primaryPracticeFour = primaryPracticeRows.find((row) => row.trial_index === "4");
+  assert(
+    primaryPracticeFour?.target_word === "pizza" &&
+      primaryPracticeFour?.participant_id === "macos_tts_tingting" &&
+      primaryPracticeFour?.talker === "macos_tts_tingting" &&
+      primaryPracticeFour?.spoken_form === "披萨" &&
+      primaryPracticeFour?.source_format === "macos_say_tingting_tts_wav",
+    "Tingting pizza provenance is not preserved in ratings.csv.",
   );
   const progressPracticeRows = ratingRows.filter(
     (row) => row.session_id === progressSessionId && row.phase === "practice",

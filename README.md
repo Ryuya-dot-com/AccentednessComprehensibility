@@ -36,7 +36,7 @@ http://127.0.0.1:8765/?manual=1&local=1
 6. Click `Prepare counterbalanced session` for server-backed stimulus-pool audio, or `Prepare trials` for local manual audio.
 7. Click `Start practice`.
 8. Complete the practice session:
-   - 4 researcher-selected calibration WAV trials, ordered from the lowest to the highest documented Accentedness band: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
+   - 4 researcher-selected practice WAV trials, ordered from the lowest to the highest documented Accentedness band: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
    - Each trial first asks for the typed English word, then shows a separate rating page.
    - If the word cannot be identified, participants can mark `I could not identify the word` instead of typing a forced guess.
    - After each practice response, the word played and its expert Accentedness reference range are shown. No scalar expert Accentedness or Comprehensibility value is asserted for these WAVs.
@@ -245,7 +245,7 @@ practice_audio/chinese/{chocolate,coffee,pizza,sofa}.wav
 practice_audio/legacy_tts_practice_manifest.csv
 ```
 
-The English samples use system TTS. The Japanese samples use katakana-shaped forms such as `チョコレート`, and the Chinese samples use comparable loanword/cognate forms such as `巧克力`. These are for interface checks only, not for final data collection. The current built-in practice session uses the researcher-selected calibration WAVs documented below.
+The English samples use system TTS. The Japanese samples use katakana-shaped forms such as `チョコレート`, and the Chinese samples use comparable loanword/cognate forms such as `巧克力`. They are legacy interface-check assets. One explicitly documented exception is the researcher-selected `chinese/pizza.wav`: the current fourth practice item intentionally reuses that synthetic Tingting token, so its provenance is retained rather than presented as a human recording.
 
 The legacy script no longer overwrites top-level `practice_manifest.csv`. The researcher-only `Load selected practice` button reads the calibration manifest described below and passes each R2 URL directly to the browser's audio element; it does not fetch the cross-origin WAV into a JavaScript blob. Use `http://127.0.0.1:8765/?manual=1&local=1` rather than opening `index.html` directly from Finder. The server-backed participant flow plays the same HTTPS URLs.
 
@@ -259,14 +259,14 @@ Current practice audio uses four researcher-selected WAV files hosted in product
   - `appreciation`: `ENG` female, documented Accentedness reference range 1–3.
   - `pesticide`: `JPN` male, documented Accentedness reference range 3–5.
   - `quality`: `JPN` female, documented Accentedness reference range 5–7.
-  - `pizza`: `CHN` female, documented Accentedness reference range 7–9.
+  - `pizza`: synthetic macOS `say` voice `Tingting`, generated from the Mandarin form `披萨`, documented Accentedness reference range 7–9. This is not a human L2-English production; its methodological suitability must be explicitly accepted before launch.
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
 - Practice feedback uses `The word played`, shows the documented expert Accentedness reference range, and repeats the participant's Accentedness and Comprehensibility ratings. It does not invent a scalar expert rating and does not ask participants to justify their ratings.
 - The practice-feedback screen permits unlimited replay so the calibration stimulus can be checked. This exception applies only after a practice response; response pages and all main-task pages retain the one-playback rule.
 
-The direct production audio base is `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`. The local source WAVs are under `/Users/tohokusla/Dropbox/Accentedness/Stimuli/Practice&Calibration/`, and the standardized R2 filenames are recorded in `practice_manifest.csv`. Both scalar fields, `expert_comprehensibility_1_9` and `expert_accentedness_1_9`, remain blank because exact scalar expert ratings have not been established; `expert_accentedness_range` stores the documented ranges.
+The direct production audio base is `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`. The local source WAVs are under `/Users/tohokusla/Dropbox/Accentedness/Stimuli/Practice&Calibration/`, and the standardized R2 filenames and source provenance are recorded in `practice_manifest.csv`. Both scalar fields, `expert_comprehensibility_1_9` and `expert_accentedness_1_9`, remain blank because exact scalar expert ratings have not been established; `expert_accentedness_range` stores the documented ranges in that manifest.
 
-The top-level `practice_manifest.csv` points to the same four production R2 WAVs so local researcher demo loading cannot silently fall back to legacy TTS or retired ElevenLabs materials.
+The top-level `practice_manifest.csv` points to the same four production R2 WAVs. It explicitly identifies item 4 as `macos_say_tingting_tts_wav` with `spoken_form=披萨`; the other three use `researcher_provided_calibration_wav`. Retired ElevenLabs materials are not part of the active flow.
 
 ## Output
 
@@ -290,7 +290,6 @@ Important CSV columns:
 - `accentedness_1_9`
 - `expert_comprehensibility_1_9`
 - `expert_accentedness_1_9`
-- `expert_accentedness_range`
 - `practice_feedback`
 - `practice_requires_reason`
 - `practice_reason`
@@ -538,13 +537,13 @@ node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 
 This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, checks one simultaneous wave across the 20 cells, and fails if the assignment spread is greater than 1.
 
-For acoustic QC of the OSF package and current app practice/calibration WAV files, run:
+For acoustic QC of the OSF package, run:
 
 ```sh
 python3 scripts/audit_audio_qc.py
 ```
 
-This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization.
+This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization. The currently selected Tingting `pizza.wav` is not yet in that OSF calibration package; its local source and R2 copy were separately checked with `ffprobe`, MD5, and SHA-256, and must be added to the OSF package after the methodological choice is accepted.
 
 The applied clipping repair candidate can be regenerated with:
 
@@ -554,19 +553,7 @@ python3 scripts/repair_clipped_audio.py
 
 This does not overwrite the production audio or manifest. It writes a candidate under `metadata/audio_repair_candidates/` for researcher listening review.
 
-To generate the collaborator review packet for selected practice ratings and the repair candidate:
-
-```sh
-python3 scripts/generate_reviewer_packet.py
-```
-
-Open `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`, complete the review, and export the CSV. After review is complete, apply the practice reference ratings with:
-
-```sh
-python3 scripts/apply_practice_review.py --review-csv PATH_TO_COMPLETED_REVIEW_CSV
-```
-
-The apply script updates `app.js`, the selected practice manifests, and the OSF package materialization script. Production-audio repair decisions are tracked separately in the OSF audio QC report and repair metadata.
+`scripts/generate_reviewer_packet.py` and `scripts/apply_practice_review.py` describe the retired ElevenLabs/scalar-rating workflow. Do not run them against v0.8. A new review record for the four current items must preserve range-only ratings and the synthetic Tingting/`披萨` provenance. Production-audio repair decisions remain tracked separately in the OSF audio QC report and repair metadata.
 
 For lexical-balance QC of style `a` versus style `b`, run:
 

@@ -63,8 +63,9 @@ Created practice audio:
 Created legacy manifest:
   $MANIFEST
 
-These samples are synthetic legacy interface-check materials only. They use
-native-language TTS forms to make English/Japanese/Chinese accent conditions
-easy to distinguish. They do not overwrite the selected ElevenLabs
-practice_manifest.csv used by the current app.
+These samples are synthetic legacy interface-check materials. They use
+native-language TTS forms to make English/Japanese/Chinese conditions easy to
+distinguish. The current app manifest is not overwritten. If one of these files
+is selected for a study, preserve its TTS voice and native-language spoken form
+in the active manifest rather than describing it as a human L2-English token.
 MSG

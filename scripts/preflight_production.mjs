@@ -12,10 +12,10 @@ const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", range: "1–3" }),
-  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", range: "3–5" }),
-  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", range: "5–7" }),
-  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", range: "7–9" }),
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", range: "1–3" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", range: "3–5" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", range: "5–7" }),
+  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", range: "7–9" }),
 ]);
 const DEFAULTS = {
   productionManifest: path.join(PACKAGE_ROOT, "remote_manifest.csv"),
@@ -266,11 +266,17 @@ function checkPractice(rows, options) {
     if (String(row.expert_accentedness_range || "").trim() !== expected.range) {
       problems.push(`practice row ${index + 1}: expected Accentedness range ${expected.range}`);
     }
+    if (String(row.talker || "").trim() !== expected.talker || String(row.participant_id || "").trim() !== expected.talker) {
+      problems.push(`practice row ${index + 1}: expected talker/participant_id ${expected.talker}`);
+    }
+    if (String(row.spoken_form || "").trim() !== expected.spokenForm) {
+      problems.push(`practice row ${index + 1}: expected spoken_form ${expected.spokenForm}`);
+    }
     if (String(row.expert_comprehensibility_1_9 || "").trim() || String(row.expert_accentedness_1_9 || "").trim()) {
       problems.push(`practice row ${index + 1}: scalar expert ratings must remain blank when only a range is available`);
     }
-    if (String(row.source_format || "").trim() !== "researcher_calibration_wav") {
-      problems.push(`practice row ${index + 1}: source_format must be researcher_calibration_wav`);
+    if (String(row.source_format || "").trim() !== expected.sourceFormat) {
+      problems.push(`practice row ${index + 1}: source_format must be ${expected.sourceFormat}`);
     }
   }
   if (rows.some((row) => /elevenlabs|chocolate|coffee|sofa|shelter/i.test(JSON.stringify(row)))) {
@@ -457,6 +463,9 @@ function checkProlificFlowSourceGuards(options) {
     requireSnippet(problems, "app.js", app, `word: "${expected.word}"`);
     requireSnippet(problems, "app.js", app, expected.file);
     requireSnippet(problems, "app.js", app, `"${expected.range}"`);
+    requireSnippet(problems, "app.js", app, expected.talker);
+    requireSnippet(problems, "app.js", app, expected.spokenForm);
+    requireSnippet(problems, "app.js", app, expected.sourceFormat);
   }
   forbidSnippet(problems, "app.js", app, "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703");
   forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
@@ -520,6 +529,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/start.js", start, "reload_required: true");
   requireSnippet(problems, "session/start.js", start, "const nextAssignment = mainRows.find");
   requireSnippet(problems, "session/start.js", start, "resume.practice_replay_required = true");
+  requireSnippet(problems, "session/start.js", start, "practiceAssignment = CANONICAL_PRACTICE_ASSIGNMENT.map");
   requireSnippet(problems, "session/start.js", start, "japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6)");
   requireSnippet(problems, "session/start.js", start, 'requiredIntegerInRange(\n      "participant_age_years"');
   requireSnippet(problems, "session/start.js", start, 'optionalText(\n      "english_variety_other"');
@@ -543,15 +553,21 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_replay_required");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "duplicatePracticeSave");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "participant_age_years: 30");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.8.0_smoke");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "session_resume_practice_required");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "practice_feedback_replay_start");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, PRACTICE_AUDIO_ROOT);
   requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_tts_tingting");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, 'spoken_form: "披萨"');
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "SELECT COUNT(*)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status IN (?, ?)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status = ?");

@@ -279,11 +279,12 @@ Practice trials use four researcher-selected calibration WAVs in ascending docum
 1. `appreciation`, `ENG` female, 1–3.
 2. `pesticide`, `JPN` male, 3–5.
 3. `quality`, `JPN` female, 5–7.
-4. `pizza`, `CHN` female, 7–9.
+4. `pizza`, synthetic macOS `say` voice `Tingting` using Mandarin `披萨`, 7–9.
 
 These are reference ranges rather than exact scalar ratings. No scalar expert Comprehensibility value has been established for these items. Before production launch:
 
 - Confirm the selected practice audio by collaborator listening review.
+- Explicitly decide whether a Mandarin TTS lexical form is methodologically acceptable for calibrating ratings of English accentedness; otherwise replace item 4 with a genuine CHN-female English `pizza` production.
 - Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.

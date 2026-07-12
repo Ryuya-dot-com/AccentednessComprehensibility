@@ -270,6 +270,8 @@ https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_fem
 
 The two scalar expert fields remain blank because exact scalar Accentedness and Comprehensibility reference ratings have not been established. The app and top-level `practice_manifest.csv` store only `expert_accentedness_range` for these four practice items.
 
+The fourth object is the legacy synthetic macOS `say` voice `Tingting` generated from Mandarin `披萨`, not a human L2-English recording. Its `spoken_form`, `talker`, and `source_format` must remain explicit in assignment exports. Obtain methodological acceptance before launch or replace it with a genuine CHN-female English `pizza` token and update the canonical server assignment, client, manifest, R2 object, and tests together.
+
 Both the participant flow and the researcher-only `Load selected practice` helper pass these HTTPS URLs directly to the browser's audio element. The helper does not fetch the R2 objects into JavaScript blobs, so ordinary playback is not dependent on an `Access-Control-Allow-Origin` response header. Test both flows after any audio-host change.
 
 The recommended R2 bucket name is:
@@ -310,7 +312,7 @@ Regenerate it with:
 python3 scripts/generate_r2_upload_commands.py
 ```
 
-It uploads 2,545 audio objects from `metadata/r2_upload_plan.csv`. Run `npx wrangler login` first; the current local Wrangler check reports that this machine is not authenticated.
+It uploads the objects listed in `metadata/r2_upload_plan.csv`. Wrangler is currently authenticated; run `npx wrangler whoami` before a future upload to confirm the active Cloudflare account.
 
 Expose the bucket with a production custom domain when possible, for example:
 

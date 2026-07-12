@@ -15,6 +15,8 @@ const PRACTICE_ITEMS = Object.freeze([
     l1_condition: "ENG",
     pronunciation_condition: "natural",
     talker: "practice_eng_female",
+    spoken_form: "appreciation",
+    source_format: "researcher_provided_calibration_wav",
     practice_group: "accent_band_1_3",
     expert_accentedness_range: "1–3",
   }),
@@ -26,6 +28,8 @@ const PRACTICE_ITEMS = Object.freeze([
     l1_condition: "JPN",
     pronunciation_condition: "accented",
     talker: "practice_jpn_male",
+    spoken_form: "pesticide",
+    source_format: "researcher_provided_calibration_wav",
     practice_group: "accent_band_3_5",
     expert_accentedness_range: "3–5",
   }),
@@ -37,17 +41,21 @@ const PRACTICE_ITEMS = Object.freeze([
     l1_condition: "JPN",
     pronunciation_condition: "accented",
     talker: "practice_jpn_female",
+    spoken_form: "quality",
+    source_format: "researcher_provided_calibration_wav",
     practice_group: "accent_band_5_7",
     expert_accentedness_range: "5–7",
   }),
   Object.freeze({
     trial_index: 4,
     target_word: "pizza",
-    file_name: "CHN_Female_pizza_Practice.wav",
+    file_name: "chn_female_pizza_practice.wav",
     audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
     l1_condition: "CHN",
     pronunciation_condition: "accented",
-    talker: "practice_chn_female",
+    talker: "macos_tts_tingting",
+    spoken_form: "披萨",
+    source_format: "macos_say_tingting_tts_wav",
     practice_group: "accent_band_7_9",
     expert_accentedness_range: "7–9",
   }),
@@ -255,10 +263,11 @@ function practiceAssignment() {
     talker: item.talker,
     word_number: String(item.trial_index),
     trial_number: String(item.trial_index),
-    spoken_form: item.target_word,
-    practice_note:
-      `Researcher-supplied calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}.`,
-    source_format: "researcher_calibration_wav",
+    spoken_form: item.spoken_form,
+    practice_note: item.source_format === "macos_say_tingting_tts_wav"
+      ? `Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨. Expert Accentedness reference range: ${item.expert_accentedness_range}.`
+      : `Researcher-provided calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}.`,
+    source_format: item.source_format,
     practice_kind: "combined",
     practice_group: item.practice_group,
   }));
@@ -425,9 +434,14 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicatePracticeRows.length === PRACTICE_ITEMS.length ? [] : [`duplicate start returned ${duplicatePracticeRows.length} practice assignments instead of 4`]),
           ...PRACTICE_ITEMS.flatMap((expected, index) => {
             const actual = duplicatePracticeRows[index] || {};
-            return actual.target_word === expected.target_word && actual.audio_url === expected.audio_url
+            return actual.target_word === expected.target_word &&
+              actual.audio_url === expected.audio_url &&
+              actual.participant_id === expected.talker &&
+              actual.talker === expected.talker &&
+              actual.spoken_form === expected.spoken_form &&
+              actual.source_format === expected.source_format
               ? []
-              : [`practice assignment ${index + 1} does not match ${expected.target_word} / ${expected.audio_url}`];
+              : [`practice assignment ${index + 1} does not match authoritative metadata for ${expected.target_word}`];
           }),
           ...(Array.isArray(duplicate.data.saved_trials) && duplicate.data.saved_trials.length === 5
             ? []
