@@ -44,10 +44,11 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Verification command after HTTPS URLs are generated: `node scripts/validate_audio_hosting.mjs --sample 80`.
   - Final full-row check before launch: `node scripts/validate_audio_hosting.mjs --sample 0`.
 
-- [ ] Redeploy the current app and verify the live Cloudflare URL.
+- [x] Redeploy the current app and verify the live Cloudflare URL.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current stable host serves v0.7; the v0.8 PR Preview serves the new code and all four R2 WAVs. The Tingting/`披萨` methodological choice was explicitly accepted on 2026-07-13; production merge and the Prolific stable-URL change remain.
+  - PR #3 was merged as `99f3872` and deployed to the stable host on 2026-07-13. The static and live-API deployment gates passed with v0.8, all four R2 WAVs, protected admin routes, the external production manifest, duplicate-start resume, and non-overwriting practice replay.
+  - The Prolific stable-URL change remains a separate manual study-setting action.
   - Remote D1 already contains the staged-flow, speaker-pattern, background-questionnaire, and word-familiarity schema.
   - Required live passes after the v0.8 deployment:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, the four R2 practice/calibration WAV paths, `response_flow`, and completion-code hardening.
@@ -242,7 +243,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Current preflight result: PASS when run with the production R2 manifest and `--using-external-manifest-secret`.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
   - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four practice items repeat without overwriting saved practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
-  - Current stable deployment is v0.7 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. The methodological decision was accepted on 2026-07-13; re-run the live v0.8 gate after production merge.
+  - Current stable deployment is v0.8 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. The 2026-07-13 live API gate passed and remote D1 stored practice item 4 as `pizza`, `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 
 - [ ] Review production secrets and access controls.
