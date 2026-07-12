@@ -16,67 +16,71 @@ DEFAULT_DATE = datetime.now().strftime("%Y%m%d")
 SELECTED_PRACTICE_ROWS = [
     {
         "trial_index": "1",
-        "target_word": "chocolate",
+        "target_word": "appreciation",
         "l1_condition": "ENG",
         "pronunciation_condition": "natural",
-        "voice_variant": "eng_bella",
-        "package_relative_path": "practice/elevenlabs/eng_bella/chocolate__eng_bella.mp3",
-        "app_relative_path": (
-            "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/"
-            "chocolate__eng_bella.mp3"
-        ),
-        "expert_comprehensibility_1_9": "1",
-        "expert_accentedness_1_9": "1",
+        "voice_variant": "eng_female",
+        "source_relative_path": "Practice&Calibration/ENG_Female_appreciation_Practice.wav",
+        "package_relative_path": "practice/calibration/eng_female_appreciation_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/eng_female_appreciation_practice.wav",
+        "spoken_form": "appreciation",
+        "source_format": "researcher_provided_calibration_wav",
+        "expert_comprehensibility_1_9": "",
+        "expert_accentedness_1_9": "",
+        "expert_accentedness_range": "1–3",
         "status": "selected",
-        "note": "Selected ElevenLabs practice MP3; loudness-normalized.",
+        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
     },
     {
         "trial_index": "2",
-        "target_word": "coffee",
+        "target_word": "pesticide",
         "l1_condition": "JPN",
         "pronunciation_condition": "accented",
-        "voice_variant": "jpn_yusuke_stronger",
-        "package_relative_path": "practice/elevenlabs/jpn_yusuke_stronger/coffee__jpn_yusuke_stronger.mp3",
-        "app_relative_path": (
-            "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/"
-            "coffee__jpn_yusuke_stronger.mp3"
-        ),
-        "expert_comprehensibility_1_9": "3",
-        "expert_accentedness_1_9": "4",
+        "voice_variant": "jpn_male",
+        "source_relative_path": "Practice&Calibration/JPN_Male_pesticide.wav",
+        "package_relative_path": "practice/calibration/jpn_male_pesticide_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_male_pesticide_practice.wav",
+        "spoken_form": "pesticide",
+        "source_format": "researcher_provided_calibration_wav",
+        "expert_comprehensibility_1_9": "",
+        "expert_accentedness_1_9": "",
+        "expert_accentedness_range": "3–5",
         "status": "selected",
-        "note": "Selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
+        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
     },
     {
         "trial_index": "3",
-        "target_word": "pizza",
+        "target_word": "quality",
         "l1_condition": "JPN",
         "pronunciation_condition": "accented",
-        "voice_variant": "jpn_lia_stronger",
-        "package_relative_path": "practice/elevenlabs/jpn_lia_stronger/pizza__jpn_lia_stronger.mp3",
-        "app_relative_path": (
-            "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/"
-            "pizza__jpn_lia_stronger.mp3"
-        ),
-        "expert_comprehensibility_1_9": "5",
-        "expert_accentedness_1_9": "6",
+        "voice_variant": "jpn_female",
+        "source_relative_path": "Practice&Calibration/JPN_Female_quality_Practice.wav",
+        "package_relative_path": "practice/calibration/jpn_female_quality_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_female_quality_practice.wav",
+        "spoken_form": "quality",
+        "source_format": "researcher_provided_calibration_wav",
+        "expert_comprehensibility_1_9": "",
+        "expert_accentedness_1_9": "",
+        "expert_accentedness_range": "5–7",
         "status": "selected",
-        "note": "Selected stronger Japanese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
+        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
     },
     {
         "trial_index": "4",
-        "target_word": "sofa",
+        "target_word": "pizza",
         "l1_condition": "CHN",
         "pronunciation_condition": "accented",
-        "voice_variant": "chn_deep_bass_stronger",
-        "package_relative_path": "practice/elevenlabs/chn_deep_bass_stronger/sofa__chn_deep_bass_stronger.mp3",
-        "app_relative_path": (
-            "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/"
-            "sofa__chn_deep_bass_stronger.mp3"
-        ),
-        "expert_comprehensibility_1_9": "7",
-        "expert_accentedness_1_9": "8",
+        "voice_variant": "macos_tingting",
+        "source_relative_path": "Practice&Calibration/chinese/pizza.wav",
+        "package_relative_path": "practice/calibration/chn_female_pizza_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_female_pizza_practice.wav",
+        "spoken_form": "披萨",
+        "source_format": "macos_say_tingting_tts_wav",
+        "expert_comprehensibility_1_9": "",
+        "expert_accentedness_1_9": "",
+        "expert_accentedness_range": "7–9",
         "status": "selected",
-        "note": "Selected stronger Chinese-accent candidate; reference ratings are temporary researcher-selected values for dry-run.",
+        "note": "Synthetic macOS say voice Tingting using Mandarin 披萨; not a human L2-English recording.",
     },
 ]
 CONTENT_TYPES = {
@@ -132,7 +136,7 @@ def package_readme(package_root: Path, counts: Counter, manifest_name: str) -> s
         "- `main/`: production stimuli using standardized OSF filenames.",
         "- `practice/`: practice/calibration and ElevenLabs candidate stimuli.",
         "- `metadata/`: rename crosswalks and documentation.",
-        "- `metadata/selected_practice_manifest.csv`: four ElevenLabs MP3 files selected for the live app practice session.",
+        "- `metadata/selected_practice_manifest.csv`: four practice WAVs selected for the live app, with range-only ratings and source provenance.",
         "- `metadata/r2_upload_plan.csv`: local file, R2 object key, content type, size, and checksum for upload planning.",
         "- `metadata/osf_package_checksums_sha256.csv`: SHA-256 checksums for copied audio files.",
         f"- `{manifest_name}`: app-ready production manifest using paths relative to this package root.",
@@ -147,9 +151,10 @@ def package_readme(package_root: Path, counts: Counter, manifest_name: str) -> s
         "",
         "## Practice Selection",
         "",
-        "The app practice session uses four selected ElevenLabs MP3 files listed in",
-        "`metadata/selected_practice_manifest.csv`: `chocolate`, `coffee`, `pizza`, and `sofa`.",
-        "The non-ENG reference ratings are temporary researcher-selected values for dry-run.",
+        "The app practice session uses the four WAVs listed in",
+        "`metadata/selected_practice_manifest.csv`: `appreciation`, `pesticide`, `quality`, and `pizza`.",
+        "The manifest stores Accentedness ranges, not scalar expert ratings. The fourth item is",
+        "synthetic macOS Tingting TTS of Mandarin `披萨`, not a human L2-English recording.",
         "",
         "## Audio Counts",
         "",
@@ -224,6 +229,17 @@ def main() -> int:
     stimuli_root = args.stimuli_root.expanduser().resolve()
     out_dir = args.out_dir.expanduser().resolve()
     file_rows = read_csv(args.file_crosswalk.expanduser().resolve())
+    existing_package_paths = {row.get("new_relative_path", "") for row in file_rows}
+    for selected in SELECTED_PRACTICE_ROWS:
+        if selected["package_relative_path"] in existing_package_paths:
+            continue
+        file_rows.append(
+            {
+                "stimulus_set": "practice_calibration_selected",
+                "old_relative_path": selected["source_relative_path"],
+                "new_relative_path": selected["package_relative_path"],
+            }
+        )
 
     copy_log = []
     status_counts: Counter[str] = Counter()
@@ -334,10 +350,14 @@ def main() -> int:
             "l1_condition",
             "pronunciation_condition",
             "voice_variant",
+            "source_relative_path",
             "package_relative_path",
             "app_relative_path",
+            "spoken_form",
+            "source_format",
             "expert_comprehensibility_1_9",
             "expert_accentedness_1_9",
+            "expert_accentedness_range",
             "status",
             "note",
             "package_file_exists",

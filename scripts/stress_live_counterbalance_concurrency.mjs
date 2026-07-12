@@ -3,6 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PRACTICE_AUDIO_ROOT =
+  "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+const PRACTICE_ITEMS = Object.freeze([
+  Object.freeze({ target_word: "appreciation", audio_file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spoken_form: "appreciation", source_format: "researcher_provided_calibration_wav", range: "1–3" }),
+  Object.freeze({ target_word: "pesticide", audio_file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spoken_form: "pesticide", source_format: "researcher_provided_calibration_wav", range: "3–5" }),
+  Object.freeze({ target_word: "quality", audio_file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spoken_form: "quality", source_format: "researcher_provided_calibration_wav", range: "5–7" }),
+  Object.freeze({ target_word: "pizza", audio_file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spoken_form: "披萨", source_format: "macos_say_tingting_tts_wav", range: "7–9" }),
+]);
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
 const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703";
@@ -46,12 +55,37 @@ function positiveInt(name, fallback) {
   return value;
 }
 
+function practiceAssignment() {
+  return PRACTICE_ITEMS.map((item, index) => ({
+    phase: "practice",
+    trial_index: index + 1,
+    source_path: `${PRACTICE_AUDIO_ROOT}/${item.audio_file}`,
+    audio_url: `${PRACTICE_AUDIO_ROOT}/${item.audio_file}`,
+    file_name: item.audio_file,
+    target_word: item.target_word,
+    participant_id: item.talker,
+    native_language: item.l1,
+    accent_condition: item.pronunciation,
+    condition: `practice_${item.pronunciation}`,
+    talker: item.talker,
+    word_number: String(index + 1),
+    trial_number: String(index + 1),
+    spoken_form: item.spoken_form,
+    practice_note: item.source_format === "macos_say_tingting_tts_wav"
+      ? `Synthetic macOS say Tingting Mandarin form 披萨; expert Accentedness reference range: ${item.range}.`
+      : `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.range}.`,
+    source_format: item.source_format,
+    practice_kind: "combined",
+    practice_group: `accent_band_${item.range.replace("–", "_")}`,
+  }));
+}
+
 function basePayload(label, index, turnstileToken) {
   return {
     rater_id: label,
     session_label: label,
     task_mode: "combined",
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     seed: label,
     dry_run: "1",
     prolific_pid: `LIVE_STRESS_${label}_${String(index).padStart(4, "0")}`,
@@ -69,7 +103,7 @@ function basePayload(label, index, turnstileToken) {
     japanese_familiarity_1_6: 3,
     chinese_familiarity_1_6: 3,
     counterbalance: { enabled: true },
-    practice_assignment: [],
+    practice_assignment: practiceAssignment(),
     turnstile_token: turnstileToken || "",
   };
 }
@@ -135,6 +169,7 @@ function summarizeMainAssignment(result) {
     : [];
   return {
     assignment_count: assignment.length,
+    trial_count: Number(result.data?.trial_count || 0),
     placeholder_rows: assignment.filter((row) => row.source_format === "dry_run_placeholder").length,
     non_https_rows: assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || "")).length,
   };
@@ -161,11 +196,38 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
   ]);
   const sameSession = first.data?.session_id && first.data.session_id === second.data?.session_id;
   const bothOk = first.ok && second.ok;
+  const resumed = first.data?.existing_session === true
+    ? first
+    : second.data?.existing_session === true
+      ? second
+      : null;
+  const resume = resumed?.data?.resume || {};
+  const resumedPractice = Array.isArray(resumed?.data?.practice_assignment)
+    ? resumed.data.practice_assignment
+    : [];
+  const practiceMatches = resumedPractice.length === PRACTICE_ITEMS.length &&
+    PRACTICE_ITEMS.every((expected, index) => {
+      const actual = resumedPractice[index] || {};
+      return actual.target_word === expected.target_word &&
+        actual.audio_url === `${PRACTICE_AUDIO_ROOT}/${expected.audio_file}`;
+    });
   return {
-    ok: bothOk && sameSession,
+    ok:
+      bothOk &&
+      sameSession &&
+      Boolean(resumed) &&
+      resume.practice_replay_required === true &&
+      resume.next_phase === "main" &&
+      Number(resume.next_trial_index) === 1 &&
+      practiceMatches,
     first,
     second,
     same_session: Boolean(sameSession),
+    resume_practice_required: resume.practice_replay_required === true,
+    resume_phase: resume.next_phase || "",
+    resume_trial_index: resume.next_trial_index || "",
+    practice_assignment_count: resumedPractice.length,
+    practice_matches: practiceMatches,
   };
 }
 
@@ -206,6 +268,9 @@ function markdown(context) {
     `- assigned_max: ${values.length ? Math.max(...values) : 0}`,
     `- assigned_spread: ${values.length ? Math.max(...values) - Math.min(...values) : 0}`,
     `- duplicate_participant_check: ${duplicate ? (duplicate.ok ? "PASS" : "FAIL") : "SKIPPED"}`,
+    `- duplicate_resume_practice_required: ${duplicate ? duplicate.resume_practice_required : "SKIPPED"}`,
+    `- duplicate_resume_target: ${duplicate ? `${duplicate.resume_phase}:${duplicate.resume_trial_index}` : "SKIPPED"}`,
+    `- duplicate_resume_practice_items: ${duplicate ? duplicate.practice_assignment_count : "SKIPPED"}`,
     "",
     "## Cell Counts",
     "",
@@ -280,6 +345,9 @@ for (const [index, result] of results.entries()) {
   if (result.ok && summary.assignment_count !== 100) {
     problems.push(`request ${index + 1}: expected 100 main assignments, got ${summary.assignment_count}`);
   }
+  if (result.ok && summary.trial_count !== 104) {
+    problems.push(`request ${index + 1}: expected trial_count 104, got ${summary.trial_count}`);
+  }
   if (result.ok && !allowPlaceholder && summary.placeholder_rows) {
     problems.push(`request ${index + 1}: ${summary.placeholder_rows} dry_run_placeholder rows`);
   }
@@ -298,7 +366,9 @@ const duplicate = skipDuplicateCheck
   ? null
   : await duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnstileToken);
 if (duplicate && !duplicate.ok) {
-  problems.push("duplicate participant start did not resume the same dry-run session");
+  problems.push(
+    "duplicate participant start did not resume the same session with four-item practice replay before main trial 1",
+  );
 }
 
 const report = markdown({

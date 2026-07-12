@@ -23,11 +23,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACKAGE_ROOT = PROJECT_ROOT / "Stimuli_OSF_Release_20260703"
-DEFAULT_APP_PRACTICE_ROOT = (
-    REPO_ROOT
-    / "practice_training_audio"
-    / "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703"
-)
+DEFAULT_APP_PRACTICE_ROOT = None
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac"}
 DETAIL_COLUMNS = [
     "qc_scope",
@@ -423,8 +419,8 @@ def collect_failures(row: dict[str, Any], thresholds: Thresholds) -> tuple[list[
             reviews.append("peak_not_near_0_99_review")
 
     if role == "selected_practice_app_asset":
-        if extension != ".mp3":
-            failures.append("selected_practice_not_mp3")
+        if extension not in {".wav", ".mp3"}:
+            failures.append("selected_practice_audio_format_unexpected")
         if lufs is not None and abs(lufs - thresholds.practice_lufs) > thresholds.practice_lufs_tolerance:
             reviews.append("selected_practice_lufs_outside_target_review")
 

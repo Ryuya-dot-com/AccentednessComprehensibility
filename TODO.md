@@ -1,9 +1,11 @@
 # Project TODO
 
-Updated: 2026-07-03 JST
+Updated: 2026-07-13 JST
 
 This list tracks the remaining work before using
 `https://accentednesscomprehensibility.pages.dev/` for Prolific data collection.
+
+The Prolific Study URL must use this stable project hostname, never a deployment-specific `https://<deployment-id>.accentednesscomprehensibility.pages.dev/` hostname.
 
 ## Current Audit Summary
 
@@ -12,32 +14,32 @@ This list tracks the remaining work before using
 - [x] Local counterbalance verification passes with placeholder materials.
 - [x] Runtime counterbalance label is standardized to `ENG`, with legacy `AME` accepted only as an import alias.
 - [x] `Stimuli/ENG` has been received; local audit found 497 audio files.
-- [x] Four collaborator-supplied practice/calibration WAV files exist in `Stimuli/Practice&Calibration`.
+- [x] Three researcher-provided calibration WAVs and the selected synthetic Tingting `pizza.wav` exist in `Stimuli/Practice&Calibration`.
 - [x] OSF rename crosswalks are generated for files, folders, and 30 speakers.
 - [x] Draft production manifests are generated from the OSF crosswalk and validate against the app's counterbalance code for all 20 cells.
 - [x] OSF-ready standardized stimulus package is generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`.
-- [x] Live Cloudflare deployment is serving the current app implementation, including staged flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice audio, and completion-code hardening.
-- [ ] Deployed `remote_manifest.csv` still points to demo materials until the production audio host/path is chosen or `COUNTERBALANCE_MANIFEST_URL` is configured.
-- [x] Placeholder practice tones are removed; `app.js` now uses 4 selected ElevenLabs MP3 practice items: `chocolate`, `coffee`, `pizza`, and `sofa`.
-- [x] Top-level local `practice_manifest.csv` and dry-run placeholder audio now point to the selected ElevenLabs MP3 set, not the legacy macOS TTS WAV set.
-- [ ] The selected practice reference ratings are temporary researcher-selected values for dry-run; collaborator listening review can revise them before final launch if needed.
+- [x] The v0.8 repository candidate includes staged flow, Sheet2 speaker-pattern metadata, the researcher-selected R2 practice/calibration set, and completion-code hardening.
+- [x] Production main audio is hosted in R2 and `COUNTERBALANCE_MANIFEST_URL`/`COUNTERBALANCE_ALLOWED_HOSTS` are configured as encrypted Pages secrets; the checked-in 12-row manifest remains an intentional demo fallback.
+- [x] Placeholder practice tones and the retired ElevenLabs set are removed from the active flow; `app.js` now uses `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
+- [x] Top-level `practice_manifest.csv` and dry-run placeholder audio point to the same direct production R2 WAV URLs.
+- [x] Scalar expert Accentedness and Comprehensibility fields remain blank; only the documented `expert_accentedness_range` is presented.
 - [x] Dictation and rating are separated into staged pages within each combined trial.
-- [x] Audio replay is disabled after successful playback.
+- [x] Practice and main response pages disable replay after successful playback; unlimited replay is available only on the post-response practice-feedback screen.
 - [x] The Sheet2 talker-pattern constraints are explicitly enforced and exported.
-- [x] Started sessions can resume after reload at the first unsaved practice/main trial.
+- [x] Reloading a started session repeats all four practice items before continuing at the first unsaved main trial or later saved-session state.
 
 ## P0: Must Finish Before Any Participant Launch
 
-- [ ] Decide where production audio will be hosted.
+- [x] Host production audio in Cloudflare R2 and provide the authoritative manifest through `COUNTERBALANCE_MANIFEST_URL`.
   - Option A: public static files committed/deployed with the Pages project.
   - Option B: private Cloudflare R2 or another approved host, referenced through `COUNTERBALANCE_MANIFEST_URL`.
-  - Recommended path is now Option B: Cloudflare R2/custom domain for the 2,497 main stimuli.
+  - Selected path: Option B, Cloudflare R2 for the 2,497 main stimuli and four active practice objects.
   - Deployment guide: `DEPLOY_CLOUDFLARE.md` section "Host Production Audio".
   - R2 upload plan generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/r2_upload_plan.csv`.
   - R2 upload command script generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/upload_to_r2_accentedness_production_stimuli.sh`.
   - Hosted manifest builder: `scripts/build_hosted_manifest.mjs` fills HTTPS `audio_url` values from the validated OSF package manifest after the R2/custom-domain base URL is known.
-  - Upload plan rows: 2,545 audio files total; 2,497 main WAV, 4 calibration WAV, 44 ElevenLabs MP3 candidates.
-  - Current external-state blocker: `npx wrangler whoami` reports not authenticated; run `npx wrangler login` before upload or Cloudflare dry run.
+  - The historical upload plan contains 2,545 objects; the newly selected Tingting `pizza.wav` was uploaded separately as `practice/calibration/chn_female_pizza_practice.wav` and must be added to the next regenerated OSF/R2 plan.
+  - `npx wrangler whoami` confirms the Cloudflare account is authenticated; refresh login only if a future scope check requires it.
   - Completion: document the chosen approach and confirm audio URLs are accessible from the live Pages app.
   - Verification command after HTTPS URLs are generated: `node scripts/validate_audio_hosting.mjs --sample 80`.
   - Final full-row check before launch: `node scripts/validate_audio_hosting.mjs --sample 0`.
@@ -45,16 +47,12 @@ This list tracks the remaining work before using
 - [ ] Redeploy the current app and verify the live Cloudflare URL.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current result: FAIL.
-  - Current live blockers:
-    - Live `/remote_manifest.csv` is still a 12-row demo manifest.
-    - Live `/api/session/start` dry-run currently fails because the remote D1 `rating_assignments` table is missing `speaker_pattern_index`; apply `db/migrations/0011_speaker_pattern.sql`.
-      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0010_staged_response_flow.sql`.
-      - Run after `wrangler login`: `npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0011_speaker_pattern.sql`.
-      - Safer partially-migrated DB path: `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`.
-  - Current live passes:
-    - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, selected ElevenLabs practice paths, `response_flow`, and completion-code hardening.
-    - Live selected practice MP3 path returns `audio/mpeg`.
+  - Current stable host serves v0.7; the v0.8 PR Preview serves the new code and all four R2 WAVs. The Tingting/`披萨` methodological choice was explicitly accepted on 2026-07-13; production merge and the Prolific stable-URL change remain.
+  - Remote D1 already contains the staged-flow, speaker-pattern, background-questionnaire, and word-familiarity schema.
+  - Required live passes after the v0.8 deployment:
+    - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, the four R2 practice/calibration WAV paths, `response_flow`, and completion-code hardening.
+    - All four practice URLs return `audio/wav`, including the new `chn_female_pizza_practice.wav` object.
+    - Assignment metadata identifies item 4 as `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
   - Run after every deployment:
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
@@ -105,19 +103,22 @@ This list tracks the remaining work before using
     - `node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_osf_20260703.csv`
     - `node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_current_paths_20260703.csv --audio-root /Users/tohokusla/Dropbox/Accentedness/Stimuli`
 
-- [x] Replace placeholder practice trials with the requested 4 ElevenLabs MP3 items.
-  - App asset folder: `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`.
-  - Selected app trials:
-    - `chocolate__eng_bella.mp3`: `ENG/natural`, reference comprehensibility 1, accentedness 1.
-    - `coffee__jpn_yusuke_stronger.mp3`: `JPN/accented`, reference comprehensibility 3, accentedness 4.
-    - `pizza__jpn_lia_stronger.mp3`: `JPN/accented`, reference comprehensibility 5, accentedness 6.
-    - `sofa__chn_deep_bass_stronger.mp3`: `CHN/accented`, reference comprehensibility 7, accentedness 8.
-  - Source manifest: `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/practice_manifest.csv`.
-  - Local demo manifest: `practice_manifest.csv` now points to the same selected MP3 files.
-  - Older collaborator-supplied calibration WAV files remain in the OSF package for reproducibility, but they are not the current app practice set because the requested target words are `chocolate`, `coffee`, `pizza`, and `sofa`.
-  - Completion: live practice uses real MP3 files, not placeholder tones.
+- [x] Replace placeholder/ElevenLabs practice trials with the requested 4 calibration WAVs.
+  - Direct R2 base: `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`.
+  - Selected app trials in fixed low-to-high reference order:
+    - `eng_female_appreciation_practice.wav`: `ENG` female, Accentedness range 1–3.
+    - `jpn_male_pesticide_practice.wav`: `JPN` male, Accentedness range 3–5.
+    - `jpn_female_quality_practice.wav`: `JPN` female, Accentedness range 5–7.
+    - `chn_female_pizza_practice.wav`: synthetic macOS Tingting Mandarin `披萨`, researcher-assigned Accentedness range 7–9.
+  - `practice_manifest.csv` points to these direct URLs and leaves `expert_comprehensibility_1_9` and `expert_accentedness_1_9` blank.
+  - Completion: live practice uses these four WAVs and shows ranges without inventing scalar expert ratings.
 
-- [x] Regenerate the 4 requested practice words with ElevenLabs candidates.
+- [x] Explicit methodological acceptance for the selected Tingting `pizza.wav` was received on 2026-07-13.
+  - The file is byte-identical to the legacy macOS `say -v Tingting` output generated from Mandarin `披萨`; it is not a human CHN-female production of English `pizza`.
+  - If retained, document that the fourth practice item calibrates an intentionally synthetic/native-language-shaped endpoint rather than ordinary L2 English speech.
+  - If rejected, provide a genuine CHN-female English `pizza` WAV and update R2, the canonical server assignment, client metadata, manifest, OSF package, and tests together.
+
+- [x] Archive: generate alternative practice words with ElevenLabs candidates. These files are retained for reproducibility but are not the active practice set.
   - Current `.env` has ElevenLabs API credentials and voice IDs.
   - Use `scripts/generate_elevenlabs_practice_audio.py` for reproducible generation.
   - Default `--word-set` is now `selected-practice`; the older `appreciation`/`pesticide`/`quality`/`shelter` set is available only by explicitly requesting `--word-set legacy-calibration`.
@@ -143,21 +144,21 @@ This list tracks the remaining work before using
   - Save audio plus `generation_manifest.csv` and `generation_metadata.json`.
   - Completion for generation: candidate audio is generated, normalized, packaged, and a selected app set is connected.
 
-- [ ] Blind-review selected ElevenLabs practice ratings with collaborators.
-  - Confirm that the Japanese-like and Chinese-like accents are strong enough for practice.
-  - Confirm or revise the temporary reference ratings stored in `app.js` and `practice_manifest.csv`.
+- [ ] Confirm the selected calibration WAV ranges with collaborators.
+  - Confirm the four documented Accentedness bands and whether exact scalar ratings should ever replace them.
+  - Keep scalar fields blank unless exact expert Accentedness and Comprehensibility ratings are formally established.
   - Review packet generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`.
   - Review templates:
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/practice_reference_rating_review_template.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/audio_repair_review_template.csv`.
-  - Apply completed practice review with `python3 scripts/apply_practice_review.py --review-csv PATH_TO_COMPLETED_REVIEW_CSV`.
-  - Generate additional variants if collaborators reject any selected item.
-  - Completion: generated audio is reviewed by researchers and accepted as practice material.
+  - The older review/apply scripts target the retired ElevenLabs manifest and must not be run against v0.8 without first being updated for `expert_accentedness_range`.
+  - Completion: the four current WAVs and documented ranges are reviewed and accepted as practice material.
 
 - [x] Implement one-play-only behavior.
   - Current UI changes `Play audio` to `Audio played` after successful playback and disables the playback button.
   - Design note says intelligibility and Acc/Comp pages each allow one playback.
-  - Replay is still possible only after a playback error, so participants are not blocked by a failed audio load.
+  - Unlimited replay is intentionally available only on the post-response practice-feedback screen; it is not available while entering a response or anywhere in the main task.
+  - A playback error does not consume the response-page attempt, so participants are not blocked by a failed audio load.
 
 - [x] Split dictation and rating into separate pages.
   - Task mode remains `combined`, but each trial now flows through `dictation` then `ratings`.
@@ -210,7 +211,7 @@ This list tracks the remaining work before using
   - Repair applied from `scripts/repair_clipped_audio.py` candidate at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_candidates/jpn_s06_natural_pass01_word018_capelin_take04_trial0018__linear_declip_candidate.wav`.
   - Original package copy backup: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_applied_20260703/original_backup/`.
   - Review before launch: decide whether peak amplitude 0.99 is still required, whether JPN sample-rate variation is acceptable, and whether ENG `eng_s01`/`eng_s04` intensity should be normalized.
-  - Selected ElevenLabs practice MP3s pass the loudness check at -23.4 LUFS.
+  - The first three selected calibration WAVs have RMS about -23.98 dBFS; the selected synthetic Tingting `pizza.wav` is 44.1 kHz mono, 0.570794 s, with mean -19.2 dBFS and peak -2.8 dBFS. Confirm that this level difference is acceptable before launch.
   - Completion: all launch-blocking audio QC flags are resolved or explicitly accepted by the research team.
 
 - [ ] Confirm main-task duration with real audio.
@@ -240,8 +241,8 @@ This list tracks the remaining work before using
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - Current preflight result: PASS when run with the production R2 manifest and `--using-external-manifest-secret`.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
-  - Started-session resume guards pass locally at source level: duplicate starts return saved `phase + trial_index` keys, pending block distractors are preserved, familiarity covariates stay fixed to the original session values, and the browser resumes at the first unsaved item.
-  - Current live result: FAIL, because Cloudflare Pages is still serving the 12-row demo `remote_manifest.csv` and live D1 is missing the `0011_speaker_pattern.sql` columns.
+  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four practice items repeat without overwriting saved practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
+  - Current stable deployment is v0.7 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. The methodological decision was accepted on 2026-07-13; re-run the live v0.8 gate after production merge.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 
 - [ ] Review production secrets and access controls.

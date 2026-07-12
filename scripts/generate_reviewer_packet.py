@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Generate reviewer-facing files for practice ratings and audio repair decisions."""
+"""Generate the archived ElevenLabs scalar-rating packet and audio-repair review files.
+
+The practice portion does not describe the active v0.8 range-only set.
+"""
 
 from __future__ import annotations
 

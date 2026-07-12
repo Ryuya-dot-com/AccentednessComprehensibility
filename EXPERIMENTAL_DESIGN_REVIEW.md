@@ -27,7 +27,7 @@ Main measures:
 Each participant completes:
 
 1. Setup and familiarity ratings.
-2. Placeholder practice trials.
+2. Four practice/calibration trials.
 3. Four main stimulus-list blocks.
 4. A short arithmetic distractor task between Blocks 1-3.
 5. Completion and D1 persistence checks.
@@ -274,14 +274,24 @@ If the final design intentionally uses a small number of speakers, the manuscrip
 
 ## Practice Trials
 
-Practice trials currently use selected ElevenLabs MP3 files for `chocolate`, `coffee`, `pizza`, and `sofa`. Before production launch:
+Practice trials use four researcher-selected calibration WAVs in ascending documented Accentedness-reference bands:
+
+1. `appreciation`, `ENG` female, 1–3.
+2. `pesticide`, `JPN` male, 3–5.
+3. `quality`, `JPN` female, 5–7.
+4. `pizza`, synthetic macOS `say` voice `Tingting` using Mandarin `披萨`, 7–9.
+
+These are reference ranges rather than exact scalar ratings. No scalar expert Comprehensibility value has been established for these items. Before production launch:
 
 - Confirm the selected practice audio by collaborator listening review.
-- Confirm or revise the provisional reference ratings.
+- The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in exports and reporting.
+- Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.
 - Keep practice feedback separate from main-trial data.
 - Keep practice short and main-task-like: each practice item should require word typing plus both ratings.
+- Permit unlimited replay only while the post-response practice feedback is visible. Practice response pages and all main-task pages retain one playback per page.
+- On reload, repeat all four practice items before continuing to the saved main-trial/checklist/completion position; do not overwrite previously saved practice responses.
 - Avoid free-text explanations during practice unless they are theoretically necessary and preregistered.
 
 Reviewer concern:

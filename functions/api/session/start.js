@@ -23,6 +23,7 @@ import {
 import {
   allocateCounterbalance,
   buildCounterbalancedAssignment,
+  CANONICAL_PRACTICE_ASSIGNMENT,
   counterbalancePayload,
   dryRunPlaceholderCounterbalanceMaterials,
   loadCounterbalanceMaterials,
@@ -39,7 +40,7 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.7.0";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
 
 const ASSIGNMENT_SELECT = `
   SELECT
@@ -72,6 +73,23 @@ function badRequest(message) {
   const error = new Error(message);
   error.status = 400;
   throw error;
+}
+
+function requireCanonicalPracticeAssignment(rows) {
+  const valid = Array.isArray(rows) &&
+    rows.length === CANONICAL_PRACTICE_ASSIGNMENT.length &&
+    CANONICAL_PRACTICE_ASSIGNMENT.every((expected, index) => {
+      const row = rows[index] || {};
+      return (
+        cleanText(row.phase) === "practice" &&
+        nullableInt(row.trial_index) === expected.trial_index &&
+        canonicalKey(row.target_word) === expected.target_word &&
+        cleanText(row.audio_url) === expected.audio_url
+      );
+    });
+  if (!valid) {
+    badRequest("practice_assignment must match the current four-item practice set.");
+  }
 }
 
 function requiredIntegerInRange(name, value, min, max) {
@@ -303,14 +321,13 @@ async function existingSessionResponse(db, session, sessionToken) {
     known: Number(row.word_known) === 1,
     submitted_at: cleanText(row.submitted_at),
   }));
-  const nextAssignment = [...practiceRows, ...mainRows].find((row) => {
-    const phase = cleanText(row.phase);
+  const nextAssignment = mainRows.find((row) => {
     const trialIndex = nullableInt(row.trial_index);
-    return phase && trialIndex && !savedKeys.has(`${phase}:${trialIndex}`);
+    return trialIndex && !savedKeys.has(`main:${trialIndex}`);
   });
   const resume = nextAssignment
     ? {
-        next_phase: cleanText(nextAssignment.phase),
+        next_phase: "main",
         next_trial_index: nullableInt(nextAssignment.trial_index),
       }
     : {
@@ -320,6 +337,7 @@ async function existingSessionResponse(db, session, sessionToken) {
             : "word_familiarity",
         next_trial_index: null,
       };
+  resume.practice_replay_required = true;
   if (resume.next_phase === "main" && resume.next_trial_index > 1) {
     const previousMain = mainRows.find((row) => nullableInt(row.trial_index) === resume.next_trial_index - 1);
     const upcomingMain = mainRows.find((row) => nullableInt(row.trial_index) === resume.next_trial_index);
@@ -426,7 +444,7 @@ export async function onRequestPost(context) {
     const taskMode = cleanText(body.task_mode) || "combined";
     const platformVersion = cleanText(body.platform_version) || "unknown";
     const counterbalanceEnabled = body.counterbalance?.enabled === true;
-    const practiceAssignment = Array.isArray(body.practice_assignment)
+    let practiceAssignment = Array.isArray(body.practice_assignment)
       ? body.practice_assignment
       : [];
     let assignment = Array.isArray(body.assignment) ? body.assignment : [];
@@ -436,6 +454,23 @@ export async function onRequestPost(context) {
     if (!sessionLabel) return errorResponse("session_label is required.");
     if (isProduction(context.env) && !counterbalanceEnabled) {
       return errorResponse("Server-side counterbalancing is required in production.", 400);
+    }
+    if (isProduction(context.env) && platformVersion !== CURRENT_PLATFORM_VERSION) {
+      return jsonResponse(
+        {
+          ok: false,
+          reload_required: true,
+          error: "The study was updated. Reload this page before starting.",
+        },
+        409,
+      );
+    }
+    if (counterbalanceEnabled && body.resume_only !== true) {
+      requireCanonicalPracticeAssignment(practiceAssignment);
+      practiceAssignment = CANONICAL_PRACTICE_ASSIGNMENT.map((item) => ({
+        ...item,
+        source_path: item.audio_url,
+      }));
     }
     client = requestClientContext(context.request, body);
     requireProlificIdentity(client, context.env);
@@ -450,16 +485,6 @@ export async function onRequestPost(context) {
     }
     if (body.resume_only === true) {
       return jsonResponse({ ok: true, existing_session: false, resume_only: true });
-    }
-    if (isProduction(context.env) && platformVersion !== CURRENT_PLATFORM_VERSION) {
-      return jsonResponse(
-        {
-          ok: false,
-          reload_required: true,
-          error: "The study was updated. Reload this page before starting.",
-        },
-        409,
-      );
     }
     const turnstileVerified = await verifyTurnstile(
       context.request,
@@ -760,6 +785,7 @@ export async function onRequestPost(context) {
       dry_run: dryRun,
       word_familiarity_required: wordFamiliarityRequired,
       counterbalance: counterbalancePayload(counterbalance),
+      practice_assignment: practiceAssignment,
       main_assignment: mainAssignment,
     });
   } catch (error) {

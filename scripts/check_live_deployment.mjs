@@ -3,6 +3,63 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PRACTICE_AUDIO_ROOT =
+  "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+const PRACTICE_ITEMS = Object.freeze([
+  Object.freeze({
+    trial_index: 1,
+    target_word: "appreciation",
+    file_name: "ENG_Female_appreciation_Practice.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
+    l1_condition: "ENG",
+    pronunciation_condition: "natural",
+    talker: "practice_eng_female",
+    spoken_form: "appreciation",
+    source_format: "researcher_provided_calibration_wav",
+    practice_group: "accent_band_1_3",
+    expert_accentedness_range: "1–3",
+  }),
+  Object.freeze({
+    trial_index: 2,
+    target_word: "pesticide",
+    file_name: "JPN_Male_pesticide.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
+    l1_condition: "JPN",
+    pronunciation_condition: "accented",
+    talker: "practice_jpn_male",
+    spoken_form: "pesticide",
+    source_format: "researcher_provided_calibration_wav",
+    practice_group: "accent_band_3_5",
+    expert_accentedness_range: "3–5",
+  }),
+  Object.freeze({
+    trial_index: 3,
+    target_word: "quality",
+    file_name: "JPN_Female_quality_Practice.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
+    l1_condition: "JPN",
+    pronunciation_condition: "accented",
+    talker: "practice_jpn_female",
+    spoken_form: "quality",
+    source_format: "researcher_provided_calibration_wav",
+    practice_group: "accent_band_5_7",
+    expert_accentedness_range: "5–7",
+  }),
+  Object.freeze({
+    trial_index: 4,
+    target_word: "pizza",
+    file_name: "chn_female_pizza_practice.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+    l1_condition: "CHN",
+    pronunciation_condition: "accented",
+    talker: "macos_tts_tingting",
+    spoken_form: "披萨",
+    source_format: "macos_say_tingting_tts_wav",
+    practice_group: "accent_band_7_9",
+    expert_accentedness_range: "7–9",
+  }),
+]);
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
 const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703";
@@ -114,9 +171,15 @@ function header(response, name) {
 
 function checkRequiredAppSnippets(appText) {
   const required = [
+    `const VERSION = "${PLATFORM_VERSION}"`,
     "const STAGED_COMBINED_FLOW = true",
     "speaker_pattern_index",
-    "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703",
+    PRACTICE_AUDIO_ROOT,
+    ...PRACTICE_ITEMS.flatMap((item) => [
+      item.target_word,
+      item.audio_url.split("/").at(-1),
+      item.expert_accentedness_range,
+    ]),
     "response_flow",
     "error.data?.retryable === true",
     "Confirming saved responses...",
@@ -129,10 +192,27 @@ function checkRequiredAppSnippets(appText) {
     "error.data?.reload_required === true",
     "serverCompletedTrialKeys",
     "serverCompletedDistractorIndexes",
+    "resumeAfterPractice",
+    "replayingPractice",
+    "practice_replay_required",
+    "continueAfterPractice",
+    "replayedSavedPractice",
+    "practiceFeedbackReplayCount",
+    "practiceFeedbackReplayGeneration",
+    "replayPracticeFeedbackAudio",
+    "You may replay this practice audio as many times as needed.",
+    "Expert raters rated this as:",
+    "Comprehensibility: — (Your rating:",
+    "These reference ratings are only for practice.",
+    "practice_feedback_replay_start",
+    "practice_feedback_replay_end",
   ];
   const forbidden = [
     'params.get("completion_code")',
     'params.get("PROLIFIC_CODE")',
+    "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703",
+    "CHN_Male_shelter_Practice.wav",
+    "practiceFeedbackReplayCount >=",
   ];
   const problems = [];
   for (const snippet of required) {
@@ -146,12 +226,16 @@ function checkRequiredAppSnippets(appText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
+    'src="app.js?v=0.8.0"',
     'id="word-familiarity-panel"',
     'id="word-familiarity-grid"',
     "Review all 50 words",
     "If you were unfamiliar with it",
     "Rate how strong the speaker's <strong>accent</strong> sounded.",
     "Rate how easy the word was to <strong>understand</strong>.",
+    'id="practice-feedback-replay-btn"',
+    'id="practice-feedback-replay-status"',
+    "You may replay the audio while reviewing this practice feedback.",
   ];
   const problems = required
     .filter((snippet) => !indexText.includes(snippet))
@@ -162,6 +246,50 @@ function checkRequiredIndexSnippets(indexText) {
     problems.push("live task instructions are not Accentedness-first");
   }
   return problems;
+}
+
+function practiceAssignment() {
+  return PRACTICE_ITEMS.map((item) => ({
+    phase: "practice",
+    trial_index: item.trial_index,
+    source_path: item.audio_url,
+    audio_url: item.audio_url,
+    file_name: item.file_name,
+    target_word: item.target_word,
+    participant_id: item.talker,
+    native_language: item.l1_condition,
+    accent_condition: item.pronunciation_condition,
+    condition: `practice_${item.pronunciation_condition}`,
+    talker: item.talker,
+    word_number: String(item.trial_index),
+    trial_number: String(item.trial_index),
+    spoken_form: item.spoken_form,
+    practice_note: item.source_format === "macos_say_tingting_tts_wav"
+      ? `Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨. Expert Accentedness reference range: ${item.expert_accentedness_range}.`
+      : `Researcher-provided calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}.`,
+    source_format: item.source_format,
+    practice_kind: "combined",
+    practice_group: item.practice_group,
+  }));
+}
+
+function trialSavePayload(sessionId, sessionToken, assignment, overrides = {}) {
+  return {
+    session_id: sessionId,
+    session_token: sessionToken,
+    row: {
+      phase: assignment.phase || "main",
+      trial_index: Number(assignment.trial_index),
+      trial_total: assignment.phase === "practice" ? PRACTICE_ITEMS.length : 100,
+      completed_at: new Date().toISOString(),
+      typed_response: assignment.target_word,
+      intelligibility_response_status: "typed",
+      comprehensibility_1_9: 4,
+      accentedness_1_9: 4,
+      response_flow: "staged_dictation_then_ratings",
+      ...overrides,
+    },
+  };
 }
 
 function checkSecurityHeaders(response, label) {
@@ -188,7 +316,7 @@ async function liveApiDryRunStartCheck(baseUrl) {
     rater_id: `live_check_${nonce}`,
     session_label: `live_check_${nonce}`,
     task_mode: "combined",
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     seed: `live_check_${nonce}`,
     dry_run: "1",
     prolific_pid: `LIVE_CHECK_${nonce}`,
@@ -206,12 +334,12 @@ async function liveApiDryRunStartCheck(baseUrl) {
     japanese_familiarity_1_6: 3,
     chinese_familiarity_1_6: 3,
     counterbalance: { enabled: true },
-    practice_assignment: [],
+    practice_assignment: practiceAssignment(),
   };
   const resumePayload = {
     rater_id: payload.rater_id,
     session_label: payload.session_label,
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     dry_run: "1",
     resume_only: true,
     prolific_pid: payload.prolific_pid,
@@ -220,13 +348,48 @@ async function liveApiDryRunStartCheck(baseUrl) {
     counterbalance: { enabled: true },
   };
   const result = await postJson(baseUrl, "/api/session/start", payload);
-  const duplicate = result.response.status === 200 && result.data.ok === true
-    ? await postJson(baseUrl, "/api/session/start", resumePayload)
-    : null;
   const assignment = Array.isArray(result.data.main_assignment)
     ? result.data.main_assignment
     : [];
+  const savedPractice = [];
+  let savedMain = null;
+  if (result.response.status === 200 && result.data.ok === true && result.data.session_token) {
+    for (const practice of practiceAssignment()) {
+      savedPractice.push(
+        await postJson(
+          baseUrl,
+          "/api/trial",
+          trialSavePayload(result.data.session_id, result.data.session_token, practice),
+        ),
+      );
+    }
+    if (assignment[0]) {
+      savedMain = await postJson(
+        baseUrl,
+        "/api/trial",
+        trialSavePayload(result.data.session_id, result.data.session_token, assignment[0]),
+      );
+    }
+  }
+  const duplicate = result.response.status === 200 && result.data.ok === true
+    ? await postJson(baseUrl, "/api/session/start", resumePayload)
+    : null;
   const duplicateResume = duplicate?.data?.resume || {};
+  const duplicatePracticeRows = Array.isArray(duplicate?.data?.practice_assignment)
+    ? duplicate.data.practice_assignment
+    : [];
+  const duplicatePracticeSave = duplicate?.data?.session_token && duplicatePracticeRows[0]
+    ? await postJson(
+        baseUrl,
+        "/api/trial",
+        trialSavePayload(
+          duplicate.data.session_id,
+          duplicate.data.session_token,
+          duplicatePracticeRows[0],
+          { typed_response: "must-not-overwrite", accentedness_1_9: 9 },
+        ),
+      )
+    : null;
   const placeholderRows = assignment.filter((row) => row.source_format === "dry_run_placeholder");
   const nonHttpsRows = assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || ""));
   const engAccentedRows = assignment.filter((row) =>
@@ -240,6 +403,15 @@ async function liveApiDryRunStartCheck(baseUrl) {
     ...(result.response.status === 200 ? [] : [`/api/session/start returned ${result.response.status}`]),
     ...(result.data.ok === true ? [] : [`/api/session/start response was not ok: ${result.data.error || result.text.slice(0, 160)}`]),
     ...(assignment.length === 100 ? [] : [`expected 100 main assignments, got ${assignment.length}`]),
+    ...(Number(result.data.trial_count) === 104 ? [] : [`expected trial_count 104, got ${result.data.trial_count}`]),
+    ...savedPractice.flatMap((save, index) =>
+      save.response.status === 200 && save.data.ok === true
+        ? []
+        : [`practice ${index + 1} save failed: ${save.response.status} ${save.data.error || save.text.slice(0, 120)}`],
+    ),
+    ...(savedMain && savedMain.response.status === 200 && savedMain.data.ok === true
+      ? []
+      : ["first main-trial save did not succeed"]),
     ...(placeholderRows.length ? [`${placeholderRows.length} assignment row(s) used dry_run_placeholder fallback`] : []),
     ...(nonHttpsRows.length ? [`${nonHttpsRows.length} assignment row(s) do not have HTTPS audio_url`] : []),
     ...(engAccentedRows.length ? [`${engAccentedRows.length} ENG row(s) are not natural`] : []),
@@ -256,7 +428,26 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
           ...(Array.isArray(duplicate.data.saved_trials) ? [] : ["duplicate start did not return saved_trials"]),
           ...(Array.isArray(duplicate.data.distractor_completed_trial_indexes) ? [] : ["duplicate start did not return distractor_completed_trial_indexes"]),
-          ...(["practice", "main", "word_familiarity", "complete"].includes(duplicateResume.next_phase) ? [] : ["duplicate start did not return a valid resume.next_phase"]),
+          ...(duplicateResume.practice_replay_required === true ? [] : ["duplicate start did not require all practice items to replay"]),
+          ...(duplicateResume.next_phase === "main" ? [] : [`duplicate resume phase must be main, got ${duplicateResume.next_phase || "(missing)"}`]),
+          ...(Number(duplicateResume.next_trial_index) === 2 ? [] : [`duplicate resume must preserve progress at main trial 2, got ${duplicateResume.next_trial_index || "(missing)"}`]),
+          ...(duplicatePracticeRows.length === PRACTICE_ITEMS.length ? [] : [`duplicate start returned ${duplicatePracticeRows.length} practice assignments instead of 4`]),
+          ...PRACTICE_ITEMS.flatMap((expected, index) => {
+            const actual = duplicatePracticeRows[index] || {};
+            return actual.target_word === expected.target_word &&
+              actual.audio_url === expected.audio_url &&
+              actual.participant_id === expected.talker &&
+              actual.talker === expected.talker &&
+              actual.spoken_form === expected.spoken_form &&
+              actual.source_format === expected.source_format &&
+              actual.accent_condition === expected.pronunciation_condition &&
+              actual.condition === `practice_${expected.pronunciation_condition}`
+              ? []
+              : [`practice assignment ${index + 1} does not match authoritative metadata for ${expected.target_word}`];
+          }),
+          ...(Array.isArray(duplicate.data.saved_trials) && duplicate.data.saved_trials.length === 5
+            ? []
+            : [`duplicate start should report 5 saved rows, got ${duplicate.data.saved_trials?.length ?? "(missing)"}`]),
           ...(duplicate.data.word_familiarity_required === true ? [] : ["duplicate start did not preserve word_familiarity_required"]),
           ...(Array.isArray(duplicate.data.word_familiarity) ? [] : ["duplicate start did not return word_familiarity"]),
           ...(Number(duplicate.data.japanese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original japanese_familiarity_1_6"]),
@@ -268,6 +459,11 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicate.data.linguistics_knowledge === "no" ? [] : ["duplicate start did not return original linguistics_knowledge"]),
         ]
       : []),
+    ...(duplicatePracticeSave?.response.status === 200 &&
+      duplicatePracticeSave.data.ok === true &&
+      duplicatePracticeSave.data.duplicate === true
+      ? []
+      : ["replayed saved practice was not handled as a non-overwriting duplicate"]),
   ];
   return {
     problems,
@@ -282,6 +478,10 @@ async function liveApiDryRunStartCheck(baseUrl) {
       non_https_rows: nonHttpsRows.length,
       duplicate_existing_session: duplicate?.data?.existing_session === true,
       duplicate_resume_phase: duplicateResume.next_phase || "",
+      duplicate_resume_trial_index: duplicateResume.next_trial_index || "",
+      practice_replay_required: duplicateResume.practice_replay_required === true,
+      practice_assignment: duplicatePracticeRows.length,
+      duplicate_practice_save: duplicatePracticeSave?.data?.duplicate === true,
     }),
   };
 }
@@ -321,9 +521,8 @@ const index = await fetchText(baseUrl, "/");
 const app = await fetchText(baseUrl, "/app.js");
 const manifest = await fetchText(baseUrl, "/remote_manifest.csv");
 const config = await fetchText(baseUrl, "/api/config");
-const selectedPractice = await fetchHead(
-  baseUrl,
-  "/practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3",
+const selectedPractice = await Promise.all(
+  PRACTICE_ITEMS.map((item) => fetchHead(baseUrl, item.audio_url)),
 );
 const adminDryRun = await fetchHead(baseUrl, "/admin/dry-run.html");
 
@@ -372,10 +571,24 @@ const checks = [
   },
   {
     name: "Selected practice audio deployed",
-    problems: /^audio\//i.test(header(selectedPractice.response, "content-type"))
-      ? []
-      : [`selected practice MP3 returned content-type ${header(selectedPractice.response, "content-type") || "(none)"}`],
-    summary: JSON.stringify(summarizeHeaders(selectedPractice.response)),
+    problems: selectedPractice.flatMap((result, index) =>
+      result.response.status >= 200 &&
+      result.response.status < 300 &&
+      /^audio\//i.test(header(result.response, "content-type"))
+        ? []
+        : [
+            `${PRACTICE_ITEMS[index].target_word} practice WAV returned ${result.response.status} / ` +
+              `${header(result.response, "content-type") || "(no content-type)"}`,
+          ],
+    ),
+    summary: JSON.stringify(
+      Object.fromEntries(
+        selectedPractice.map((result, index) => [
+          PRACTICE_ITEMS[index].target_word,
+          summarizeHeaders(result.response),
+        ]),
+      ),
+    ),
   },
   {
     name: "Admin dry-run protected",

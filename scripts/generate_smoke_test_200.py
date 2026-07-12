@@ -21,49 +21,62 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "exports" / "smoke_test_200"
-VERSION = "pronunciation_rating_v0.7.0_smoke"
+VERSION = "pronunciation_rating_v0.8.0_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
+PRACTICE_AUDIO_ROOT = "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration"
 PRACTICE_ITEMS = [
     (
-        "chocolate",
-        "ENG/natural",
+        "appreciation",
+        "accent_band_1_3",
         "ENG",
         "natural",
-        "eng_bella",
-        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3",
+        "practice_eng_female",
+        f"{PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav",
         1,
-        1,
+        3,
+        "appreciation",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 1–3",
     ),
     (
-        "coffee",
-        "JPN/accented",
+        "pesticide",
+        "accent_band_3_5",
         "JPN",
         "accented",
-        "jpn_yusuke_stronger",
-        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/coffee__jpn_yusuke_stronger.mp3",
+        "practice_jpn_male",
+        f"{PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav",
         3,
-        4,
+        5,
+        "pesticide",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 3–5",
+    ),
+    (
+        "quality",
+        "accent_band_5_7",
+        "JPN",
+        "accented",
+        "practice_jpn_female",
+        f"{PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav",
+        5,
+        7,
+        "quality",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 5–7",
     ),
     (
         "pizza",
-        "JPN/accented",
-        "JPN",
-        "accented",
-        "jpn_lia_stronger",
-        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/pizza__jpn_lia_stronger.mp3",
-        5,
-        6,
-    ),
-    (
-        "sofa",
-        "CHN/accented",
+        "accent_band_7_9",
         "CHN",
         "accented",
-        "chn_deep_bass_stronger",
-        "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/sofa__chn_deep_bass_stronger.mp3",
+        "macos_tts_tingting",
+        f"{PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav",
         7,
-        8,
+        9,
+        "披萨",
+        "macos_say_tingting_tts_wav",
+        "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨; expert Accentedness reference range 7–9",
     ),
 ]
 TRIAL_COUNT = len(PRACTICE_ITEMS) + 100
@@ -368,7 +381,19 @@ def condition_rows(block_list: str, style: str) -> list[dict]:
 
 def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
     rows = []
-    for index, (word, group, l1, pron, talker, audio_path, expert_comp, expert_accent) in enumerate(PRACTICE_ITEMS, start=1):
+    for index, (
+        word,
+        group,
+        l1,
+        pron,
+        talker,
+        audio_path,
+        accent_min,
+        accent_max,
+        spoken_form,
+        source_format,
+        practice_note,
+    ) in enumerate(PRACTICE_ITEMS, start=1):
         rows.append({
             "id": f"{session_id}:practice:{index}",
             "session_id": session_id,
@@ -378,18 +403,18 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "audio_url": audio_path,
             "file_name": Path(audio_path).name,
             "target_word": word,
-            "participant_id": f"practice_{talker}",
+            "participant_id": talker,
             "native_language": l1,
             "accent_condition": pron,
-            "condition": "practice",
+            "condition": f"practice_{pron}",
             "talker": talker,
             "pass_number": "",
             "word_number": "",
             "trial_number": str(index),
             "take_number": "1",
-            "spoken_form": word,
-            "practice_note": "selected ElevenLabs practice item in smoke dataset",
-            "source_format": "selected_elevenlabs_practice",
+            "spoken_form": spoken_form,
+            "practice_note": practice_note,
+            "source_format": source_format,
             "practice_kind": "combined",
             "practice_group": group,
             "counterbalance_cell": "",
@@ -402,8 +427,8 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "block_list": "",
             "within_block_index": "",
             "block_trial_count": "",
-            "expert_comprehensibility_1_9": expert_comp,
-            "expert_accentedness_1_9": expert_accent,
+            "expert_comprehensibility_1_9": None,
+            "expert_accentedness_1_9": None,
             "created_at": created_at,
         })
     return rows
@@ -503,8 +528,9 @@ def response_for(row: dict, participant_index: int) -> dict:
     normalized = normalize_word(typed)
     normalized_target = normalize_word(target)
     if row["phase"] == "practice":
-        comp = row["expert_comprehensibility_1_9"]
-        accent = row["expert_accentedness_1_9"]
+        _, _, accent_min, accent_max = row["practice_group"].split("_")
+        accent = (int(accent_min) + int(accent_max)) // 2
+        comp = accent
     else:
         l1 = row["l1_condition"]
         pron = row["pronunciation_condition"]
@@ -614,7 +640,11 @@ def assignment_to_trial(row: dict, session: dict, participant_index: int, saved_
         "target_word": row["target_word"],
         "expert_comprehensibility_1_9": row["expert_comprehensibility_1_9"] or None,
         "expert_accentedness_1_9": row["expert_accentedness_1_9"] or None,
-        "practice_feedback": "smoke practice feedback" if row["phase"] == "practice" else None,
+        "practice_feedback": (
+            f"Expert Accentedness reference range: {row['practice_group'].removeprefix('accent_band_').replace('_', '–')}"
+            if row["phase"] == "practice"
+            else None
+        ),
         "practice_requires_reason": 0 if row["phase"] == "practice" else None,
         "practice_reason": None,
         "japanese_familiarity_1_6": session["japanese_familiarity_1_6"],
@@ -666,6 +696,9 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
     completed_word_familiarity_response_total = 0
     dropout_word_familiarity_response_total = 0
     dropout_sessions_with_partial_word_familiarity = 0
+    practice_resume_session_count = 0
+    practice_replay_event_total = 0
+    practice_feedback_replay_pair_total = 0
 
     for participant_index in range(1, participant_count + 1):
         cell_id, list_comb, style = COUNTERBALANCE_CELLS[(participant_index - 1) % len(COUNTERBALANCE_CELLS)]
@@ -815,6 +848,61 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "trial_count": TRIAL_COUNT,
             "counterbalance_cell": cell_id,
         })
+        if duplicate_count and saved_practice_count == len(PRACTICE_ITEMS):
+            practice_resume_session_count += 1
+            resume_main_index = min(saved_main_count + 1, 100)
+            add_event(
+                conn,
+                f"{session_id}:event:resume",
+                session_id,
+                prolific_pid,
+                "session_resume_practice_required",
+                None,
+                duplicate_ms,
+                {
+                    "practice_replay_required": True,
+                    "practice_item_count": len(PRACTICE_ITEMS),
+                    "next_phase": "main" if saved_main_count < 100 else "word_familiarity",
+                    "next_trial_index": resume_main_index if saved_main_count < 100 else None,
+                },
+            )
+            for practice_index, practice_item in enumerate(PRACTICE_ITEMS, start=1):
+                add_event(
+                    conn,
+                    f"{session_id}:event:practice-replayed:{practice_index}",
+                    session_id,
+                    prolific_pid,
+                    "practice_replayed",
+                    practice_index,
+                    duplicate_ms + practice_index * 1_000,
+                    {
+                        "target_word": practice_item[0],
+                        "practice_replay_required": True,
+                    },
+                )
+                practice_replay_event_total += 1
+            # Five feedback-stage replay pairs exercise the intentionally unbounded
+            # replay contract without adding duplicate rating_trials rows.
+            for replay_number in range(1, 6):
+                replay_ms = duplicate_ms + 10_000 + replay_number * 1_000
+                for suffix, event_type, event_offset in (
+                    ("start", "practice_feedback_replay_start", 0),
+                    ("end", "practice_feedback_replay_end", 600),
+                ):
+                    add_event(
+                        conn,
+                        f"{session_id}:event:feedback-replay:{replay_number}:{suffix}",
+                        session_id,
+                        prolific_pid,
+                        event_type,
+                        1,
+                        replay_ms + event_offset,
+                        {
+                            "target_word": PRACTICE_ITEMS[0][0],
+                            "replay_number": replay_number,
+                        },
+                    )
+                practice_feedback_replay_pair_total += 1
         for block_end in (25, 50, 75):
             if saved_main_count >= block_end:
                 add_event(conn, f"{session_id}:event:distractor:{block_end}", session_id, prolific_pid, "distractor_complete", block_end, started_ms + 180_000 + block_end * 22_000 + 15_000, {
@@ -859,6 +947,9 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
         "dropout_word_familiarity_response_total": dropout_word_familiarity_response_total,
         "dropout_sessions_with_partial_word_familiarity": dropout_sessions_with_partial_word_familiarity,
         "dropout_sessions_without_word_familiarity": dropout_count - dropout_sessions_with_partial_word_familiarity,
+        "practice_resume_session_count": practice_resume_session_count,
+        "practice_replay_event_total": practice_replay_event_total,
+        "practice_feedback_replay_pair_total": practice_feedback_replay_pair_total,
     }
 
 
@@ -1117,6 +1208,55 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         if not 1 <= int(row["word_number"]) <= TARGET_WORD_COUNT
         or row["target_word"] != word_label(int(row["word_number"]))
     )
+    expected_practice_by_index = {
+        index: {
+            "target_word": item[0],
+            "practice_group": item[1],
+            "l1_condition": item[2],
+            "pronunciation_condition": item[3],
+            "audio_url": item[5],
+            "range": f"{item[6]}–{item[7]}",
+            "talker": item[4],
+            "spoken_form": item[8],
+            "source_format": item[9],
+            "condition": f"practice_{item[3]}",
+            "accent_condition": item[3],
+        }
+        for index, item in enumerate(PRACTICE_ITEMS, start=1)
+    }
+    practice_assignment_rows = fetch_all(
+        conn,
+        """
+        SELECT trial_index, target_word, practice_group, l1_condition,
+               pronunciation_condition, accent_condition, condition,
+               audio_url, participant_id, talker,
+               spoken_form, practice_note, source_format,
+               expert_comprehensibility_1_9, expert_accentedness_1_9
+        FROM rating_assignments
+        WHERE phase = 'practice'
+        """,
+    )
+    practice_assignment_mismatches = 0
+    for row in practice_assignment_rows:
+        expected_item = expected_practice_by_index.get(int(row["trial_index"]))
+        if (
+            expected_item is None
+            or row["target_word"] != expected_item["target_word"]
+            or row["practice_group"] != expected_item["practice_group"]
+            or row["l1_condition"] != expected_item["l1_condition"]
+            or row["pronunciation_condition"] != expected_item["pronunciation_condition"]
+            or row["accent_condition"] != expected_item["accent_condition"]
+            or row["condition"] != expected_item["condition"]
+            or row["audio_url"] != expected_item["audio_url"]
+            or row["participant_id"] != expected_item["talker"]
+            or row["talker"] != expected_item["talker"]
+            or row["spoken_form"] != expected_item["spoken_form"]
+            or expected_item["range"] not in str(row["practice_note"] or "")
+            or row["source_format"] != expected_item["source_format"]
+            or row["expert_comprehensibility_1_9"] is not None
+            or row["expert_accentedness_1_9"] is not None
+        ):
+            practice_assignment_mismatches += 1
     checks = {
         "sessions": scalar(conn, "SELECT COUNT(*) FROM sessions"),
         "completed_sessions": scalar(conn, "SELECT COUNT(*) FROM sessions WHERE status = 'completed'"),
@@ -1184,6 +1324,32 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "unknown_word_responses": scalar(conn, "SELECT COUNT(*) - SUM(word_known) FROM word_familiarity_responses"),
         "capelin_known_responses": scalar(conn, "SELECT SUM(word_known) FROM word_familiarity_responses WHERE word_number = 23 AND target_word = 'capelin'"),
         "canonical_word_familiarity_mismatches": canonical_word_familiarity_mismatches,
+        "practice_assignment_mismatches": practice_assignment_mismatches,
+        "practice_scalar_expert_values": scalar(conn, """
+            SELECT COUNT(*)
+            FROM rating_assignments
+            WHERE phase = 'practice'
+              AND (expert_comprehensibility_1_9 IS NOT NULL OR expert_accentedness_1_9 IS NOT NULL)
+        """),
+        "sessions_with_more_than_four_practice_trials": scalar(conn, """
+            SELECT COUNT(*)
+            FROM (
+              SELECT session_id
+              FROM rating_trials
+              WHERE phase = 'practice'
+              GROUP BY session_id
+              HAVING COUNT(*) > 4
+            )
+        """),
+        "practice_resume_events": scalar(conn, "SELECT COUNT(*) FROM event_logs WHERE event_type = 'session_resume_practice_required'"),
+        "practice_replayed_events": scalar(conn, "SELECT COUNT(*) FROM event_logs WHERE event_type = 'practice_replayed'"),
+        "practice_feedback_replay_start_events": scalar(conn, "SELECT COUNT(*) FROM event_logs WHERE event_type = 'practice_feedback_replay_start'"),
+        "practice_feedback_replay_end_events": scalar(conn, "SELECT COUNT(*) FROM event_logs WHERE event_type = 'practice_feedback_replay_end'"),
+        "max_practice_feedback_replay_number": scalar(conn, """
+            SELECT MAX(CAST(json_extract(payload_json, '$.replay_number') AS INTEGER))
+            FROM event_logs
+            WHERE event_type = 'practice_feedback_replay_start'
+        """),
         "completed_analysis_rows_missing_word_known": scalar(conn, """
             SELECT COUNT(*)
             FROM rating_trials rt
@@ -1233,6 +1399,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "blank_without_unidentified": 0,
         "missing_saved_trials": dropout_count,
         "completion_urls_issued": completed_count,
+        "duplicate_start_total": participant_count // 25,
         "word_familiarity_required_sessions": participant_count,
         "word_familiarity_responses": expected_word_familiarity,
         "completed_word_familiarity_responses": completed_count * TARGET_WORD_COUNT,
@@ -1242,6 +1409,14 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "dropout_sessions_with_partial_word_familiarity": generation["dropout_sessions_with_partial_word_familiarity"],
         "dropout_sessions_without_word_familiarity": generation["dropout_sessions_without_word_familiarity"],
         "canonical_word_familiarity_mismatches": 0,
+        "practice_assignment_mismatches": 0,
+        "practice_scalar_expert_values": 0,
+        "sessions_with_more_than_four_practice_trials": 0,
+        "practice_resume_events": generation["practice_resume_session_count"],
+        "practice_replayed_events": generation["practice_replay_event_total"],
+        "practice_feedback_replay_start_events": generation["practice_feedback_replay_pair_total"],
+        "practice_feedback_replay_end_events": generation["practice_feedback_replay_pair_total"],
+        "max_practice_feedback_replay_number": 5 if generation["practice_feedback_replay_pair_total"] else 0,
         "completed_analysis_rows_missing_word_known": 0,
         "completed_analysis_rows_missing_word_submitted_at": 0,
         "ratings.csv": expected_total_trials,

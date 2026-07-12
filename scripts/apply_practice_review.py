@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Apply completed practice reference-rating review decisions to app/manifests."""
+"""Apply the archived ElevenLabs scalar-rating review workflow.
+
+This script does not support the active v0.8 range-only practice manifest.
+"""
 
 from __future__ import annotations
 
@@ -197,7 +200,14 @@ def main() -> int:
     parser.add_argument("--materialize-script", type=Path, default=DEFAULT_MATERIALIZE_SCRIPT)
     parser.add_argument("--applied-copy", type=Path, default=DEFAULT_APPLIED_COPY)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--allow-archived-elevenlabs-workflow", action="store_true")
     args = parser.parse_args()
+
+    if not args.allow_archived_elevenlabs_workflow:
+        parser.error(
+            "This archived script targets chocolate/coffee/pizza/sofa scalar ratings, not the active v0.8 practice set. "
+            "Pass --allow-archived-elevenlabs-workflow only when intentionally reproducing that historical workflow."
+        )
 
     review_path = args.review_csv.expanduser().resolve()
     reviews = completed_practice_reviews(read_csv(review_path))

@@ -36,11 +36,12 @@ http://127.0.0.1:8765/?manual=1&local=1
 6. Click `Prepare counterbalanced session` for server-backed stimulus-pool audio, or `Prepare trials` for local manual audio.
 7. Click `Start practice`.
 8. Complete the practice session:
-   - 4 selected ElevenLabs MP3 combined trials.
+   - 4 researcher-selected practice WAV trials, ordered from the lowest to the highest documented Accentedness band: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
    - Each trial first asks for the typed English word, then shows a separate rating page.
    - If the word cannot be identified, participants can mark `I could not identify the word` instead of typing a forced guess.
-   - The word played and Accentedness/Comprehensibility reference ratings are shown after each practice response.
-9. For each sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then rate accentedness followed by comprehensibility as displayed from top to bottom.
+   - After each practice response, the word played and its expert Accentedness reference range are shown. No scalar expert Accentedness or Comprehensibility value is asserted for these WAVs.
+   - Audio can be replayed as many times as needed only while this practice feedback is visible. The word-identification and rating response pages still allow one playback each.
+9. For each main-task sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then rate accentedness followed by comprehensibility as displayed from top to bottom. Main-task feedback and replay are not provided.
 10. In the server-backed counterbalanced task, complete a short calculation distractor task between main stimulus-list blocks.
 11. After the final rating, review the 50-word familiarity checklist. Check words known before the study and leave unfamiliar words blank; all 50 explicit 0/1 responses are saved.
 12. The participant is returned to Prolific only after all trials and the required checklist are saved and the server marks the session as completed. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved data remain in D1, but no Prolific completion URL is issued.
@@ -50,6 +51,8 @@ http://127.0.0.1:8765/?manual=1&local=1
 Use `remote_manifest.csv` when stimulus recordings are already uploaded to GitHub, GitHub Pages, Cloudflare Pages, R2, or another static host. The bundled `remote_manifest.csv` is a small demo manifest, not a production counterbalance manifest. For production, replace it with the final counterbalance-ready manifest or set `COUNTERBALANCE_MANIFEST_URL`. A custom manifest URL is available through the `Use a custom stimulus manifest` option for local/manual preview workflows.
 
 For the Cloudflare/Prolific version, server-side counterbalancing is enabled by default. The server reads the authoritative stimulus pool from `remote_manifest.csv`, or from the `COUNTERBALANCE_MANIFEST_URL` Pages secret when that secret is set, and assigns each participant to one of 20 counterbalance cells. External manifest URLs must use HTTPS, and `COUNTERBALANCE_ALLOWED_HOSTS` can restrict manifest/audio hosts. The browser does not provide the main stimulus pool to `/api/session/start`. Participant write APIs require a per-session token issued by `/api/session/start`; the token hash is stored in D1 and the raw token is kept only in browser memory. In production, `/api/session/start` requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`; D1 enforces one `participant_key` per `STUDY_ID + PROLIFIC_PID`. Use `?manual=1` only for the older manual participant-selection workflow.
+
+Configure Prolific with the stable Pages project URL, `https://accentednesscomprehensibility.pages.dev/`, plus Prolific's participant parameters. Never use a deployment-specific URL such as `https://<deployment-id>.accentednesscomprehensibility.pages.dev/`; it permanently targets that historical deployment and can continue serving an obsolete practice set after `main` is updated.
 
 Before practice, participants complete the required background questionnaire: age; first-language English variety; gender; familiarity with Japanese-accented and Chinese-accented English; English-teaching experience; and relevant linguistics knowledge. `Other`/`Yes` detail fields are conditionally required. The server accepts only whole-number ages from 1–120, exact enumerated choices, familiarity ratings from 1–6, and bounded free text. Responses are stored once on the `sessions` row rather than copied into every trial. A `resume_only` lookup restores an open Prolific session and its saved background responses without asking the participant to answer the questionnaire again.
 
@@ -164,7 +167,7 @@ The server balances cells at session start by active-or-completed sessions first
 
 This works best as rolling recruitment: continue recruiting until the target number of completed sessions is reached, then finalize stale sessions and check the completed count per cell. If a fixed batch of participants is launched all at once and recruitment stops before replacing dropouts, the assigned counts can be balanced while completed counts are still uneven. The counterbalance algorithm can compensate only when later participants are allowed to enter after dropouts are known or finalized.
 
-If a participant reloads or reopens the Prolific URL while the session is still `started`, the server issues a fresh session token for the same session and returns the first unsaved `phase + trial_index`. The browser resumes from that item, including any pending block distractor, and trial rows continue to use the familiarity values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
+If a participant reloads or reopens the stable Prolific URL while the session is still `started`, the server issues a fresh session token for the same session. The browser deliberately presents all four practice items again, then continues at the first unsaved main trial, pending block distractor, final checklist, or completion state. Replayed practice does not overwrite an already saved practice response. Trial rows continue to use the familiarity and background values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
 
 Counterbalance reference files:
 
@@ -242,27 +245,28 @@ practice_audio/chinese/{chocolate,coffee,pizza,sofa}.wav
 practice_audio/legacy_tts_practice_manifest.csv
 ```
 
-The English samples use system TTS. The Japanese samples use katakana-shaped forms such as `チョコレート`, and the Chinese samples use comparable loanword/cognate forms such as `巧克力`. These are for interface checks only, not for final data collection. The current built-in practice session uses the selected ElevenLabs MP3 files documented below.
+The English samples use system TTS. The Japanese samples use katakana-shaped forms such as `チョコレート`, and the Chinese samples use comparable loanword/cognate forms such as `巧克力`. They are legacy interface-check assets. One explicitly documented exception is the researcher-selected `chinese/pizza.wav`: the current fourth practice item intentionally reuses that synthetic Tingting token, so its provenance is retained rather than presented as a human recording.
 
-The legacy script no longer overwrites top-level `practice_manifest.csv`. The researcher-only `Load selected practice` button now reads the selected ElevenLabs MP3 manifest described below. The bundled practice loader uses browser `fetch`, so use `http://127.0.0.1:8765/?manual=1&local=1` rather than opening `index.html` directly from Finder.
+The legacy script no longer overwrites top-level `practice_manifest.csv`. The researcher-only `Load selected practice` button reads the calibration manifest described below and passes each R2 URL directly to the browser's audio element; it does not fetch the cross-origin WAV into a JavaScript blob. Use `http://127.0.0.1:8765/?manual=1&local=1` rather than opening `index.html` directly from Finder. The server-backed participant flow plays the same HTTPS URLs.
 
 ## Built-in Practice Session
 
 The server-backed task automatically starts with a practice session before main ratings.
 
-Current practice audio uses selected ElevenLabs MP3 files:
+Current practice audio uses four researcher-selected WAV files hosted in production R2:
 
 - 4 combined practice items that are not part of the main 50-word set:
-  - `chocolate`: `ENG/natural`
-  - `coffee`: `JPN/accented`
-  - `pizza`: `JPN/accented`
-  - `sofa`: `CHN/accented`
+  - `appreciation`: `ENG` female, documented Accentedness reference range 1–3.
+  - `pesticide`: `JPN` male, documented Accentedness reference range 3–5.
+  - `quality`: `JPN` female, documented Accentedness reference range 5–7.
+  - `pizza`: synthetic macOS `say` voice `Tingting`, generated from the Mandarin form `披萨`, documented Accentedness reference range 7–9. This is not a human L2-English production; its methodological use was explicitly accepted on 2026-07-13.
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
-- Practice feedback uses `The word played`, then shows Accentedness followed by Comprehensibility reference ratings. It does not ask participants to justify their ratings.
+- Practice feedback uses `The word played`, shows the documented expert Accentedness reference range, and repeats the participant's Accentedness and Comprehensibility ratings. It does not invent a scalar expert rating and does not ask participants to justify their ratings.
+- The practice-feedback screen permits unlimited replay so the calibration stimulus can be checked. This exception applies only after a practice response; response pages and all main-task pages retain the one-playback rule.
 
-Practice audio paths are under `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`. The current non-ENG reference ratings are temporary researcher-selected values for dry-run and can be revised after collaborator listening review.
+The direct production audio base is `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`. The local source WAVs are under `/Users/tohokusla/Dropbox/Accentedness/Stimuli/Practice&Calibration/`, and the standardized R2 filenames and source provenance are recorded in `practice_manifest.csv`. Both scalar fields, `expert_comprehensibility_1_9` and `expert_accentedness_1_9`, remain blank because exact scalar expert ratings have not been established; `expert_accentedness_range` stores the documented ranges in that manifest.
 
-The top-level `practice_manifest.csv` also points to these four selected MP3 files so local researcher demo loading cannot silently fall back to the legacy macOS TTS WAV set.
+The top-level `practice_manifest.csv` points to the same four production R2 WAVs. It explicitly identifies item 4 as `macos_say_tingting_tts_wav` with `spoken_form=披萨`; the other three use `researcher_provided_calibration_wav`. Retired ElevenLabs materials are not part of the active flow.
 
 ## Output
 
@@ -457,7 +461,7 @@ Rater responses are saved trial-by-trial to D1. The final checklist is saved as 
 
 Each saved trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Audio replay starts are also logged in `events.csv` with replay status and relative play time.
 
-Mid-task reloads resume at the first unsaved trial for still-open sessions. Mid-task dropouts keep their partial rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
+Mid-task reloads first repeat the complete four-item practice session, then resume at the first unsaved main trial or later saved-session state. Mid-task dropouts keep their partial rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
 
 The researcher export page is:
 
@@ -533,13 +537,13 @@ node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 
 This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, checks one simultaneous wave across the 20 cells, and fails if the assignment spread is greater than 1.
 
-For acoustic QC of the OSF package and selected app practice MP3 files, run:
+For acoustic QC of the OSF package, run:
 
 ```sh
 python3 scripts/audit_audio_qc.py
 ```
 
-This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization.
+This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization. The accepted Tingting `pizza.wav` is not yet in that OSF calibration package; its local source and R2 copy were separately checked with `ffprobe`, MD5, and SHA-256, and must be added to the next regenerated OSF package.
 
 The applied clipping repair candidate can be regenerated with:
 
@@ -549,19 +553,7 @@ python3 scripts/repair_clipped_audio.py
 
 This does not overwrite the production audio or manifest. It writes a candidate under `metadata/audio_repair_candidates/` for researcher listening review.
 
-To generate the collaborator review packet for selected practice ratings and the repair candidate:
-
-```sh
-python3 scripts/generate_reviewer_packet.py
-```
-
-Open `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`, complete the review, and export the CSV. After review is complete, apply the practice reference ratings with:
-
-```sh
-python3 scripts/apply_practice_review.py --review-csv PATH_TO_COMPLETED_REVIEW_CSV
-```
-
-The apply script updates `app.js`, the selected practice manifests, and the OSF package materialization script. Production-audio repair decisions are tracked separately in the OSF audio QC report and repair metadata.
+`scripts/generate_reviewer_packet.py` and `scripts/apply_practice_review.py` describe the retired ElevenLabs/scalar-rating workflow. Do not run them against v0.8. A new review record for the four current items must preserve range-only ratings and the accepted synthetic Tingting/`披萨` provenance. Production-audio repair decisions remain tracked separately in the OSF audio QC report and repair metadata.
 
 For lexical-balance QC of style `a` versus style `b`, run:
 
@@ -602,7 +594,7 @@ node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 
 Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, and duplicate-start resume metadata by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
 
-The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, selected ElevenLabs practice MP3 files, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`; the current live API dry-run result is `PASS`.
+The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, the four R2 practice/calibration WAVs, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`. The stable host still serves v0.7; rerun the full live API gate after the production merge. The v0.8 PR Preview has passed the static app/audio checks but is not a production-environment gate. After deployment, update the Prolific study link to the stable hostname separately.
 
 After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 

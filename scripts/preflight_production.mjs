@@ -8,12 +8,21 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PRACTICE_AUDIO_ROOT =
+  "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+const EXPECTED_PRACTICE_ITEMS = Object.freeze([
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", range: "1–3" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", range: "3–5" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", range: "5–7" }),
+  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", range: "7–9" }),
+]);
 const DEFAULTS = {
   productionManifest: path.join(PACKAGE_ROOT, "remote_manifest.csv"),
   deployedManifest: path.join(REPO_ROOT, "remote_manifest.csv"),
   audioQcIssues: path.join(PACKAGE_ROOT, "metadata", "audio_qc_issues.csv"),
   lexicalPairwise: path.join(PACKAGE_ROOT, "metadata", "lexical_balance_pairwise_differences.csv"),
-  selectedPracticeManifest: path.join(PACKAGE_ROOT, "metadata", "selected_practice_manifest.csv"),
+  selectedPracticeManifest: path.join(REPO_ROOT, "practice_manifest.csv"),
   durationSummary: path.join(PACKAGE_ROOT, "metadata", "duration_estimate_summary.csv"),
   indexHtml: path.join(REPO_ROOT, "index.html"),
   appJs: path.join(REPO_ROOT, "app.js"),
@@ -35,6 +44,7 @@ const DEFAULTS = {
   backgroundLocalTest: path.join(REPO_ROOT, "scripts", "test_background_questionnaire_local.mjs"),
   liveCheck: path.join(REPO_ROOT, "scripts", "check_live_deployment.mjs"),
   stressCheck: path.join(REPO_ROOT, "scripts", "stress_live_counterbalance_concurrency.mjs"),
+  smokeGenerator: path.join(REPO_ROOT, "scripts", "generate_smoke_test_200.py"),
   out: path.join(PACKAGE_ROOT, "metadata", "PREFLIGHT_REPORT_20260703.md"),
 };
 
@@ -232,14 +242,52 @@ function checkLexical(rows) {
 
 function checkPractice(rows, options) {
   const problems = [];
-  const selected = rows.filter((row) => String(row.status || "").startsWith("selected"));
-  if (selected.length !== 4) problems.push(`expected 4 selected practice rows, found ${selected.length}`);
-  const provisional = selected.filter((row) => /provisional/i.test(row.status || row.note || ""));
-  if (provisional.length && !options.allowProvisionalPracticeRatings) {
-    problems.push(`${provisional.length} selected practice row(s) still have provisional reference ratings`);
+  if (rows.length !== EXPECTED_PRACTICE_ITEMS.length) {
+    problems.push(`expected 4 current practice rows, found ${rows.length}`);
   }
-  const missing = selected.filter((row) => row.package_file_exists !== "1");
-  if (missing.length) problems.push(`${missing.length} selected practice package file(s) are missing`);
+  for (const [index, expected] of EXPECTED_PRACTICE_ITEMS.entries()) {
+    const row = rows[index] || {};
+    const expectedUrl = `${PRACTICE_AUDIO_ROOT}/${expected.file}`;
+    const actualUrl = String(row.audio_url || row.audio_file || "").trim();
+    if (String(row.target_word || "").trim().toLowerCase() !== expected.word) {
+      problems.push(`practice row ${index + 1}: expected target ${expected.word}, found ${row.target_word || "(missing)"}`);
+    }
+    if (actualUrl !== expectedUrl) {
+      problems.push(`practice row ${index + 1}: expected audio ${expectedUrl}, found ${actualUrl || "(missing)"}`);
+    }
+    if (String(row.l1_condition || "").trim() !== expected.l1) {
+      problems.push(`practice row ${index + 1}: expected L1 ${expected.l1}, found ${row.l1_condition || "(missing)"}`);
+    }
+    if (String(row.pronunciation_condition || "").trim() !== expected.pronunciation) {
+      problems.push(
+        `practice row ${index + 1}: expected pronunciation ${expected.pronunciation}, found ${row.pronunciation_condition || "(missing)"}`,
+      );
+    }
+    if (String(row.accent_condition || "").trim() !== expected.pronunciation) {
+      problems.push(`practice row ${index + 1}: expected accent_condition ${expected.pronunciation}`);
+    }
+    if (String(row.condition || "").trim() !== `practice_${expected.pronunciation}`) {
+      problems.push(`practice row ${index + 1}: expected condition practice_${expected.pronunciation}`);
+    }
+    if (String(row.expert_accentedness_range || "").trim() !== expected.range) {
+      problems.push(`practice row ${index + 1}: expected Accentedness range ${expected.range}`);
+    }
+    if (String(row.talker || "").trim() !== expected.talker || String(row.participant_id || "").trim() !== expected.talker) {
+      problems.push(`practice row ${index + 1}: expected talker/participant_id ${expected.talker}`);
+    }
+    if (String(row.spoken_form || "").trim() !== expected.spokenForm) {
+      problems.push(`practice row ${index + 1}: expected spoken_form ${expected.spokenForm}`);
+    }
+    if (String(row.expert_comprehensibility_1_9 || "").trim() || String(row.expert_accentedness_1_9 || "").trim()) {
+      problems.push(`practice row ${index + 1}: scalar expert ratings must remain blank when only a range is available`);
+    }
+    if (String(row.source_format || "").trim() !== expected.sourceFormat) {
+      problems.push(`practice row ${index + 1}: source_format must be ${expected.sourceFormat}`);
+    }
+  }
+  if (rows.some((row) => /elevenlabs|chocolate|coffee|sofa|shelter/i.test(JSON.stringify(row)))) {
+    problems.push("practice manifest still contains a superseded practice item or ElevenLabs source");
+  }
   return problems;
 }
 
@@ -355,6 +403,7 @@ function checkProlificFlowSourceGuards(options) {
   const backgroundLocalTest = readTextIfExists(options.backgroundLocalTest);
   const liveCheck = readTextIfExists(options.liveCheck);
   const stressCheck = readTextIfExists(options.stressCheck);
+  const smokeGenerator = readTextIfExists(options.smokeGenerator);
   for (const [label, text] of [
     ["index.html", index],
     ["app.js", app],
@@ -376,11 +425,13 @@ function checkProlificFlowSourceGuards(options) {
     ["scripts/test_background_questionnaire_local.mjs", backgroundLocalTest],
     ["scripts/check_live_deployment.mjs", liveCheck],
     ["scripts/stress_live_counterbalance_concurrency.mjs", stressCheck],
+    ["scripts/generate_smoke_test_200.py", smokeGenerator],
   ]) {
     if (!text) problems.push(`${label} is missing or empty`);
   }
 
   requireSnippet(problems, "app.js", app, "window.location.assign(completionUrl)");
+  requireSnippet(problems, "app.js", app, `const VERSION = "${PLATFORM_VERSION}"`);
   requireSnippet(problems, "app.js", app, "Your response could not be saved. Please try Continue again.");
   requireSnippet(problems, "app.js", app, "error.data?.retryable === true");
   requireSnippet(problems, "app.js", app, "Confirming saved responses...");
@@ -398,8 +449,38 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "app.js", app, "if (state.wordFamiliarityRequired)");
   requireSnippet(problems, "app.js", app, "error.data?.reload_required === true");
   requireSnippet(problems, "app.js", app, "The word played:");
+  requireSnippet(problems, "app.js", app, "Expert Accentedness reference range:");
+  requireSnippet(problems, "app.js", app, "resumeAfterPractice");
+  requireSnippet(problems, "app.js", app, "replayingPractice");
+  requireSnippet(problems, "app.js", app, "practice_replay_required");
+  requireSnippet(problems, "app.js", app, "continueAfterPractice");
+  requireSnippet(problems, "app.js", app, "replayedSavedPractice");
+  requireSnippet(problems, "app.js", app, "saveResult?.duplicate !== true");
+  requireSnippet(problems, "app.js", app, "replayPracticeFeedbackAudio");
+  requireSnippet(problems, "app.js", app, "practiceFeedbackReplayGeneration");
+  requireSnippet(problems, "app.js", app, "You may replay this practice audio as many times as needed.");
   requireSnippet(problems, "app.js", app, "Expert raters rated this as:");
+  requireSnippet(problems, "app.js", app, "Comprehensibility: — (Your rating:");
+  requireSnippet(problems, "app.js", app, "These reference ratings are only for practice.");
+  requireSnippet(problems, "app.js", app, '"practice_feedback_replay_start"');
+  requireSnippet(problems, "app.js", app, '"practice_feedback_replay_end"');
+  forbidSnippet(problems, "app.js", app, "practiceFeedbackReplayCount >=");
+  for (const expected of EXPECTED_PRACTICE_ITEMS) {
+    requireSnippet(problems, "app.js", app, `word: "${expected.word}"`);
+    requireSnippet(problems, "app.js", app, expected.file);
+    requireSnippet(problems, "app.js", app, `"${expected.range}"`);
+    requireSnippet(problems, "app.js", app, expected.talker);
+    requireSnippet(problems, "app.js", app, expected.spokenForm);
+    requireSnippet(problems, "app.js", app, expected.sourceFormat);
+  }
+  forbidSnippet(problems, "app.js", app, "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703");
+  forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
+  forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.8.0"');
+  requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-btn"');
+  requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-status"');
+  requireSnippet(problems, "index.html", index, "You may replay the audio while reviewing this practice feedback.");
   requireSnippet(problems, "index.html", index, 'id="word-familiarity-panel"');
   requireSnippet(problems, "index.html", index, "Review all 50 words");
   requireSnippet(problems, "index.html", index, "If you were unfamiliar with it");
@@ -451,8 +532,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/start.js", start, "prolificIdentityMatches");
   requireSnippet(problems, "session/start.js", start, "constantTimeEqual");
   requireSnippet(problems, "session/start.js", start, '"word_familiarity"');
-  requireSnippet(problems, "session/start.js", start, 'CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.7.0"');
+  requireSnippet(problems, "session/start.js", start, `CURRENT_PLATFORM_VERSION = "${PLATFORM_VERSION}"`);
   requireSnippet(problems, "session/start.js", start, "reload_required: true");
+  requireSnippet(problems, "session/start.js", start, "const nextAssignment = mainRows.find");
+  requireSnippet(problems, "session/start.js", start, "resume.practice_replay_required = true");
+  requireSnippet(problems, "session/start.js", start, "practiceAssignment = CANONICAL_PRACTICE_ASSIGNMENT.map");
   requireSnippet(problems, "session/start.js", start, "japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6)");
   requireSnippet(problems, "session/start.js", start, 'requiredIntegerInRange(\n      "participant_age_years"');
   requireSnippet(problems, "session/start.js", start, 'optionalText(\n      "english_variety_other"');
@@ -473,7 +557,24 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "participant_age_years: 30");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_variety: "american"');
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "resume_only: true");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, PLATFORM_VERSION);
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_replay_required");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "duplicatePracticeSave");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "participant_age_years: 30");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.8.0_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "session_resume_practice_required");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "practice_feedback_replay_start");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "macos_say_tingting_tts_wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, PRACTICE_AUDIO_ROOT);
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_tts_tingting");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, 'spoken_form: "披萨"');
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "SELECT COUNT(*)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status IN (?, ?)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status = ?");
@@ -505,6 +606,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_identity_triple_match: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "csv_formula_neutralized: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "word_familiarity_rows: 50");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_set_v080_exact: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_feedback_unlimited_replay_contract: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_replays_all_practice: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_preserves_first_unsaved_main: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "replayed_practice_idempotent: true");
   requireSnippet(
     problems,
     "scripts/test_background_questionnaire_local.mjs",
@@ -538,7 +644,7 @@ function markdownReport(checks, options) {
     `- Deployed/repo manifest: \`${options.deployedManifest}\``,
     `- Audio QC issues: \`${options.audioQcIssues}\``,
     `- Lexical balance: \`${options.lexicalPairwise}\``,
-    `- Selected practice manifest: \`${options.selectedPracticeManifest}\``,
+    `- Current practice manifest: \`${options.selectedPracticeManifest}\``,
     `- Duration summary: \`${options.durationSummary}\``,
     "",
     "## Checks",
@@ -582,6 +688,7 @@ const options = {
   backgroundLocalTest: path.resolve(argValue("--background-local-test", DEFAULTS.backgroundLocalTest)),
   liveCheck: path.resolve(argValue("--live-check", DEFAULTS.liveCheck)),
   stressCheck: path.resolve(argValue("--stress-check", DEFAULTS.stressCheck)),
+  smokeGenerator: path.resolve(argValue("--smoke-generator", DEFAULTS.smokeGenerator)),
   out: path.resolve(argValue("--out", DEFAULTS.out)),
   usingExternalManifestSecret: hasFlag("--using-external-manifest-secret"),
   requireAudioUrls: !hasFlag("--allow-relative-audio-files"),
@@ -638,10 +745,10 @@ const checks = [
   {
     name: "Selected practice ratings",
     problems: [
-      ...csvInputProblems("Selected practice manifest", options.selectedPracticeManifest, practiceRows),
+      ...csvInputProblems("Current practice manifest", options.selectedPracticeManifest, practiceRows),
       ...checkPractice(practiceRows, options),
     ],
-    summary: `${practiceRows.length} selected-practice manifest row(s)`,
+    summary: `${practiceRows.length} current practice manifest row(s)`,
   },
   {
     name: "Duration lower-bound estimate",

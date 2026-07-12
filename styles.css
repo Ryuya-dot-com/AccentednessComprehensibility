@@ -931,7 +931,30 @@ label {
   line-height: 1.5;
   margin-top: 18px;
   padding: 14px;
+}
+
+#practice-feedback-text {
+  margin: 0;
   white-space: pre-line;
+}
+
+.practice-feedback-replay {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 14px;
+}
+
+.practice-feedback-replay button {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+#practice-feedback-replay-status {
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .practice-reason {
