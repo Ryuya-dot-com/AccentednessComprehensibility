@@ -145,23 +145,25 @@
                 <li>Type the English word you heard.</li>
                 <li>Continue to the rating page.</li>
                 <li>Press <strong>Play audio</strong> again.</li>
-                <li>Rate how easy the word was to understand.</li>
-                <li>Rate how strong the speaker's accent sounded.</li>
+                <li>Rate the speaker's <strong>Accentedness</strong>.</li>
+                <li>Rate the word's <strong>Comprehensibility</strong>.</li>
               </ol>
-              <p>Each page allows one playback. Practice comes first.</p>
+              <p>You can play the audio only once on each page. Practice comes first.</p>
             </div>
             <div class="scale-summary-grid">
               <div>
-                <span>Ease of understanding</span>
-                <strong>1 = very easy; 9 = very difficult</strong>
+                <span>Intelligibility</span>
+                <p>Type the English word you hear.</p>
               </div>
               <div>
-                <span>Accent strength</span>
-                <strong>1 = no noticeable accent; 9 = very strong accent</strong>
+                <span>Accentedness</span>
+                <p>This refers to how much a speaker's speech is influenced by his/her native language and/or is colored by other non-native features.</p>
+                <strong>1 = no accent; 9 = extremely strong accent</strong>
               </div>
               <div>
-                <span>Word typing</span>
-                <strong>Type the English word you hear.</strong>
+                <span>Comprehensibility</span>
+                <p>This term refers to how much effort it takes to understand what someone is saying. If you can understand (the word produced by a speaker) with ease, then the speaker is effortless to understand. However, if you struggle and must listen very carefully, or in fact cannot understand what is being said at all, then a speaker is effortful/difficult to understand.</p>
+                <strong>1 = easy to understand; 9 = extremely difficult to understand</strong>
               </div>
             </div>
           </section>
@@ -251,21 +253,21 @@
           <summary>Rating scales</summary>
           <div class="anchor-grid">
             <div>
-              <h3>Ease of understanding</h3>
-              <p>How easy was the word to understand?</p>
-              <p><strong>1</strong> = very easy</p>
-              <p><strong>9</strong> = very difficult</p>
-            </div>
-            <div>
-              <h3>Accent strength</h3>
-              <p>How strong did the speaker's accent sound?</p>
-              <p><strong>1</strong> = no noticeable accent</p>
-              <p><strong>9</strong> = very strong accent</p>
-            </div>
-            <div>
-              <h3>Word typing</h3>
+              <h3>Intelligibility</h3>
               <p>Type the English word you hear.</p>
               <p>Please answer as accurately as you can.</p>
+            </div>
+            <div>
+              <h3>Accentedness</h3>
+              <p>This refers to how much a speaker's speech is influenced by his/her native language and/or is colored by other non-native features.</p>
+              <p><strong>1</strong> = no accent</p>
+              <p><strong>9</strong> = extremely strong accent</p>
+            </div>
+            <div>
+              <h3>Comprehensibility</h3>
+              <p>This term refers to how much effort it takes to understand what someone is saying. If you can understand (the word produced by a speaker) with ease, then the speaker is effortless to understand. However, if you struggle and must listen very carefully, or in fact cannot understand what is being said at all, then a speaker is effortful/difficult to understand.</p>
+              <p><strong>1</strong> = easy to understand</p>
+              <p><strong>9</strong> = extremely difficult to understand</p>
             </div>
           </div>
         </details>
@@ -322,22 +324,28 @@
               </label>
             </div>
 
-            <fieldset class="scale-block" id="comprehensibility-block">
-              <legend>How easy was it to understand?</legend>
+            <fieldset class="scale-block" id="accentedness-block" aria-describedby="accentedness-definition">
+              <legend>Accentedness</legend>
+              <p class="scale-definition" id="accentedness-definition">
+                This refers to how much a speaker's speech is influenced by his/her native language and/or is colored by other non-native features.
+              </p>
               <div class="scale-endpoints">
-                <span>Very easy</span>
-                <span>Very difficult</span>
-              </div>
-              <div class="scale-options" id="comprehensibility-scale"></div>
-            </fieldset>
-
-            <fieldset class="scale-block" id="accentedness-block">
-              <legend>How strong did the accent sound?</legend>
-              <div class="scale-endpoints">
-                <span>No noticeable accent</span>
-                <span>Very strong accent</span>
+                <span>1: No accent</span>
+                <span>9: Extremely strong accent</span>
               </div>
               <div class="scale-options" id="accentedness-scale"></div>
+            </fieldset>
+
+            <fieldset class="scale-block" id="comprehensibility-block" aria-describedby="comprehensibility-definition">
+              <legend>Comprehensibility</legend>
+              <p class="scale-definition" id="comprehensibility-definition">
+                This term refers to how much effort it takes to understand what someone is saying. If you can understand (the word produced by a speaker) with ease, then the speaker is effortless to understand. However, if you struggle and must listen very carefully, or in fact cannot understand what is being said at all, then a speaker is effortful/difficult to understand.
+              </p>
+              <div class="scale-endpoints">
+                <span>1: Easy to understand</span>
+                <span>9: Extremely difficult to understand</span>
+              </div>
+              <div class="scale-options" id="comprehensibility-scale"></div>
             </fieldset>
 
             <div id="practice-feedback" class="practice-feedback hidden" aria-live="polite"></div>
