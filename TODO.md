@@ -50,6 +50,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - PR #3 was merged as `99f3872` and deployed to the stable host on 2026-07-13. The static and live-API deployment gates passed with v0.8, all four R2 WAVs, protected admin routes, the external production manifest, duplicate-start resume, and non-overwriting practice replay.
   - The Prolific stable-URL change remains a separate manual study-setting action.
   - Remote D1 already contains the staged-flow, speaker-pattern, background-questionnaire, and word-familiarity schema.
+  - Migration `0014_archived_session_locks.sql` was applied on 2026-07-13 so archived preview rows retain full Prolific IDs without blocking a replacement active session; active/completed participant locks remain strict.
   - Required live passes after the v0.8 deployment:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, the four R2 practice/calibration WAV paths, `response_flow`, and completion-code hardening.
     - All four practice URLs return `audio/wav`, including the new `chn_female_pizza_practice.wav` object.

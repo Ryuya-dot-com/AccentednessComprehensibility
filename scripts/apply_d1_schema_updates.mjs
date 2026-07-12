@@ -130,16 +130,22 @@ const REQUIRED_SETUP_SQL = [
   ON sessions(status, last_seen_at_ms)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance
   ON sessions(counterbalance_cell, status)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_prolific_session_unique
+  `DROP INDEX IF EXISTS idx_sessions_prolific_session_unique`,
+  `DROP INDEX IF EXISTS idx_sessions_prolific_pid_study_unique`,
+  `DROP INDEX IF EXISTS idx_sessions_participant_key_unique`,
+  `CREATE UNIQUE INDEX idx_sessions_prolific_session_unique
   ON sessions(prolific_session_id)
-  WHERE prolific_session_id IS NOT NULL AND prolific_session_id != ''`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_prolific_pid_study_unique
+  WHERE prolific_session_id IS NOT NULL AND prolific_session_id != ''
+    AND status != 'start_failed'`,
+  `CREATE UNIQUE INDEX idx_sessions_prolific_pid_study_unique
   ON sessions(prolific_pid, prolific_study_id)
   WHERE prolific_pid IS NOT NULL AND prolific_pid != ''
-    AND prolific_study_id IS NOT NULL AND prolific_study_id != ''`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_key_unique
+    AND prolific_study_id IS NOT NULL AND prolific_study_id != ''
+    AND status != 'start_failed'`,
+  `CREATE UNIQUE INDEX idx_sessions_participant_key_unique
   ON sessions(participant_key)
-  WHERE participant_key IS NOT NULL AND participant_key != ''`,
+  WHERE participant_key IS NOT NULL AND participant_key != ''
+    AND status != 'start_failed'`,
   `CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_cell
   ON counterbalance_allocations(cell_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_updated

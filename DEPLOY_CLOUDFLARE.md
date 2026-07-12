@@ -241,6 +241,14 @@ npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migr
 
 Apply this D1 migration before the Pages code. Existing v0.6 sessions receive `word_familiarity_required=0`, so they can finish without being misclassified as unfamiliar; new v0.7 sessions require all 50 rows before completion.
 
+For v0.8 or later, allow an explicitly archived preview row to retain its full Prolific identifiers without blocking its replacement active session:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0014_archived_session_locks.sql
+```
+
+The migration excludes only `status='start_failed'` rows from the three unique Prolific indexes. Active and completed rows remain locked. When archiving an incomplete researcher preview, also change its `participant_key` to a unique `dry-run:archived-preview:<session-id>` value and its counterbalance allocation status to `dry_run_incomplete`; do not blank or mask the stored Prolific IDs.
+
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
 ```sh
@@ -612,6 +620,7 @@ Before running the actual study:
 - Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
 - Apply `db/migrations/0012_background_questionnaire.sql` to existing D1 databases, or confirm all nine columns through the guarded updater.
 - Apply `db/migrations/0013_word_familiarity.sql` before v0.7 code, or confirm the flag, table, and index through the guarded updater.
+- Apply `db/migrations/0014_archived_session_locks.sql` before archiving and replacing a Prolific preview session; confirm active rows remain unique.
 - For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`; it exports a SQL backup first and applies only missing additive schema.
 - Confirm the Prolific Study URL includes `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
 - Protect `/admin/*` and `/api/admin/*` with Cloudflare Access; set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`.

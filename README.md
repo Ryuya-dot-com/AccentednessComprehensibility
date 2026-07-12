@@ -405,6 +405,20 @@ If the D1 database was created before the final word-familiarity checklist was a
 wrangler d1 execute <DB_NAME> --file=./db/migrations/0013_word_familiarity.sql
 ```
 
+For v0.8 or later, align the unique Prolific indexes with the archived-session lifecycle:
+
+```sh
+wrangler d1 execute <DB_NAME> --file=./db/migrations/0014_archived_session_locks.sql
+```
+
+This preserves the full Prolific identifiers on `start_failed`/archived test rows while allowing one replacement active session. Active and completed sessions remain strictly unique.
+
+Run the archived-session lock regression test after changing these indexes:
+
+```sh
+python3 scripts/test_archived_session_lock.py
+```
+
 For a partially migrated Cloudflare D1 database, use the guarded schema updater after `npx wrangler login`. It checks live columns first, exports a backup when applying, and adds only missing additive columns:
 
 ```sh
