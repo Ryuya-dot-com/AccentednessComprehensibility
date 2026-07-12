@@ -2,6 +2,16 @@
 import { randomUUID } from "node:crypto";
 import { TARGET_WORDS } from "../functions/api/_word-familiarity.js";
 
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PRACTICE_AUDIO_ROOT =
+  "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+const PRACTICE_ITEMS = Object.freeze([
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", range: "1–3" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", range: "3–5" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", range: "5–7" }),
+  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", range: "7–9" }),
+]);
+
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
   if (index < 0) return fallback;
@@ -81,27 +91,72 @@ function parseCsv(text) {
     .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
-function assignment() {
-  return [{
+function practiceAssignment() {
+  return PRACTICE_ITEMS.map((item, index) => ({
+    phase: "practice",
+    trial_index: index + 1,
+    source_path: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
+    audio_url: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
+    file_name: item.file,
+    target_word: item.word,
+    participant_id: item.talker,
+    native_language: item.l1,
+    accent_condition: item.pronunciation,
+    condition: "practice",
+    talker: item.talker,
+    word_number: String(index + 1),
+    trial_number: String(index + 1),
+    spoken_form: item.word,
+    practice_note: `Expert Accentedness reference range: ${item.range}.`,
+    source_format: "researcher_calibration_wav",
+    practice_kind: "combined",
+    practice_group: `accent_band_${item.range.replace("–", "_")}`,
+    l1_condition: item.l1,
+    pronunciation_condition: item.pronunciation,
+  }));
+}
+
+function mainAssignment(trialIndex = 1, targetWord = "capelin", wordNumber = 23) {
+  return {
     phase: "main",
-    trial_index: 1,
-    source_path: "local/background-test.mp3",
-    audio_url: "https://example.invalid/local/background-test.mp3",
-    file_name: "background-test.mp3",
-    target_word: "capelin",
+    trial_index: trialIndex,
+    source_path: `local/background-test-${trialIndex}.mp3`,
+    audio_url: `https://example.invalid/local/background-test-${trialIndex}.mp3`,
+    file_name: `background-test-${trialIndex}.mp3`,
+    target_word: targetWord,
     participant_id: "local_speaker",
     native_language: "ENG",
     accent_condition: "natural",
     condition: "local_test",
     talker: "local_speaker",
-    word_number: "23",
-    trial_number: "1",
-    spoken_form: "capelin",
+    word_number: String(wordNumber),
+    trial_number: String(trialIndex),
+    spoken_form: targetWord,
     source_format: "local_test",
     stimulus_list: "A",
     l1_condition: "ENG",
     pronunciation_condition: "natural",
-  }];
+  };
+}
+
+function assignment() {
+  return [...practiceAssignment(), mainAssignment()];
+}
+
+function trialRow(item, overrides = {}) {
+  const practice = item.phase === "practice";
+  return {
+    phase: item.phase,
+    trial_index: item.trial_index,
+    trial_total: practice ? PRACTICE_ITEMS.length : 100,
+    completed_at: new Date().toISOString(),
+    typed_response: item.target_word,
+    intelligibility_response_status: "typed",
+    comprehensibility_1_9: 4,
+    accentedness_1_9: practice ? item.trial_index * 2 : 3,
+    response_flow: "staged_dictation_then_ratings",
+    ...overrides,
+  };
 }
 
 function identity(suffix) {
@@ -118,7 +173,7 @@ function validStartPayload(suffix) {
   return {
     ...identity(suffix),
     task_mode: "combined",
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     participant_age_years: "34",
     english_variety: "other",
     english_variety_other: '=HYPERLINK("https://example.invalid","Irish English")',
@@ -172,6 +227,12 @@ async function main() {
   assert(indexPage.text.includes('id="word-familiarity-panel"'), "Participant page is missing the checklist panel.");
   assert(indexPage.text.includes("Review all 50 words"), "Participant page is missing the 50-word instruction.");
   assert(indexPage.text.includes("If you were unfamiliar with it"), "Participant page has the wrong checklist instruction.");
+  assert(indexPage.text.includes('src="app.js?v=0.8.0"'), "Participant page does not cache-bust app.js v0.8.0.");
+  assert(indexPage.text.includes('id="practice-feedback-replay-btn"'), "Practice feedback replay control is missing.");
+  assert(
+    indexPage.text.includes("You may replay the audio while reviewing this practice feedback."),
+    "Practice instructions do not allow feedback-stage replay.",
+  );
   assert(
     indexPage.text.indexOf("Rate how strong the speaker's") <
       indexPage.text.indexOf("Rate how easy the word was"),
@@ -179,6 +240,7 @@ async function main() {
   );
   const appPage = await get(baseUrl, "/app.js");
   assert(appPage.response.status === 200, `Participant app failed: ${appPage.response.status}`);
+  assert(appPage.text.includes(`const VERSION = "${PLATFORM_VERSION}"`), "Participant app has the wrong platform version.");
   assert(appPage.text.includes("showWordFamiliarityChecklist"), "Deployed app is missing checklist behavior.");
   assert(appPage.text.includes('"capelin"'), "Deployed app is missing Capelin from the canonical list.");
   assert(
@@ -192,6 +254,36 @@ async function main() {
   assert(
     appPage.text.includes("error.data?.reload_required === true"),
     "Participant app does not handle a stale-version reload response.",
+  );
+  for (const item of PRACTICE_ITEMS) {
+    assert(appPage.text.includes(`word: "${item.word}"`), `Participant app is missing practice word ${item.word}.`);
+    assert(appPage.text.includes(item.file), `Participant app is missing practice audio ${item.file}.`);
+    assert(appPage.text.includes(`"${item.range}"`), `Participant app is missing practice range ${item.range}.`);
+  }
+  for (const snippet of [
+    "resumeAfterPractice",
+    "practice_replay_required",
+    "continueAfterPractice",
+    "replayedSavedPractice",
+    "replayPracticeFeedbackAudio",
+    "practiceFeedbackReplayGeneration",
+    "You may replay this practice audio as many times as needed.",
+    "Expert raters rated this as:",
+    "Comprehensibility: — (Your rating:",
+    "These reference ratings are only for practice.",
+    "practice_feedback_replay_start",
+    "practice_feedback_replay_end",
+  ]) {
+    assert(appPage.text.includes(snippet), `Participant app is missing resume/replay contract: ${snippet}`);
+  }
+  assert(
+    !appPage.text.includes("practiceFeedbackReplayCount >="),
+    "Practice feedback replay has an unintended hard limit.",
+  );
+  assert(
+    !appPage.text.includes("elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703") &&
+      !appPage.text.includes("CHN_Male_shelter_Practice.wav"),
+    "Participant app still contains the superseded practice set.",
   );
 
   const runId = `${Date.now()}_${randomUUID().slice(0, 8)}`;
@@ -217,7 +309,7 @@ async function main() {
   assert(countBeforeResumeMiss.response.status === 200, `Admin pre-count failed: ${countBeforeResumeMiss.text}`);
   const missingResume = await postJson(baseUrl, "/api/session/start", {
     ...identity(`${runId}_missing_resume`),
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(
@@ -239,13 +331,13 @@ async function main() {
   assert(started.response.status === 200, `Valid start failed: ${started.response.status} ${started.text}`);
   assert(started.json?.ok === true && started.json?.session_id, `Start response is incomplete: ${started.text}`);
   assert(started.json?.session_token, "Start response did not issue a session token.");
-  assert(started.json?.word_familiarity_required === true, "New v0.7 session did not require the checklist.");
+  assert(started.json?.word_familiarity_required === true, "New v0.8 session did not require the checklist.");
   const sessionId = started.json.session_id;
 
   const mismatchedIdentity = await postJson(baseUrl, "/api/session/start", {
     ...identity(runId),
     prolific_session_id: `WRONG_${runId}`,
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(
@@ -266,7 +358,7 @@ async function main() {
   const resumed = await postJson(baseUrl, "/api/session/start", {
     ...identity(runId),
     task_mode: "combined",
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(resumed.response.status === 200, `Resume probe failed: ${resumed.response.status} ${resumed.text}`);
@@ -274,8 +366,33 @@ async function main() {
   assert(resumed.json?.session_id === sessionId, "Resume returned a different session ID.");
   assert(resumed.json?.participant_age_years === 34, "Resume did not return the saved age.");
   assert(resumed.json?.english_variety_other === payload.english_variety_other, "Resume did not return background text.");
+  assert(resumed.json?.resume?.practice_replay_required === true, "Resume did not require all four practice items to replay.");
+  assert(
+    resumed.json?.resume?.next_phase === "main" && Number(resumed.json?.resume?.next_trial_index) === 1,
+    `Fresh resume did not preserve the post-practice target at main trial 1: ${resumed.text}`,
+  );
+  assert(resumed.json?.practice_assignment?.length === 4, "Resume did not return all four practice assignments.");
+  for (const [index, expected] of practiceAssignment().entries()) {
+    const actual = resumed.json.practice_assignment[index] || {};
+    assert(
+      actual.target_word === expected.target_word && actual.audio_url === expected.audio_url,
+      `Resume practice ${index + 1} does not match ${expected.target_word}.`,
+    );
+  }
   const sessionToken = resumed.json.session_token;
   assert(sessionToken, "Resume did not rotate the session token.");
+
+  for (const practice of practiceAssignment()) {
+    const savedPractice = await postJson(baseUrl, "/api/trial", {
+      session_id: sessionId,
+      session_token: sessionToken,
+      row: trialRow(practice),
+    });
+    assert(
+      savedPractice.response.status === 200 && savedPractice.json?.ok === true,
+      `Practice ${practice.trial_index} save failed: ${savedPractice.text}`,
+    );
+  }
 
   const trial = await postJson(baseUrl, "/api/trial", {
     session_id: sessionId,
@@ -283,7 +400,7 @@ async function main() {
     row: {
       phase: "main",
       trial_index: 1,
-      trial_total: 1,
+      trial_total: 100,
       completed_at: new Date().toISOString(),
       typed_response: "capelin",
       intelligibility_response_status: "typed",
@@ -310,15 +427,33 @@ async function main() {
 
   const resumeBeforeChecklist = await postJson(baseUrl, "/api/session/start", {
     ...identity(runId),
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(
     resumeBeforeChecklist.response.status === 200 &&
-      resumeBeforeChecklist.json?.resume?.next_phase === "word_familiarity",
+      resumeBeforeChecklist.json?.resume?.next_phase === "word_familiarity" &&
+      resumeBeforeChecklist.json?.resume?.practice_replay_required === true &&
+      resumeBeforeChecklist.json?.practice_assignment?.length === 4 &&
+      resumeBeforeChecklist.json?.saved_trials?.length === 5,
     `Resume did not route to the checklist: ${resumeBeforeChecklist.text}`,
   );
   const checklistToken = resumeBeforeChecklist.json.session_token;
+  const duplicatePractice = await postJson(baseUrl, "/api/trial", {
+    session_id: sessionId,
+    session_token: checklistToken,
+    row: trialRow(practiceAssignment()[0], {
+      typed_response: "must-not-overwrite",
+      comprehensibility_1_9: 9,
+      accentedness_1_9: 9,
+    }),
+  });
+  assert(
+    duplicatePractice.response.status === 200 &&
+      duplicatePractice.json?.ok === true &&
+      duplicatePractice.json?.duplicate === true,
+    `Replayed saved practice was not idempotent: ${duplicatePractice.text}`,
+  );
   const wordFamiliarity = allUnknownWordFamiliarity();
   await expectRejectedWordFamiliarity(
     baseUrl,
@@ -369,12 +504,14 @@ async function main() {
 
   const resumeAfterChecklist = await postJson(baseUrl, "/api/session/start", {
     ...identity(runId),
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(
     resumeAfterChecklist.response.status === 200 &&
       resumeAfterChecklist.json?.resume?.next_phase === "complete" &&
+      resumeAfterChecklist.json?.resume?.practice_replay_required === true &&
+      resumeAfterChecklist.json?.practice_assignment?.length === 4 &&
       resumeAfterChecklist.json?.word_familiarity?.length === 50,
     `Resume did not restore the completed checklist: ${resumeAfterChecklist.text}`,
   );
@@ -399,23 +536,33 @@ async function main() {
   const legacySessionId = legacyStarted.json.session_id;
   const legacyResumedMidTask = await postJson(baseUrl, "/api/session/start", {
     ...identity(legacySuffix),
-    platform_version: "pronunciation_rating_v0.7.0",
+    platform_version: PLATFORM_VERSION,
     resume_only: true,
   });
   assert(
     legacyResumedMidTask.response.status === 200 &&
       legacyResumedMidTask.json?.existing_session === true &&
       legacyResumedMidTask.json?.resume?.next_phase === "main" &&
+      legacyResumedMidTask.json?.resume?.practice_replay_required === true &&
+      legacyResumedMidTask.json?.practice_assignment?.length === 4 &&
       legacyResumedMidTask.json?.word_familiarity_required === false,
     `A mid-task v0.6 resume did not preserve the checklist exemption: ${legacyResumedMidTask.text}`,
   );
+  for (const practice of practiceAssignment()) {
+    const legacyPractice = await postJson(baseUrl, "/api/trial", {
+      session_id: legacySessionId,
+      session_token: legacyResumedMidTask.json.session_token,
+      row: trialRow(practice),
+    });
+    assert(legacyPractice.response.status === 200, `Legacy practice failed: ${legacyPractice.text}`);
+  }
   const legacyTrial = await postJson(baseUrl, "/api/trial", {
     session_id: legacySessionId,
     session_token: legacyResumedMidTask.json.session_token,
     row: {
       phase: "main",
       trial_index: 1,
-      trial_total: 1,
+      trial_total: 100,
       completed_at: new Date().toISOString(),
       typed_response: "capelin",
       intelligibility_response_status: "typed",
@@ -432,6 +579,73 @@ async function main() {
   assert(
     legacyCompleted.response.status === 200 && legacyCompleted.json?.status === "completed",
     `Legacy session could not complete without a checklist: ${legacyCompleted.text}`,
+  );
+
+  const progressSuffix = `${runId}_resume_progress`;
+  const progressPayload = validStartPayload(progressSuffix);
+  progressPayload.assignment = [
+    ...practiceAssignment(),
+    mainAssignment(1, "capelin", 23),
+    mainAssignment(2, "persimmon", 2),
+  ];
+  const progressStarted = await postJson(baseUrl, "/api/session/start", progressPayload);
+  assert(progressStarted.response.status === 200, `Progress-contract start failed: ${progressStarted.text}`);
+  const progressSessionId = progressStarted.json.session_id;
+  const initiallySaved = [practiceAssignment()[0], practiceAssignment()[1], mainAssignment(1, "capelin", 23)];
+  for (const item of initiallySaved) {
+    const saved = await postJson(baseUrl, "/api/trial", {
+      session_id: progressSessionId,
+      session_token: progressStarted.json.session_token,
+      row: trialRow(item),
+    });
+    assert(saved.response.status === 200 && saved.json?.ok === true, `Progress-contract save failed: ${saved.text}`);
+  }
+  const progressResumed = await postJson(baseUrl, "/api/session/start", {
+    ...identity(progressSuffix),
+    platform_version: PLATFORM_VERSION,
+    resume_only: true,
+  });
+  assert(
+    progressResumed.response.status === 200 &&
+      progressResumed.json?.resume?.practice_replay_required === true &&
+      progressResumed.json?.resume?.next_phase === "main" &&
+      Number(progressResumed.json?.resume?.next_trial_index) === 2 &&
+      progressResumed.json?.practice_assignment?.length === 4 &&
+      progressResumed.json?.saved_trials?.length === 3,
+    `Resume did not replay practice before exact first unsaved main trial 2: ${progressResumed.text}`,
+  );
+  const repeatedPractice = await postJson(baseUrl, "/api/trial", {
+    session_id: progressSessionId,
+    session_token: progressResumed.json.session_token,
+    row: trialRow(practiceAssignment()[0], {
+      typed_response: "must-not-overwrite-progress",
+      accentedness_1_9: 9,
+    }),
+  });
+  assert(
+    repeatedPractice.response.status === 200 && repeatedPractice.json?.duplicate === true,
+    `Saved practice replay was not idempotent in the progress session: ${repeatedPractice.text}`,
+  );
+  for (const practice of practiceAssignment().slice(2)) {
+    const saved = await postJson(baseUrl, "/api/trial", {
+      session_id: progressSessionId,
+      session_token: progressResumed.json.session_token,
+      row: trialRow(practice),
+    });
+    assert(saved.response.status === 200 && saved.json?.ok === true, `Missing practice save failed: ${saved.text}`);
+  }
+  const progressResumedAgain = await postJson(baseUrl, "/api/session/start", {
+    ...identity(progressSuffix),
+    platform_version: PLATFORM_VERSION,
+    resume_only: true,
+  });
+  assert(
+    progressResumedAgain.response.status === 200 &&
+      progressResumedAgain.json?.resume?.practice_replay_required === true &&
+      progressResumedAgain.json?.resume?.next_phase === "main" &&
+      Number(progressResumedAgain.json?.resume?.next_trial_index) === 2 &&
+      progressResumedAgain.json?.saved_trials?.length === 5,
+    `Repeated reopen changed saved main progress or duplicated practice rows: ${progressResumedAgain.text}`,
   );
 
   const adminHeaders = { "x-admin-token": adminToken };
@@ -457,6 +671,30 @@ async function main() {
   );
   assert(sessionRow.word_familiarity_response_count === "50", "sessions.csv is missing checklist coverage.");
   assert(sessionRow.known_word_count === "0", "sessions.csv has the wrong known-word count.");
+
+  const ratingsExport = await get(baseUrl, "/api/admin/export/ratings.csv", adminHeaders);
+  assert(ratingsExport.response.status === 200, `Ratings export failed: ${ratingsExport.text}`);
+  const ratingRows = parseCsv(ratingsExport.text);
+  const primaryPracticeRows = ratingRows.filter(
+    (row) => row.session_id === sessionId && row.phase === "practice",
+  );
+  assert(primaryPracticeRows.length === 4, `Primary session has ${primaryPracticeRows.length} practice rows instead of 4.`);
+  const primaryPracticeOne = primaryPracticeRows.find((row) => row.trial_index === "1");
+  assert(
+    primaryPracticeOne?.typed_response === "appreciation" &&
+      primaryPracticeOne?.comprehensibility_1_9 === "4" &&
+      primaryPracticeOne?.accentedness_1_9 === "2",
+    "Replaying saved practice overwrote the original primary-session response.",
+  );
+  const progressPracticeRows = ratingRows.filter(
+    (row) => row.session_id === progressSessionId && row.phase === "practice",
+  );
+  assert(progressPracticeRows.length === 4, `Progress session has ${progressPracticeRows.length} practice rows instead of 4.`);
+  const progressPracticeOne = progressPracticeRows.find((row) => row.trial_index === "1");
+  assert(
+    progressPracticeOne?.typed_response === "appreciation" && progressPracticeOne?.accentedness_1_9 === "2",
+    "Repeated reopen overwrote the original progress-session practice response.",
+  );
 
   const wordFamiliarityExport = await get(baseUrl, "/api/admin/export/word-familiarity.csv", adminHeaders);
   assert(wordFamiliarityExport.response.status === 200, `Word familiarity export failed: ${wordFamiliarityExport.text}`);
@@ -490,7 +728,7 @@ async function main() {
     ok: true,
     base_url: baseUrl.toString(),
     session_id: sessionId,
-    validation_cases: 6,
+    validation_cases: 10,
     resume_without_questionnaire: true,
     resume_miss_does_not_write: true,
     resume_identity_triple_match: true,
@@ -504,6 +742,11 @@ async function main() {
     legacy_v060_compatibility: true,
     legacy_v060_mid_task_resume: true,
     stale_client_reload_handled: true,
+    practice_set_v080_exact: true,
+    practice_feedback_unlimited_replay_contract: true,
+    resume_replays_all_practice: true,
+    resume_preserves_first_unsaved_main: true,
+    replayed_practice_idempotent: true,
   }, null, 2));
 }
 

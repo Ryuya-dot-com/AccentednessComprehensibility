@@ -27,8 +27,30 @@ const LIST_COMBINATIONS = [
   "JABC",
 ];
 const DEFAULT_COUNTERBALANCE_MANIFEST = "remote_manifest.csv";
-const SELECTED_PRACTICE_AUDIO_ROOT =
-  "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703";
+const PRACTICE_CALIBRATION_AUDIO_ROOT =
+  "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+export const CANONICAL_PRACTICE_ASSIGNMENT = Object.freeze([
+  Object.freeze({
+    trial_index: 1,
+    target_word: "appreciation",
+    audio_url: `${PRACTICE_CALIBRATION_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
+  }),
+  Object.freeze({
+    trial_index: 2,
+    target_word: "pesticide",
+    audio_url: `${PRACTICE_CALIBRATION_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
+  }),
+  Object.freeze({
+    trial_index: 3,
+    target_word: "quality",
+    audio_url: `${PRACTICE_CALIBRATION_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
+  }),
+  Object.freeze({
+    trial_index: 4,
+    target_word: "pizza",
+    audio_url: `${PRACTICE_CALIBRATION_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+  }),
+]);
 const MANIFEST_FILE_COLUMNS = [
   "audio_file",
   "osf_audio_file",
@@ -41,14 +63,14 @@ const MANIFEST_FILE_COLUMNS = [
 const MANIFEST_URL_COLUMNS = ["audio_url", "url", "source_url", "raw_url"];
 const DRY_RUN_PLACEHOLDER_AUDIO = {
   ENG: [
-    `${SELECTED_PRACTICE_AUDIO_ROOT}/chocolate__eng_bella.mp3`,
+    CANONICAL_PRACTICE_ASSIGNMENT[0].audio_url,
   ],
   JPN: [
-    `${SELECTED_PRACTICE_AUDIO_ROOT}/coffee__jpn_yusuke_stronger.mp3`,
-    `${SELECTED_PRACTICE_AUDIO_ROOT}/pizza__jpn_lia_stronger.mp3`,
+    CANONICAL_PRACTICE_ASSIGNMENT[1].audio_url,
+    CANONICAL_PRACTICE_ASSIGNMENT[2].audio_url,
   ],
   CHN: [
-    `${SELECTED_PRACTICE_AUDIO_ROOT}/sofa__chn_deep_bass_stronger.mp3`,
+    CANONICAL_PRACTICE_ASSIGNMENT[3].audio_url,
   ],
 };
 

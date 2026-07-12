@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.7.0";
+  const VERSION = "pronunciation_rating_v0.8.0";
   const DEFAULT_REMOTE_MANIFEST_URL = "remote_manifest.csv";
   const AUDIO_EXTENSIONS = /\.(wav|mp3|m4a|ogg|webm)$/i;
   const REQUIRED_MANIFEST_FILE_COLUMNS = [
@@ -31,62 +31,64 @@
   document.body.classList.toggle("participant-mode", PARTICIPANT_MODE);
   document.body.classList.toggle("dry-run-mode", DRY_RUN_MODE);
 
+  const PRACTICE_AUDIO_ROOT =
+    "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
   const PRACTICE_ITEMS = [
     {
       practice_kind: "combined",
-      practice_group: "natural",
-      word: "chocolate",
-      file_name: "chocolate__eng_bella.mp3",
-      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/chocolate__eng_bella.mp3",
+      practice_group: "accent_band_1_3",
+      word: "appreciation",
+      file_name: "ENG_Female_appreciation_Practice.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
       l1_condition: "ENG",
       pronunciation_condition: "natural",
-      talker: "practice_eng_bella",
-      voice_variant: "eng_bella",
-      expert_comprehensibility_1_9: 1,
-      expert_accentedness_1_9: 1,
-      practice_note: "Selected ElevenLabs practice MP3. Loudness-normalized with ffmpeg loudnorm I=-23 LRA=7 TP=-2.",
+      talker: "practice_eng_female",
+      voice_variant: "eng_female",
+      expert_accentedness_range: "1–3",
+      source_format: "researcher_calibration_wav",
+      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 1–3.",
     },
     {
       practice_kind: "combined",
-      practice_group: "mild_accent",
-      word: "coffee",
-      file_name: "coffee__jpn_yusuke_stronger.mp3",
-      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/coffee__jpn_yusuke_stronger.mp3",
+      practice_group: "accent_band_3_5",
+      word: "pesticide",
+      file_name: "JPN_Male_pesticide.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
       l1_condition: "JPN",
       pronunciation_condition: "accented",
-      talker: "practice_jpn_yusuke_stronger",
-      voice_variant: "jpn_yusuke_stronger",
-      expert_comprehensibility_1_9: 3,
-      expert_accentedness_1_9: 4,
-      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
+      talker: "practice_jpn_male",
+      voice_variant: "jpn_male",
+      expert_accentedness_range: "3–5",
+      source_format: "researcher_calibration_wav",
+      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 3–5.",
     },
     {
       practice_kind: "combined",
-      practice_group: "strong_accent",
+      practice_group: "accent_band_5_7",
+      word: "quality",
+      file_name: "JPN_Female_quality_Practice.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
+      l1_condition: "JPN",
+      pronunciation_condition: "accented",
+      talker: "practice_jpn_female",
+      voice_variant: "jpn_female",
+      expert_accentedness_range: "5–7",
+      source_format: "researcher_calibration_wav",
+      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 5–7.",
+    },
+    {
+      practice_kind: "combined",
+      practice_group: "accent_band_7_9",
       word: "pizza",
-      file_name: "pizza__jpn_lia_stronger.mp3",
-      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/pizza__jpn_lia_stronger.mp3",
-      l1_condition: "JPN",
-      pronunciation_condition: "accented",
-      talker: "practice_jpn_lia_stronger",
-      voice_variant: "jpn_lia_stronger",
-      expert_comprehensibility_1_9: 5,
-      expert_accentedness_1_9: 6,
-      practice_note: "Selected stronger Japanese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
-    },
-    {
-      practice_kind: "combined",
-      practice_group: "strong_accent",
-      word: "sofa",
-      file_name: "sofa__chn_deep_bass_stronger.mp3",
-      audio_url: "practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/sofa__chn_deep_bass_stronger.mp3",
+      file_name: "chn_female_pizza_practice.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
       l1_condition: "CHN",
       pronunciation_condition: "accented",
-      talker: "practice_chn_deep_bass_stronger",
-      voice_variant: "chn_deep_bass_stronger",
-      expert_comprehensibility_1_9: 7,
-      expert_accentedness_1_9: 8,
-      practice_note: "Selected stronger Chinese-accent ElevenLabs candidate. Reference ratings are temporary researcher-selected values for dry-run.",
+      talker: "practice_chn_female",
+      voice_variant: "chn_female",
+      expert_accentedness_range: "7–9",
+      source_format: "researcher_calibration_wav",
+      practice_note: "Researcher-supplied calibration WAV. Expert Accentedness reference range: 7–9.",
     },
   ];
 
@@ -181,6 +183,9 @@
     accentednessBlock: document.getElementById("accentedness-block"),
     accentednessScale: document.getElementById("accentedness-scale"),
     practiceFeedback: document.getElementById("practice-feedback"),
+    practiceFeedbackText: document.getElementById("practice-feedback-text"),
+    practiceFeedbackReplayBtn: document.getElementById("practice-feedback-replay-btn"),
+    practiceFeedbackReplayStatus: document.getElementById("practice-feedback-replay-status"),
     practiceReasonBlock: document.getElementById("practice-reason-block"),
     practiceReason: document.getElementById("practice-reason"),
     turnstileWidget: document.getElementById("turnstile-widget"),
@@ -215,6 +220,9 @@
     phase: "main",
     pendingPracticeRow: null,
     pendingPracticeFeedback: null,
+    practiceFeedbackReplayCount: 0,
+    practiceFeedbackAudioPlaying: false,
+    practiceFeedbackReplayGeneration: 0,
     currentUrl: null,
     currentAudio: null,
     audioStartMs: null,
@@ -238,6 +246,9 @@
     serverSaveFailed: false,
     existingServerSession: false,
     serverResume: null,
+    resumeAfterPractice: null,
+    replayingPractice: false,
+    serverPracticeAssignments: [],
     serverCompletedTrialKeys: new Set(),
     serverCompletedDistractorIndexes: new Set(),
     wordFamiliarity: [],
@@ -672,14 +683,27 @@
           if (await resumeExistingServerSessionIfNeeded()) return;
         }
       } catch (error) {
+        if (error.status === 409 && error.data?.reload_required === true) {
+          setSetupStatus("Updating study");
+          setLog("The study was updated. Reloading the latest version now...");
+          window.setTimeout(() => window.location.reload(), 800);
+          return;
+        }
         if (error.status === 409 && error.data?.duplicate_participant === true) {
           setSetupStatus("Session already closed");
           setLog(error.message || "This participant already has a closed session.");
           return;
         }
         console.warn("saved-session lookup failed", error);
+        state.serverSaveFailed = true;
+        setSetupStatus("Resume failed");
+        setLog(PARTICIPANT_MODE
+          ? "The saved session could not be safely resumed. Please contact the researcher."
+          : `Saved-session lookup failed: ${error.message}`);
+        return;
       } finally {
         if (els.onboardingNextBtn) els.onboardingNextBtn.textContent = originalLabel;
+        renderOnboarding();
       }
     }
     clearBackgroundValidation();
@@ -886,10 +910,26 @@
       speaker_pattern_index: item.speaker_pattern_index || "",
       speaker_pattern_speaker: item.speaker_pattern_speaker || "",
       voice_variant: item.voice_variant || "",
-      expert_comprehensibility_1_9: item.expert_comprehensibility_1_9,
-      expert_accentedness_1_9: item.expert_accentedness_1_9,
+      expert_accentedness_range: item.expert_accentedness_range || "",
       placeholder_audio: Boolean(item.placeholder_audio),
     }));
+  }
+
+  function practiceAssignmentsMatchCurrent(serverRows, currentRows) {
+    if (!Array.isArray(serverRows) || serverRows.length !== currentRows.length) return false;
+    return currentRows.every((current, index) => {
+      const server = serverRows[index] || {};
+      return (
+        Number.parseInt(server.trial_index, 10) === index + 1 &&
+        String(server.target_word || "").trim().toLowerCase() === current.target_word &&
+        String(server.audio_url || "").trim() === current.audio_url
+      );
+    });
+  }
+
+  function allFourPracticeAssignmentsCompleted(completedKeys = state.serverCompletedTrialKeys) {
+    return PRACTICE_ITEMS.every((_, index) =>
+      completedKeys.has(trialKey("practice", index + 1)));
   }
 
   function serverAssignmentRows() {
@@ -1060,7 +1100,6 @@
   }
 
   async function startServerSession({ resumeOnly = false } = {}) {
-    if (state.serverSessionId) return state.serverSessionId;
     ensureSessionLabel();
     const seed = els.seed.value.trim() || `${els.raterId.value.trim()}_${els.sessionId.value.trim()}_${VERSION}`;
     const payload = {
@@ -1113,30 +1152,34 @@
 
     const data = await postJson("/api/session/start", payload);
     if (resumeOnly && data.existing_session !== true) {
+      state.serverSessionId = "";
+      state.serverSessionToken = "";
       state.existingServerSession = false;
       state.serverResume = null;
+      state.resumeAfterPractice = null;
+      state.replayingPractice = false;
+      state.serverPracticeAssignments = [];
+      state.serverCompletedTrialKeys = new Set();
+      state.serverCompletedDistractorIndexes = new Set();
       return "";
     }
-    state.serverSessionId = data.session_id;
-    state.serverSessionToken = data.session_token || "";
-    if (data.existing_session === true) applyServerBackgroundValues(data);
-    state.existingServerSession = data.existing_session === true;
-    state.serverResume = data.resume || null;
-    state.serverCompletedTrialKeys = new Set(
+    const existingServerSession = data.existing_session === true;
+    const serverResume = data.resume || null;
+    const completedTrialKeys = new Set(
       Array.isArray(data.saved_trials)
         ? data.saved_trials
             .map((row) => trialKey(row.phase, row.trial_index))
             .filter(Boolean)
         : [],
     );
-    state.serverCompletedDistractorIndexes = new Set(
+    const completedDistractorIndexes = new Set(
       Array.isArray(data.distractor_completed_trial_indexes)
         ? data.distractor_completed_trial_indexes
             .map((value) => Number.parseInt(value, 10))
             .filter((value) => Number.isFinite(value))
         : [],
     );
-    state.wordFamiliarity = Array.isArray(data.word_familiarity)
+    const wordFamiliarity = Array.isArray(data.word_familiarity)
       ? data.word_familiarity
           .map((row) => ({
             word_number: Number.parseInt(row.word_number, 10),
@@ -1145,77 +1188,82 @@
           }))
           .filter((row) => Number.isFinite(row.word_number) && row.target_word)
       : [];
-    state.wordFamiliarityRequired = data.word_familiarity_required !== false;
-    if (data.counterbalance) {
-      state.counterbalance.assigned = data.counterbalance;
+    const returnedPracticeAssignments = Array.isArray(data.practice_assignment)
+      ? data.practice_assignment
+      : [];
+    const currentPracticeTrials = buildPracticeTrials();
+    const serverPracticeAssignments = returnedPracticeAssignments.length ||
+      existingServerSession || state.counterbalance.enabled
+      ? returnedPracticeAssignments
+      : currentPracticeTrials.map((item, index) => ({ ...item, trial_index: index + 1 }));
+    const practiceAssignmentsCurrent = practiceAssignmentsMatchCurrent(
+      serverPracticeAssignments,
+      currentPracticeTrials,
+    );
+    if (existingServerSession && serverPracticeAssignments.length !== currentPracticeTrials.length) {
+      throw new Error("The saved session does not contain all four practice assignments. Please contact the researcher.");
     }
-    if (Array.isArray(data.practice_assignment) && data.practice_assignment.length) {
-      state.practiceTrials = data.practice_assignment.map((item) => ({
-        ...item,
-        file: null,
-        phase: "practice",
-      }));
+    if (
+      existingServerSession &&
+      !practiceAssignmentsCurrent &&
+      !allFourPracticeAssignmentsCompleted(completedTrialKeys)
+    ) {
+      throw new Error("The practice materials changed before the saved practice set was complete. Please contact the researcher.");
     }
-    if (Array.isArray(data.main_assignment) && data.main_assignment.length) {
-      state.mainTrials = data.main_assignment.map((item) => ({
+    if (!existingServerSession && !practiceAssignmentsCurrent) {
+      throw new Error("The server did not save the current four-item practice set. Please contact the researcher.");
+    }
+    const returnedMainTrials = Array.isArray(data.main_assignment)
+      ? data.main_assignment.map((item) => ({
         ...item,
         file: null,
         phase: "main",
         practice_kind: "",
-      }));
+      }))
+      : [];
+    const mainTrials = returnedMainTrials.length || state.counterbalance.enabled
+      ? returnedMainTrials
+      : state.mainTrials;
+    if (state.counterbalance.enabled && !mainTrials.length) {
+      throw new Error("The server did not return the saved main-task assignment. Please contact the researcher.");
     }
+
+    state.serverSessionId = data.session_id;
+    state.serverSessionToken = data.session_token || "";
+    state.existingServerSession = existingServerSession;
+    state.serverResume = serverResume;
+    state.serverCompletedTrialKeys = completedTrialKeys;
+    state.serverCompletedDistractorIndexes = completedDistractorIndexes;
+    state.wordFamiliarity = wordFamiliarity;
+    state.wordFamiliarityRequired = data.word_familiarity_required !== false;
+    state.serverPracticeAssignments = serverPracticeAssignments;
+    state.practiceTrials = currentPracticeTrials;
+    state.replayingPractice = existingServerSession;
+    state.resumeAfterPractice = existingServerSession ? serverResume : null;
+    state.mainTrials = mainTrials;
+    if (data.counterbalance) state.counterbalance.assigned = data.counterbalance;
+    if (existingServerSession) applyServerBackgroundValues(data);
     state.serverSaveFailed = false;
     return state.serverSessionId;
   }
 
   async function resumeExistingServerSessionIfNeeded() {
     if (!state.existingServerSession || !state.serverResume) return false;
-    const resume = state.serverResume;
-    if (resume.next_phase === "complete") {
-      state.phase = "main";
-      state.trials = state.mainTrials;
-      setLog("All saved responses were found. Confirming completion with the server.");
-      showOnly(els.taskPanel);
-      await completeSession();
-      return true;
+    if (state.serverResume.practice_replay_required !== true) {
+      throw new Error("The server did not require practice replay for this saved session.");
     }
-    if (resume.next_phase === "word_familiarity") {
-      state.phase = "main";
-      state.trials = state.mainTrials;
-      setLog("All rating responses were found. Please complete the final word checklist.");
-      showWordFamiliarityChecklist();
-      return true;
+    if (state.practiceTrials.length !== PRACTICE_ITEMS.length) {
+      throw new Error("The complete four-item practice set could not be loaded.");
     }
-
-    const nextIndex = Math.max(0, Number.parseInt(resume.next_trial_index, 10) - 1);
-    if (resume.next_phase === "main") {
-      state.phase = "main";
-      state.trials = state.mainTrials;
-    } else {
-      state.phase = "practice";
-      state.trials = state.practiceTrials;
-    }
-
-    if (!state.trials.length) return false;
-    if (nextIndex >= state.trials.length) {
-      if (state.phase === "practice") startMainTrials();
-      else await finishRatings();
-      return true;
-    }
-
-    setLog(`Resuming saved session at ${state.phase} item ${nextIndex + 1}.`);
+    state.resumeAfterPractice = state.serverResume;
+    state.replayingPractice = true;
+    state.phase = "practice";
+    state.trials = state.practiceTrials;
+    state.currentIndex = -1;
+    hidePracticeFeedback();
+    setLog("Saved progress was found. Practice will be repeated before the session resumes.");
     showOnly(els.taskPanel);
-    if (
-      state.phase === "main" &&
-      resume.pending_distractor === true &&
-      Number.parseInt(resume.pending_distractor_index, 10) === nextIndex
-    ) {
-      showDistractor(nextIndex);
-    } else if (state.phase === "main" && shouldShowBlockDistractor(nextIndex)) {
-      showDistractor(nextIndex);
-    } else {
-      showTrial(nextIndex);
-    }
+    showTrial(0);
     return true;
   }
 
@@ -1237,8 +1285,8 @@
   }
 
   async function saveServerTrial(row) {
-    if (!state.serverSessionId) return;
-    await postJson("/api/trial", {
+    if (!state.serverSessionId) return null;
+    return postJson("/api/trial", {
       session_id: state.serverSessionId,
       session_token: state.serverSessionToken,
       ...prolificParams(),
@@ -1672,6 +1720,9 @@
     state.serverSaveFailed = false;
     state.existingServerSession = false;
     state.serverResume = null;
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
+    state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
     state.distractor = null;
@@ -1899,6 +1950,9 @@
     state.serverSaveFailed = false;
     state.existingServerSession = false;
     state.serverResume = null;
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
+    state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
     state.distractor = null;
@@ -2005,9 +2059,17 @@
   function hidePracticeFeedback() {
     state.pendingPracticeRow = null;
     state.pendingPracticeFeedback = null;
+    state.practiceFeedbackReplayCount = 0;
+    state.practiceFeedbackAudioPlaying = false;
+    state.practiceFeedbackReplayGeneration += 1;
     if (els.practiceFeedback) {
-      els.practiceFeedback.textContent = "";
       els.practiceFeedback.classList.add("hidden");
+    }
+    if (els.practiceFeedbackText) els.practiceFeedbackText.textContent = "";
+    if (els.practiceFeedbackReplayStatus) els.practiceFeedbackReplayStatus.textContent = "";
+    if (els.practiceFeedbackReplayBtn) {
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
     }
     if (els.practiceReasonBlock) els.practiceReasonBlock.classList.add("hidden");
     if (els.practiceReason) els.practiceReason.value = "";
@@ -2024,8 +2086,7 @@
   }
 
   function buildPracticeFeedback(row, item) {
-    const expertComp = Number(item.expert_comprehensibility_1_9);
-    const expertAccent = Number(item.expert_accentedness_1_9);
+    const expertAccentRange = String(item.expert_accentedness_range || "").trim();
     const userComp = selectedRatingNumber("comprehensibility");
     const userAccent = selectedRatingNumber("accentedness");
     const answerText = row.intelligibility_unidentified === 1
@@ -2037,8 +2098,8 @@
         `The word played: ${item.target_word}\n` +
         `Your answer: ${answerText}\n` +
         "Expert raters rated this as:\n" +
-        `Accentedness: ${expertAccent} (Your rating: ${userAccent})\n` +
-        `Comprehensibility: ${expertComp} (Your rating: ${userComp})\n` +
+        `Accentedness: ${expertAccentRange} (Your rating: ${userAccent})\n` +
+        `Comprehensibility: — (Your rating: ${userComp})\n` +
         "These reference ratings are only for practice.",
     };
   }
@@ -2493,7 +2554,7 @@
       const reasonReady =
         !practiceRequiresReason(state.pendingPracticeFeedback) ||
         Boolean(els.practiceReason.value.trim());
-      els.nextBtn.disabled = !reasonReady;
+      els.nextBtn.disabled = state.practiceFeedbackAudioPlaying || !reasonReady;
       return;
     }
     const played = currentStagePlayed();
@@ -2645,8 +2706,28 @@
   async function persistRowAndAdvance(row) {
     els.nextBtn.disabled = true;
     els.audioState.textContent = "Saving response...";
+    const savedKey = savedTrialKeyFromRow(row);
+    const replayedSavedPractice = Boolean(
+      state.replayingPractice &&
+        row.phase === "practice" &&
+        savedKey &&
+        state.serverCompletedTrialKeys.has(savedKey),
+    );
+    let saveResult = null;
     try {
-      await saveServerTrial(row);
+      if (replayedSavedPractice) {
+        await logServerEvent(
+          "practice_replayed",
+          {
+            trial_index: row.trial_index,
+            target_word: row.target_word,
+            feedback_replay_count: state.practiceFeedbackReplayCount,
+          },
+          row.trial_index,
+        );
+      } else {
+        saveResult = await saveServerTrial(row);
+      }
       state.serverSaveFailed = false;
     } catch (error) {
       state.serverSaveFailed = true;
@@ -2660,15 +2741,14 @@
       }
     }
 
-    const savedKey = savedTrialKeyFromRow(row);
     if (savedKey) state.serverCompletedTrialKeys.add(savedKey);
-    state.rows.push(row);
+    if (!replayedSavedPractice && saveResult?.duplicate !== true) state.rows.push(row);
 
     const nextIndex = state.currentIndex + 1;
     const breakInterval = Number.parseInt(els.breakInterval.value, 10) || 0;
     if (nextIndex >= state.trials.length) {
       if (state.phase === "practice") {
-        startMainTrials();
+        await continueAfterPractice();
         return;
       }
       await finishRatings();
@@ -2689,10 +2769,16 @@
     const feedback = buildPracticeFeedback(row, item);
     state.pendingPracticeRow = row;
     state.pendingPracticeFeedback = feedback;
-    if (els.practiceFeedback) {
-      els.practiceFeedback.textContent = feedback.text;
-      els.practiceFeedback.classList.remove("hidden");
+    state.practiceFeedbackReplayCount = 0;
+    if (els.practiceFeedbackText) els.practiceFeedbackText.textContent = feedback.text;
+    if (els.practiceFeedbackReplayStatus) {
+      els.practiceFeedbackReplayStatus.textContent = "You may replay this practice audio as many times as needed.";
     }
+    if (els.practiceFeedbackReplayBtn) {
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+    }
+    if (els.practiceFeedback) els.practiceFeedback.classList.remove("hidden");
     setScaleInputsDisabled(true);
     if (els.dictationInput) els.dictationInput.disabled = true;
     if (els.practiceReasonBlock) {
@@ -2702,8 +2788,109 @@
     updateNextState();
   }
 
+  async function replayPracticeFeedbackAudio() {
+    const item = currentTrial();
+    if (!state.pendingPracticeRow || !isPracticeTrial(item)) return;
+    cleanupAudio();
+    let audio;
+    if (item.audio_url) {
+      audio = new Audio(item.audio_url);
+    } else if (item.file) {
+      state.currentUrl = URL.createObjectURL(item.file);
+      audio = new Audio(state.currentUrl);
+    } else {
+      throw new Error("No audio source is attached to this practice item.");
+    }
+    state.currentAudio = audio;
+    state.practiceFeedbackReplayCount += 1;
+    state.practiceFeedbackAudioPlaying = true;
+    state.practiceFeedbackReplayGeneration += 1;
+    const replayGeneration = state.practiceFeedbackReplayGeneration;
+    let replayFinished = false;
+    const replayIsCurrent = () =>
+      !replayFinished &&
+      state.practiceFeedbackReplayGeneration === replayGeneration &&
+      state.currentAudio === audio;
+    const replayNumber = state.practiceFeedbackReplayCount;
+    els.practiceFeedbackReplayBtn.disabled = true;
+    els.practiceFeedbackReplayBtn.textContent = "Playing practice audio...";
+    els.practiceFeedbackReplayStatus.textContent = `Replay ${replayNumber} is playing.`;
+    els.nextBtn.disabled = true;
+    logServerEvent(
+      "practice_feedback_replay_start",
+      {
+        file_name: item.file_name,
+        target_word: item.target_word,
+        replay_number: replayNumber,
+      },
+      state.currentIndex + 1,
+    );
+    audio.addEventListener("ended", () => {
+      if (!replayIsCurrent()) return;
+      replayFinished = true;
+      state.practiceFeedbackAudioPlaying = false;
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+      els.practiceFeedbackReplayStatus.textContent =
+        `Replay ${replayNumber} finished. You may listen again.`;
+      updateNextState();
+      logServerEvent(
+        "practice_feedback_replay_end",
+        {
+          file_name: item.file_name,
+          target_word: item.target_word,
+          replay_number: replayNumber,
+          duration_s: Number.isFinite(audio.duration) ? audio.duration : "",
+        },
+        state.currentIndex + 1,
+      );
+    }, { once: true });
+    audio.addEventListener("error", () => {
+      if (!replayIsCurrent()) return;
+      replayFinished = true;
+      state.practiceFeedbackAudioPlaying = false;
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+      els.practiceFeedbackReplayStatus.textContent = "The practice audio could not be replayed.";
+      updateNextState();
+      logServerEvent(
+        "practice_feedback_replay_error",
+        {
+          file_name: item.file_name,
+          target_word: item.target_word,
+          replay_number: replayNumber,
+        },
+        state.currentIndex + 1,
+      );
+    }, { once: true });
+    try {
+      await audio.play();
+    } catch (error) {
+      if (!replayIsCurrent()) return;
+      replayFinished = true;
+      state.practiceFeedbackAudioPlaying = false;
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+      els.practiceFeedbackReplayStatus.textContent = PARTICIPANT_MODE
+        ? "The practice audio could not be replayed. Please try again."
+        : `Practice replay failed: ${error.message}`;
+      updateNextState();
+      logServerEvent(
+        "practice_feedback_replay_error",
+        {
+          file_name: item.file_name,
+          target_word: item.target_word,
+          replay_number: replayNumber,
+          error: String(error?.message || error),
+        },
+        state.currentIndex + 1,
+      );
+    }
+  }
+
   async function saveTrialAndAdvance() {
     if (state.pendingPracticeRow) {
+      if (state.practiceFeedbackAudioPlaying) return;
       const row = state.pendingPracticeRow;
       row.practice_feedback = state.pendingPracticeFeedback?.text || "";
       row.practice_requires_reason = state.pendingPracticeFeedback?.requiresReason ? "1" : "0";
@@ -2726,7 +2913,57 @@
     await persistRowAndAdvance(row);
   }
 
+  async function continueAfterPractice() {
+    const resume = state.resumeAfterPractice;
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
+    hidePracticeFeedback();
+    if (!resume) {
+      startMainTrials();
+      return;
+    }
+    if (resume.next_phase === "word_familiarity") {
+      state.phase = "main";
+      state.trials = state.mainTrials;
+      setLog("Practice complete. Please complete the final word checklist.");
+      showWordFamiliarityChecklist();
+      return;
+    }
+    if (resume.next_phase === "complete") {
+      state.phase = "main";
+      state.trials = state.mainTrials;
+      setLog("Practice complete. Confirming the saved session with the server.");
+      showOnly(els.taskPanel);
+      await completeSession();
+      return;
+    }
+    if (resume.next_phase !== "main") {
+      throw new Error("The saved session has an invalid post-practice continuation.");
+    }
+    const nextIndex = Math.max(0, Number.parseInt(resume.next_trial_index, 10) - 1);
+    state.phase = "main";
+    state.trials = state.mainTrials;
+    if (!state.mainTrials.length || nextIndex >= state.mainTrials.length) {
+      await finishRatings();
+      return;
+    }
+    setLog(`Practice complete. Resuming the main task at question ${nextIndex + 1}.`);
+    showOnly(els.taskPanel);
+    if (
+      resume.pending_distractor === true &&
+      Number.parseInt(resume.pending_distractor_index, 10) === nextIndex
+    ) {
+      showDistractor(nextIndex);
+    } else if (shouldShowBlockDistractor(nextIndex)) {
+      showDistractor(nextIndex);
+    } else {
+      showTrial(nextIndex);
+    }
+  }
+
   function startMainTrials() {
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
     state.phase = "main";
     state.trials = state.mainTrials;
     state.currentIndex = -1;
@@ -3189,7 +3426,7 @@
     if (!els.sessionId.value.trim()) els.sessionId.value = "practice_session";
     els.loadPracticeBtn.disabled = true;
     setSetupStatus("Loading");
-    setLog("Loading selected ElevenLabs practice materials...");
+    setLog("Loading researcher-supplied practice materials...");
 
     const manifestResponse = await fetch("practice_manifest.csv", { cache: "no-store" });
     if (!manifestResponse.ok) {
@@ -3197,21 +3434,14 @@
     }
 
     const manifestRows = parseCsv(await manifestResponse.text());
-    const fileRecords = [];
-    for (const row of manifestRows) {
-      const audioPath = valueFrom(row, REQUIRED_MANIFEST_FILE_COLUMNS);
-      if (!audioPath) continue;
-      const response = await fetch(audioPath, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Could not load ${audioPath} (${response.status})`);
-      }
-      const blob = await response.blob();
-      const file = new File([blob], fileKey(audioPath), { type: blob.type || "audio/wav" });
-      fileRecords.push({ file, sourcePath: audioPath });
+    const manifestUrl = resolveUrl("practice_manifest.csv");
+    const playableRows = manifestRows.filter((row) => remoteAudioUrlFromRow(row, manifestUrl));
+    if (!playableRows.length) {
+      throw new Error("practice_manifest.csv does not contain any playable audio URLs.");
     }
-
-    state.manifestRows = manifestRows;
-    prepareFileRecords(fileRecords, manifestRows);
+    state.manifestRows = playableRows;
+    state.items = playableRows.map((row, index) => remoteRowToItem(row, manifestUrl, index));
+    finishPreparedItems(playableRows, "practice_source: direct URL playback");
     els.loadPracticeBtn.disabled = false;
   }
 
@@ -3219,6 +3449,15 @@
     state.running = false;
     cleanupAudio();
     logServerEvent("session_paused", { completed: state.rows.length, total: state.trials.length });
+    state.serverSessionId = "";
+    state.serverSessionToken = "";
+    state.existingServerSession = false;
+    state.serverResume = null;
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
+    state.serverPracticeAssignments = [];
+    state.serverCompletedTrialKeys = new Set();
+    state.serverCompletedDistractorIndexes = new Set();
     showOnly(els.setupPanel);
     setOnboardingStep("ready");
     els.startBtn.disabled = false;
@@ -3250,6 +3489,9 @@
     state.serverSaveFailed = false;
     state.existingServerSession = false;
     state.serverResume = null;
+    state.resumeAfterPractice = null;
+    state.replayingPractice = false;
+    state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
     state.wordFamiliarity = [];
@@ -3374,6 +3616,17 @@
         ? "The audio could not be played. Please try again."
         : `Playback failed: ${error.message}`;
       els.playBtn.disabled = false;
+    });
+  });
+  els.practiceFeedbackReplayBtn.addEventListener("click", () => {
+    replayPracticeFeedbackAudio().catch((error) => {
+      state.practiceFeedbackAudioPlaying = false;
+      els.practiceFeedbackReplayBtn.disabled = false;
+      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+      els.practiceFeedbackReplayStatus.textContent = PARTICIPANT_MODE
+        ? "The practice audio could not be replayed. Please try again."
+        : `Practice replay failed: ${error.message}`;
+      updateNextState();
     });
   });
   els.dictationInput.addEventListener("keydown", handleFirstKey);

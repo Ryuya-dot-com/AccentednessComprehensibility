@@ -204,9 +204,10 @@
                 <li>Rate how easy the word was to <strong>understand</strong>.</li>
               </ol>
               <p>
-                Each page allows one playback. Practice comes first. During Practice, you will hear and rate
-                4 words. The word played and sample Accentedness and Comprehensibility ratings from expert
-                raters will be shown after each practice item. This feedback is not shown in the main session.
+                Each response page allows one playback. Practice comes first. During Practice, you will hear and
+                rate 4 words. The word played and an expert Accentedness reference range will be shown after each
+                practice item. You may replay the audio while reviewing this practice feedback. This feedback and
+                replay option are not shown in the main session.
               </p>
             </div>
             <div class="scale-summary-grid">
@@ -407,7 +408,15 @@
               <div class="scale-options" id="comprehensibility-scale"></div>
             </fieldset>
 
-            <div id="practice-feedback" class="practice-feedback hidden" aria-live="polite"></div>
+            <div id="practice-feedback" class="practice-feedback hidden">
+              <p id="practice-feedback-text" aria-live="polite"></p>
+              <div class="practice-feedback-replay">
+                <button id="practice-feedback-replay-btn" class="secondary" type="button">
+                  Replay practice audio
+                </button>
+                <span id="practice-feedback-replay-status" aria-live="polite"></span>
+              </div>
+            </div>
 
             <label id="practice-reason-block" class="practice-reason hidden">
               Please briefly explain what made you choose your rating.
@@ -483,6 +492,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=0.8.0"></script>
   </body>
 </html>

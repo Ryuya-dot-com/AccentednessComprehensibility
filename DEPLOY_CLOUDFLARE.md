@@ -259,7 +259,18 @@ node scripts/apply_d1_schema_updates.mjs \
 
 ## 6. Host Production Audio
 
-Do not commit the 2,497 main production audio files to the Pages repository. Use Cloudflare R2 or another approved static HTTPS host for production audio. Keep the four built-in practice MP3 files in `practice_training_audio/`; they are small and are part of the app UI.
+Do not commit the 2,497 main production audio files or the current practice/calibration WAVs to the Pages repository. Serve them from Cloudflare R2 or another approved static HTTPS host. The current practice set uses these direct R2 objects in low-to-high Accentedness-reference order:
+
+```text
+https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/eng_female_appreciation_practice.wav  # 1–3
+https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_male_pesticide_practice.wav       # 3–5
+https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_female_quality_practice.wav      # 5–7
+https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_female_pizza_practice.wav        # 7–9
+```
+
+The two scalar expert fields remain blank because exact scalar Accentedness and Comprehensibility reference ratings have not been established. The app and top-level `practice_manifest.csv` store only `expert_accentedness_range` for these four practice items.
+
+Both the participant flow and the researcher-only `Load selected practice` helper pass these HTTPS URLs directly to the browser's audio element. The helper does not fetch the R2 objects into JavaScript blobs, so ordinary playback is not dependent on an `Access-Control-Allow-Origin` response header. Test both flows after any audio-host change.
 
 The recommended R2 bucket name is:
 
@@ -307,7 +318,7 @@ Expose the bucket with a production custom domain when possible, for example:
 https://stimuli.example.edu/
 ```
 
-Cloudflare's `r2.dev` public URL is acceptable for development checks, but Cloudflare documents it as non-production and rate-limited. For production, use a custom domain so Cloudflare cache, WAF, access controls, and bot-management options can be applied.
+The current practice implementation references the verified public `r2.dev` URLs listed above. If the audio is later moved to a custom domain, update all four `PRACTICE_ITEMS`, `practice_manifest.csv`, the live-deployment checks, and the allowed-host setting together before changing the Prolific study. A custom domain remains preferable for cache, WAF, access-control, and bot-management options.
 
 Generate the production manifest with absolute audio URLs after the public audio base URL is known. Prefer the hosted-manifest builder because it preserves the already validated OSF package manifest and only fills `audio_url` from `audio_file`:
 
@@ -345,7 +356,7 @@ npx wrangler pages secret put COUNTERBALANCE_MANIFEST_URL --project-name accente
 Set allowed hosts to the manifest host and audio host:
 
 ```text
-COUNTERBALANCE_ALLOWED_HOSTS=accentednesscomprehensibility.pages.dev,stimuli.example.edu
+COUNTERBALANCE_ALLOWED_HOSTS=accentednesscomprehensibility.pages.dev,pub-c26f53c7e40c448db5847c2079933f52.r2.dev
 ```
 
 Official references:
@@ -554,7 +565,7 @@ On `/admin/`, confirm that these CSV downloads work:
 
 To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
-To test reload recovery, start a pilot session from a Prolific-style URL, save several practice/main trials, then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, the browser resumes at the first unsaved trial rather than the beginning, already completed block distractors are not repeated, and completion is issued only after the remaining assignments are saved.
+To test reload recovery, start a pilot session from the stable Prolific-style URL, save several practice/main trials, then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, all four practice items are presented again, the browser then continues at the first unsaved main trial or later saved-session state, already completed block distractors are not repeated, and completion is issued only after the remaining assignments are saved. Confirm that replaying practice does not overwrite an already saved practice response.
 
 To test the final checklist, finish all ratings and confirm that the 50-word screen appears before any completion code or Prolific redirect. Leave `capelin` blank in a test response, submit all 50 explicit values, and verify `word-familiarity.csv` contains `word_number=23,target_word=capelin,word_known=0` while the matching `analysis.csv` trial rows also contain `word_known=0`. A zero-known-word submission is valid; failing to review/submit the checklist is not.
 
@@ -576,6 +587,8 @@ For a Prolific-style test, use URL parameters such as:
 https://accentednesscomprehensibility.pages.dev/?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}
 ```
 
+Use this stable Pages project hostname in the Prolific Study URL. Do not copy a deployment-specific hostname such as `https://<deployment-id>.accentednesscomprehensibility.pages.dev/` from a Cloudflare deployment detail page: that URL remains pinned to the historical deployment and will not receive later fixes or practice-stimulus changes.
+
 Do not include the completion code or completion URL in the Prolific participant URL. Store the full return URL in `PROLIFIC_COMPLETION_URL`, or store the code in `PROLIFIC_COMPLETION_CODE`.
 
 After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side assignment has a saved rating and every version-required word-familiarity row is present. If completion saving fails, the server detects missing assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
@@ -584,7 +597,8 @@ After Cloudflare marks the session as `completed`, `/api/session/complete` retur
 
 Before running the actual study:
 
-- Confirm collaborator review of the selected ElevenLabs practice MP3 files and revise the temporary practice reference ratings in `app.js` if needed.
+- Confirm the four R2 practice/calibration WAVs are reachable and presented in this order: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), `pizza` (7–9). Keep scalar expert fields blank unless exact expert ratings are formally established.
+- Confirm unlimited audio replay is available only on the practice-feedback screen; practice response pages and all main-task pages must retain one playback per page.
 - Set `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
 - Apply `db/migrations/0005_session_security.sql` to existing D1 databases.
@@ -617,7 +631,7 @@ Before running the actual study:
 - Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.
 - For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress`.
-- Complete a live pilot reload test: save trials, reload the same Prolific-style URL, confirm resume at the first unsaved trial, then finish and verify completion/export rows.
+- Complete a live pilot reload test: save trials, reload the same stable Prolific-style URL, confirm that all four practice items repeat before the first unsaved main trial or later saved-session state, then finish and verify completion/export rows.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.
