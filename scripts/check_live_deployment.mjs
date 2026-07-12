@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -199,6 +199,10 @@ function checkRequiredAppSnippets(appText) {
     "replayedSavedPractice",
     "practiceFeedbackReplayCount",
     "practiceFeedbackReplayGeneration",
+    "audioPlaybackGeneration",
+    "playbackSettled",
+    "AUDIO_LIFECYCLE.isPlaybackCurrent",
+    "AUDIO_LIFECYCLE.createFeedbackReplayLifecycle",
     "replayPracticeFeedbackAudio",
     "You may replay this practice audio as many times as needed.",
     "Expert raters rated this as:",
@@ -224,9 +228,21 @@ function checkRequiredAppSnippets(appText) {
   return problems;
 }
 
+function checkRequiredAudioLifecycleSnippets(helperText) {
+  return [
+    "createFeedbackReplayLifecycle",
+    "isPlaybackCurrent",
+    'complete("timeupdate")',
+    '"timeout"',
+  ]
+    .filter((snippet) => !helperText.includes(snippet))
+    .map((snippet) => `live audio-lifecycle.js missing snippet: ${snippet}`);
+}
+
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="app.js?v=0.8.0"',
+    'src="audio-lifecycle.js?v=0.8.1"',
+    'src="app.js?v=0.8.1"',
     'id="word-familiarity-panel"',
     'id="word-familiarity-grid"',
     "Review all 50 words",
@@ -519,6 +535,7 @@ const apiDryRunStart = hasFlag("--api-dry-run-start");
 
 const index = await fetchText(baseUrl, "/");
 const app = await fetchText(baseUrl, "/app.js");
+const audioLifecycle = await fetchText(baseUrl, "/audio-lifecycle.js");
 const manifest = await fetchText(baseUrl, "/remote_manifest.csv");
 const config = await fetchText(baseUrl, "/api/config");
 const selectedPractice = await Promise.all(
@@ -553,6 +570,16 @@ const checks = [
       ...checkRequiredAppSnippets(app.text),
     ],
     summary: `${app.text.length} bytes`,
+  },
+  {
+    name: "Live audio replay lifecycle",
+    problems: [
+      ...(audioLifecycle.response.status === 200
+        ? []
+        : [`audio-lifecycle.js returned ${audioLifecycle.response.status}`]),
+      ...checkRequiredAudioLifecycleSnippets(audioLifecycle.text),
+    ],
+    summary: `${audioLifecycle.text.length} bytes`,
   },
   {
     name: "Live static remote_manifest.csv",

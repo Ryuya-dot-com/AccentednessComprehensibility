@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { TARGET_WORDS } from "../functions/api/_word-familiarity.js";
 
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -229,7 +229,8 @@ async function main() {
   assert(indexPage.text.includes('id="word-familiarity-panel"'), "Participant page is missing the checklist panel.");
   assert(indexPage.text.includes("Review all 50 words"), "Participant page is missing the 50-word instruction.");
   assert(indexPage.text.includes("If you were unfamiliar with it"), "Participant page has the wrong checklist instruction.");
-  assert(indexPage.text.includes('src="app.js?v=0.8.0"'), "Participant page does not cache-bust app.js v0.8.0.");
+  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.8.1"'), "Participant page does not load the audio lifecycle guard.");
+  assert(indexPage.text.includes('src="app.js?v=0.8.1"'), "Participant page does not cache-bust app.js v0.8.1.");
   assert(indexPage.text.includes('id="practice-feedback-replay-btn"'), "Practice feedback replay control is missing.");
   assert(
     indexPage.text.includes("You may replay the audio while reviewing this practice feedback."),
@@ -242,6 +243,14 @@ async function main() {
   );
   const appPage = await get(baseUrl, "/app.js");
   assert(appPage.response.status === 200, `Participant app failed: ${appPage.response.status}`);
+  const audioLifecyclePage = await get(baseUrl, "/audio-lifecycle.js");
+  assert(audioLifecyclePage.response.status === 200, `Audio lifecycle helper failed: ${audioLifecyclePage.response.status}`);
+  assert(
+    audioLifecyclePage.text.includes("createFeedbackReplayLifecycle") &&
+      audioLifecyclePage.text.includes("isPlaybackCurrent") &&
+      audioLifecyclePage.text.includes('complete("timeupdate")'),
+    "Audio lifecycle helper is missing replay completion or stale-audio guards.",
+  );
   assert(appPage.text.includes(`const VERSION = "${PLATFORM_VERSION}"`), "Participant app has the wrong platform version.");
   assert(appPage.text.includes("showWordFamiliarityChecklist"), "Deployed app is missing checklist behavior.");
   assert(appPage.text.includes('"capelin"'), "Deployed app is missing Capelin from the canonical list.");
@@ -269,6 +278,10 @@ async function main() {
     "replayedSavedPractice",
     "replayPracticeFeedbackAudio",
     "practiceFeedbackReplayGeneration",
+    "audioPlaybackGeneration",
+    "playbackSettled",
+    "AUDIO_LIFECYCLE.isPlaybackCurrent",
+    "AUDIO_LIFECYCLE.createFeedbackReplayLifecycle",
     "You may replay this practice audio as many times as needed.",
     "Expert raters rated this as:",
     "Comprehensibility: — (Your rating:",
@@ -756,7 +769,7 @@ async function main() {
     legacy_v060_compatibility: true,
     legacy_v060_mid_task_resume: true,
     stale_client_reload_handled: true,
-    practice_set_v080_exact: true,
+    practice_set_v081_exact: true,
     practice_feedback_unlimited_replay_contract: true,
     resume_replays_all_practice: true,
     resume_preserves_first_unsaved_main: true,
