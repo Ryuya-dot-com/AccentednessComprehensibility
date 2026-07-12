@@ -259,7 +259,7 @@ Current practice audio uses four researcher-selected WAV files hosted in product
   - `appreciation`: `ENG` female, documented Accentedness reference range 1–3.
   - `pesticide`: `JPN` male, documented Accentedness reference range 3–5.
   - `quality`: `JPN` female, documented Accentedness reference range 5–7.
-  - `pizza`: synthetic macOS `say` voice `Tingting`, generated from the Mandarin form `披萨`, documented Accentedness reference range 7–9. This is not a human L2-English production; its methodological suitability must be explicitly accepted before launch.
+  - `pizza`: synthetic macOS `say` voice `Tingting`, generated from the Mandarin form `披萨`, documented Accentedness reference range 7–9. This is not a human L2-English production; its methodological use was explicitly accepted on 2026-07-13.
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
 - Practice feedback uses `The word played`, shows the documented expert Accentedness reference range, and repeats the participant's Accentedness and Comprehensibility ratings. It does not invent a scalar expert rating and does not ask participants to justify their ratings.
 - The practice-feedback screen permits unlimited replay so the calibration stimulus can be checked. This exception applies only after a practice response; response pages and all main-task pages retain the one-playback rule.
@@ -543,7 +543,7 @@ For acoustic QC of the OSF package, run:
 python3 scripts/audit_audio_qc.py
 ```
 
-This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization. The currently selected Tingting `pizza.wav` is not yet in that OSF calibration package; its local source and R2 copy were separately checked with `ffprobe`, MD5, and SHA-256, and must be added to the OSF package after the methodological choice is accepted.
+This writes `audio_qc_by_file.csv`, `audio_qc_summary.csv`, and `audio_qc_issues.csv` to `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`. The current report is `AUDIO_QC_REPORT_20260703.md`; it has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired. Review items remain for peak normalization, JPN sample-rate variation, and ENG intensity normalization. The accepted Tingting `pizza.wav` is not yet in that OSF calibration package; its local source and R2 copy were separately checked with `ffprobe`, MD5, and SHA-256, and must be added to the next regenerated OSF package.
 
 The applied clipping repair candidate can be regenerated with:
 
@@ -553,7 +553,7 @@ python3 scripts/repair_clipped_audio.py
 
 This does not overwrite the production audio or manifest. It writes a candidate under `metadata/audio_repair_candidates/` for researcher listening review.
 
-`scripts/generate_reviewer_packet.py` and `scripts/apply_practice_review.py` describe the retired ElevenLabs/scalar-rating workflow. Do not run them against v0.8. A new review record for the four current items must preserve range-only ratings and the synthetic Tingting/`披萨` provenance. Production-audio repair decisions remain tracked separately in the OSF audio QC report and repair metadata.
+`scripts/generate_reviewer_packet.py` and `scripts/apply_practice_review.py` describe the retired ElevenLabs/scalar-rating workflow. Do not run them against v0.8. A new review record for the four current items must preserve range-only ratings and the accepted synthetic Tingting/`披萨` provenance. Production-audio repair decisions remain tracked separately in the OSF audio QC report and repair metadata.
 
 For lexical-balance QC of style `a` versus style `b`, run:
 
@@ -594,7 +594,7 @@ node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 
 Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, and duplicate-start resume metadata by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
 
-The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, the four R2 practice/calibration WAVs, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`. The stable host still serves v0.7; rerun the full live API gate after the v0.8 methodological decision, production merge, and Prolific stable-URL update. The v0.8 PR Preview has passed the static app/audio checks but is not a production-environment gate.
+The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, the four R2 practice/calibration WAVs, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`. The stable host still serves v0.7; rerun the full live API gate after the production merge. The v0.8 PR Preview has passed the static app/audio checks but is not a production-environment gate. After deployment, update the Prolific study link to the stable hostname separately.
 
 After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 

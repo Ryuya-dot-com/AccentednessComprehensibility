@@ -284,7 +284,7 @@ Practice trials use four researcher-selected calibration WAVs in ascending docum
 These are reference ranges rather than exact scalar ratings. No scalar expert Comprehensibility value has been established for these items. Before production launch:
 
 - Confirm the selected practice audio by collaborator listening review.
-- Explicitly decide whether a Mandarin TTS lexical form is methodologically acceptable for calibrating ratings of English accentedness; otherwise replace item 4 with a genuine CHN-female English `pizza` production.
+- The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in exports and reporting.
 - Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.

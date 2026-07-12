@@ -47,7 +47,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [ ] Redeploy the current app and verify the live Cloudflare URL.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current stable host serves v0.7; the v0.8 PR Preview serves the new code and all four R2 WAVs. Production merge remains intentionally paused for the Tingting/`披萨` methodological decision and the Prolific URL change.
+  - Current stable host serves v0.7; the v0.8 PR Preview serves the new code and all four R2 WAVs. The Tingting/`披萨` methodological choice was explicitly accepted on 2026-07-13; production merge and the Prolific stable-URL change remain.
   - Remote D1 already contains the staged-flow, speaker-pattern, background-questionnaire, and word-familiarity schema.
   - Required live passes after the v0.8 deployment:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, the four R2 practice/calibration WAV paths, `response_flow`, and completion-code hardening.
@@ -113,7 +113,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - `practice_manifest.csv` points to these direct URLs and leaves `expert_comprehensibility_1_9` and `expert_accentedness_1_9` blank.
   - Completion: live practice uses these four WAVs and shows ranges without inventing scalar expert ratings.
 
-- [ ] Obtain explicit methodological acceptance for the selected Tingting `pizza.wav`, or replace it.
+- [x] Explicit methodological acceptance for the selected Tingting `pizza.wav` was received on 2026-07-13.
   - The file is byte-identical to the legacy macOS `say -v Tingting` output generated from Mandarin `披萨`; it is not a human CHN-female production of English `pizza`.
   - If retained, document that the fourth practice item calibrates an intentionally synthetic/native-language-shaped endpoint rather than ordinary L2 English speech.
   - If rejected, provide a genuine CHN-female English `pizza` WAV and update R2, the canonical server assignment, client metadata, manifest, OSF package, and tests together.
@@ -242,7 +242,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Current preflight result: PASS when run with the production R2 manifest and `--using-external-manifest-secret`.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
   - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four practice items repeat without overwriting saved practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
-  - Current stable deployment is v0.7 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. Re-run the live v0.8 gate only after the methodological decision and production merge.
+  - Current stable deployment is v0.7 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. The methodological decision was accepted on 2026-07-13; re-run the live v0.8 gate after production merge.
   - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
 
 - [ ] Review production secrets and access controls.
