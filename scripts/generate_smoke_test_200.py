@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "exports" / "smoke_test_200"
-VERSION = "pronunciation_rating_v0.5.0_smoke"
+VERSION = "pronunciation_rating_v0.7.0_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
 PRACTICE_ITEMS = [
@@ -67,6 +67,22 @@ PRACTICE_ITEMS = [
     ),
 ]
 TRIAL_COUNT = len(PRACTICE_ITEMS) + 100
+
+# Canonical CounterBalance.xlsx Sheet1 numbering. Keep this in sync with
+# TARGET_WORDS in app.js and functions/api/_word-familiarity.js.
+TARGET_WORDS = [
+    "tweezers", "persimmon", "thermometer", "razor", "mantis",
+    "pacifier", "podium", "labyrinth", "loquat", "scapula",
+    "burdock", "protractor", "acorn", "scalpel", "cocoon",
+    "cicada", "toboggan", "chisel", "casket", "detergent",
+    "nostril", "rickshaw", "capelin", "lotus", "tadpole",
+    "burglar", "xylophone", "walrus", "icicle", "abalone",
+    "porcupine", "carousel", "faucet", "cobweb", "pylon",
+    "pupa", "binoculars", "spatula", "lawnmower", "ladle",
+    "raccoon", "syringe", "catapult", "treadmill", "wardrobe",
+    "strainer", "parakeet", "scallop", "toupee", "abacus",
+]
+TARGET_WORD_COUNT = len(TARGET_WORDS)
 
 COUNTERBALANCE_CELLS = [
     (1, "ABCD", "a"),
@@ -148,7 +164,16 @@ SESSIONS_COLUMNS = [
     "completion_url_issued_at", "completion_url_issued_at_ms",
     "completion_url_issued_count", "duplicate_start_count",
     "duplicate_start_last_at", "duplicate_start_last_at_ms", "timezone",
-    "user_agent",
+    "user_agent", "word_familiarity_required",
+    "word_familiarity_response_count", "known_word_count",
+    "missing_word_familiarity_count", "word_familiarity_submitted_at",
+]
+
+WORD_FAMILIARITY_COLUMNS = [
+    "session_id", "rater_id", "prolific_pid", "prolific_study_id",
+    "prolific_session_id", "platform_version", "session_status",
+    "word_number", "target_word", "word_known", "submitted_at",
+    "submitted_at_ms",
 ]
 
 ASSIGNMENTS_COLUMNS = [
@@ -195,7 +220,8 @@ ANALYSIS_COLUMNS = [
     "comprehensibility_first_rt_ms", "comprehensibility_last_rt_ms",
     "comprehensibility_selection_count", "accentedness_first_rt_ms",
     "accentedness_last_rt_ms", "accentedness_selection_count",
-    "unidentified_selected_rt_ms",
+    "unidentified_selected_rt_ms", "word_known",
+    "word_familiarity_required", "word_familiarity_submitted_at",
 ]
 
 QUALITY_COLUMNS = [
@@ -208,7 +234,9 @@ QUALITY_COLUMNS = [
     "distractor_problem_total", "distractor_accuracy", "avg_distractor_rt_ms",
     "duplicate_start_count",
     "completion_url_issued_count", "counterbalance_cell", "list_comb",
-    "pronunciation_style",
+    "pronunciation_style", "word_familiarity_required",
+    "word_familiarity_response_count", "known_word_count",
+    "missing_word_familiarity_count",
 ]
 
 
@@ -267,9 +295,54 @@ def split_word_numbers(values) -> tuple[list[int], list[int]]:
 
 
 def word_label(number: int) -> str:
-    first = chr(ord("a") + ((number - 1) // 26))
-    second = chr(ord("a") + ((number - 1) % 26))
-    return f"smoke{first}{second}"
+    if not 1 <= number <= TARGET_WORD_COUNT:
+        raise ValueError(f"word number must be between 1 and {TARGET_WORD_COUNT}: {number}")
+    return TARGET_WORDS[number - 1]
+
+
+def simulated_word_known(participant_index: int, word_number: int) -> int:
+    """Return a deterministic, plausibly distributed familiarity response."""
+    rare_words = {9, 11, 23, 30, 36, 49}
+    less_common_words = {5, 8, 10, 14, 17, 22, 24, 35, 43, 46, 47, 48, 50}
+    if word_number == 23:  # capelin is intentionally least familiar
+        probability = 0.06
+    elif word_number in rare_words:
+        probability = 0.22
+    elif word_number in less_common_words:
+        probability = 0.58
+    else:
+        probability = 0.9
+    return int(random.Random(participant_index * 10_000 + word_number).random() < probability)
+
+
+def dropout_word_familiarity_count(saved_main_count: int) -> int:
+    """Exercise both absent and partial checklist coverage for late dropouts."""
+    return min(TARGET_WORD_COUNT - 1, max(0, saved_main_count - 70))
+
+
+def build_word_familiarity_rows(
+    session_id: str,
+    participant_index: int,
+    response_count: int,
+    submitted_at_ms: int,
+) -> list[dict]:
+    if not 0 <= response_count <= TARGET_WORD_COUNT:
+        raise ValueError(f"invalid word-familiarity response count: {response_count}")
+    word_numbers = list(range(1, TARGET_WORD_COUNT + 1))
+    if response_count < TARGET_WORD_COUNT:
+        random.Random(participant_index * 97).shuffle(word_numbers)
+        word_numbers = sorted(word_numbers[:response_count])
+    return [
+        {
+            "session_id": session_id,
+            "word_number": word_number,
+            "target_word": word_label(word_number),
+            "word_known": simulated_word_known(participant_index, word_number),
+            "submitted_at": iso(submitted_at_ms),
+            "submitted_at_ms": submitted_at_ms,
+        }
+        for word_number in word_numbers
+    ]
 
 
 def condition_rows(block_list: str, style: str) -> list[dict]:
@@ -589,6 +662,10 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
     practice_saved_total = 0
     incomplete_dropout_count = 0
     abandoned_count = 0
+    word_familiarity_response_total = 0
+    completed_word_familiarity_response_total = 0
+    dropout_word_familiarity_response_total = 0
+    dropout_sessions_with_partial_word_familiarity = 0
 
     for participant_index in range(1, participant_count + 1):
         cell_id, list_comb, style = COUNTERBALANCE_CELLS[(participant_index - 1) % len(COUNTERBALANCE_CELLS)]
@@ -628,6 +705,25 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             completion_issued_count = 1
             allocation_status = "completed"
             allocation_completed_at = iso(completed_ms)
+        if is_dropout:
+            word_familiarity_response_count = dropout_word_familiarity_count(saved_main_count)
+            word_familiarity_submitted_ms = last_seen_ms
+        else:
+            word_familiarity_response_count = TARGET_WORD_COUNT
+            word_familiarity_submitted_ms = completed_ms - 30_000
+        word_familiarity_rows = build_word_familiarity_rows(
+            session_id,
+            participant_index,
+            word_familiarity_response_count,
+            word_familiarity_submitted_ms,
+        )
+        word_familiarity_response_total += word_familiarity_response_count
+        if is_dropout:
+            dropout_word_familiarity_response_total += word_familiarity_response_count
+            if word_familiarity_response_count:
+                dropout_sessions_with_partial_word_familiarity += 1
+        else:
+            completed_word_familiarity_response_total += word_familiarity_response_count
         duplicate_count = 1 if participant_index % 25 == 0 else 0
         duplicate_ms = started_ms + 6_000 if duplicate_count else None
         session = {
@@ -646,6 +742,7 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "timezone": "Asia/Tokyo",
             "japanese_familiarity_1_6": 1 + (participant_index % 6),
             "chinese_familiarity_1_6": 1 + ((participant_index + 2) % 6),
+            "word_familiarity_required": 1,
             "completion_code": completion_code,
             "session_token_hash": "smoke-token-hash",
             "turnstile_verified": 1,
@@ -671,6 +768,8 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "duplicate_start_last_at_ms": duplicate_ms,
         }
         insert_row(conn, "sessions", session)
+        for word_familiarity_row in word_familiarity_rows:
+            insert_row(conn, "word_familiarity_responses", word_familiarity_row)
         insert_row(conn, "counterbalance_allocations", {
             "id": allocation_id,
             "session_id": session_id,
@@ -725,6 +824,10 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
                     "rt_ms": 18500 + (participant_index % 8) * 450 + block_end * 11,
                 })
         if not is_dropout:
+            add_event(conn, f"{session_id}:event:word-familiarity", session_id, prolific_pid, "word_familiarity_saved", None, word_familiarity_submitted_ms, {
+                "response_count": word_familiarity_response_count,
+                "known_word_count": sum(row["word_known"] for row in word_familiarity_rows),
+            })
             add_event(conn, f"{session_id}:event:complete", session_id, prolific_pid, "session_complete", None, completed_ms, {
                 "trial_count": TRIAL_COUNT,
                 "completed_trial_count": TRIAL_COUNT,
@@ -750,14 +853,45 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
         "saved_trial_total": saved_trial_total,
         "main_saved_total": main_saved_total,
         "practice_saved_total": practice_saved_total,
+        "word_familiarity_required_sessions": participant_count,
+        "word_familiarity_response_total": word_familiarity_response_total,
+        "completed_word_familiarity_response_total": completed_word_familiarity_response_total,
+        "dropout_word_familiarity_response_total": dropout_word_familiarity_response_total,
+        "dropout_sessions_with_partial_word_familiarity": dropout_sessions_with_partial_word_familiarity,
+        "dropout_sessions_without_word_familiarity": dropout_count - dropout_sessions_with_partial_word_familiarity,
     }
 
 
 def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
     exports = {}
+    session_base_columns = SESSIONS_COLUMNS[:-5]
+    sessions_sql = f"""
+        SELECT
+          {', '.join(f's.{column}' for column in session_base_columns)},
+          s.word_familiarity_required,
+          COALESCE(wf.word_familiarity_response_count, 0) AS word_familiarity_response_count,
+          COALESCE(wf.known_word_count, 0) AS known_word_count,
+          CASE
+            WHEN s.word_familiarity_required = 1
+            THEN MAX(0, {TARGET_WORD_COUNT} - COALESCE(wf.word_familiarity_response_count, 0))
+            ELSE 0
+          END AS missing_word_familiarity_count,
+          wf.word_familiarity_submitted_at
+        FROM sessions s
+        LEFT JOIN (
+          SELECT
+            session_id,
+            COUNT(*) AS word_familiarity_response_count,
+            SUM(word_known) AS known_word_count,
+            MAX(submitted_at) AS word_familiarity_submitted_at
+          FROM word_familiarity_responses
+          GROUP BY session_id
+        ) wf ON wf.session_id = s.id
+        ORDER BY s.started_at_ms, s.started_at
+    """
     specs = {
         "ratings.csv": (f"SELECT {', '.join(RATINGS_COLUMNS)} FROM rating_trials ORDER BY rater_id, session_label, phase, trial_index", RATINGS_COLUMNS),
-        "sessions.csv": (f"SELECT {', '.join(SESSIONS_COLUMNS)} FROM sessions ORDER BY started_at_ms, started_at", SESSIONS_COLUMNS),
+        "sessions.csv": (sessions_sql, SESSIONS_COLUMNS),
         "assignments.csv": (f"SELECT {', '.join(ASSIGNMENTS_COLUMNS)} FROM rating_assignments ORDER BY session_id, phase, trial_index", ASSIGNMENTS_COLUMNS),
         "events.csv": (f"SELECT {', '.join(EVENT_COLUMNS)} FROM event_logs ORDER BY server_received_at", EVENT_COLUMNS),
         "counterbalance.csv": ("""
@@ -769,6 +903,24 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
             LEFT JOIN sessions s ON s.id = ca.session_id
             ORDER BY ca.assigned_at
         """, COUNTERBALANCE_COLUMNS),
+        "word-familiarity.csv": ("""
+            SELECT
+              wf.session_id,
+              s.rater_id,
+              s.prolific_pid,
+              s.prolific_study_id,
+              s.prolific_session_id,
+              s.platform_version,
+              s.status AS session_status,
+              wf.word_number,
+              wf.target_word,
+              wf.word_known,
+              wf.submitted_at,
+              wf.submitted_at_ms
+            FROM word_familiarity_responses wf
+            JOIN sessions s ON s.id = wf.session_id
+            ORDER BY s.started_at_ms, s.started_at, wf.session_id, wf.word_number
+        """, WORD_FAMILIARITY_COLUMNS),
     }
     for filename, (sql, columns) in specs.items():
         rows = fetch_all(conn, sql)
@@ -834,9 +986,16 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           rt.accentedness_first_rt_ms,
           rt.accentedness_last_rt_ms,
           rt.accentedness_selection_count,
-          rt.unidentified_selected_rt_ms
+          rt.unidentified_selected_rt_ms,
+          wf.word_known,
+          s.word_familiarity_required,
+          wf.submitted_at AS word_familiarity_submitted_at
         FROM rating_trials rt
         JOIN sessions s ON s.id = rt.session_id
+        LEFT JOIN word_familiarity_responses wf
+          ON wf.session_id = rt.session_id
+         AND wf.word_number = CAST(rt.word_number AS INTEGER)
+         AND LOWER(wf.target_word) = LOWER(rt.target_word)
         WHERE s.status = 'completed'
           AND rt.phase = 'main'
         ORDER BY s.completed_at_ms, s.completed_at, s.id, rt.trial_index
@@ -848,7 +1007,7 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
     csv_write(out_dir / "analysis.csv", analysis_rows, ANALYSIS_COLUMNS)
     exports["analysis.csv"] = len(analysis_rows)
 
-    quality_rows = fetch_all(conn, """
+    quality_rows = fetch_all(conn, f"""
         SELECT
           s.id AS session_id,
           s.status,
@@ -893,7 +1052,15 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           s.completion_url_issued_count,
           s.counterbalance_cell,
           s.list_comb,
-          s.pronunciation_style
+          s.pronunciation_style,
+          s.word_familiarity_required,
+          COALESCE(wf.word_familiarity_response_count, 0) AS word_familiarity_response_count,
+          COALESCE(wf.known_word_count, 0) AS known_word_count,
+          CASE
+            WHEN s.word_familiarity_required = 1
+            THEN MAX(0, {TARGET_WORD_COUNT} - COALESCE(wf.word_familiarity_response_count, 0))
+            ELSE 0
+          END AS missing_word_familiarity_count
         FROM sessions s
         LEFT JOIN rating_trials rt ON rt.session_id = s.id
         LEFT JOIN (
@@ -907,6 +1074,14 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           WHERE event_type = 'distractor_complete'
           GROUP BY session_id
         ) de ON de.session_id = s.id
+        LEFT JOIN (
+          SELECT
+            session_id,
+            COUNT(*) AS word_familiarity_response_count,
+            SUM(word_known) AS known_word_count
+          FROM word_familiarity_responses
+          GROUP BY session_id
+        ) wf ON wf.session_id = s.id
         GROUP BY s.id
         ORDER BY s.started_at_ms, s.started_at
     """)
@@ -931,6 +1106,17 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
     expected_main = generation["main_saved_total"]
     expected_practice = generation["practice_saved_total"]
     expected_analysis = completed_count * 100
+    expected_word_familiarity = generation["word_familiarity_response_total"]
+    canonical_rows = fetch_all(
+        conn,
+        "SELECT word_number, target_word FROM word_familiarity_responses",
+    )
+    canonical_word_familiarity_mismatches = sum(
+        1
+        for row in canonical_rows
+        if not 1 <= int(row["word_number"]) <= TARGET_WORD_COUNT
+        or row["target_word"] != word_label(int(row["word_number"]))
+    )
     checks = {
         "sessions": scalar(conn, "SELECT COUNT(*) FROM sessions"),
         "completed_sessions": scalar(conn, "SELECT COUNT(*) FROM sessions WHERE status = 'completed'"),
@@ -953,6 +1139,75 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "missing_saved_trials": scalar(conn, "SELECT COUNT(*) FROM sessions WHERE completed_trial_count != trial_count"),
         "completion_urls_issued": scalar(conn, "SELECT SUM(completion_url_issued_count) FROM sessions"),
         "duplicate_start_total": scalar(conn, "SELECT SUM(duplicate_start_count) FROM sessions"),
+        "word_familiarity_required_sessions": scalar(conn, "SELECT COUNT(*) FROM sessions WHERE word_familiarity_required = 1"),
+        "word_familiarity_responses": scalar(conn, "SELECT COUNT(*) FROM word_familiarity_responses"),
+        "completed_word_familiarity_responses": scalar(conn, """
+            SELECT COUNT(*)
+            FROM word_familiarity_responses wf
+            JOIN sessions s ON s.id = wf.session_id
+            WHERE s.status = 'completed'
+        """),
+        "completed_sessions_with_full_word_familiarity": scalar(conn, f"""
+            SELECT COUNT(*)
+            FROM sessions s
+            WHERE s.status = 'completed'
+              AND (SELECT COUNT(*) FROM word_familiarity_responses wf WHERE wf.session_id = s.id) = {TARGET_WORD_COUNT}
+        """),
+        "completed_sessions_missing_word_familiarity": scalar(conn, f"""
+            SELECT COUNT(*)
+            FROM sessions s
+            WHERE s.status = 'completed'
+              AND (SELECT COUNT(*) FROM word_familiarity_responses wf WHERE wf.session_id = s.id) != {TARGET_WORD_COUNT}
+        """),
+        "dropout_sessions_with_full_word_familiarity": scalar(conn, f"""
+            SELECT COUNT(*)
+            FROM sessions s
+            WHERE s.status != 'completed'
+              AND (SELECT COUNT(*) FROM word_familiarity_responses wf WHERE wf.session_id = s.id) = {TARGET_WORD_COUNT}
+        """),
+        "dropout_sessions_with_partial_word_familiarity": scalar(conn, f"""
+            SELECT COUNT(*)
+            FROM sessions s
+            WHERE s.status != 'completed'
+              AND (SELECT COUNT(*) FROM word_familiarity_responses wf WHERE wf.session_id = s.id)
+                  BETWEEN 1 AND {TARGET_WORD_COUNT - 1}
+        """),
+        "dropout_sessions_without_word_familiarity": scalar(conn, """
+            SELECT COUNT(*)
+            FROM sessions s
+            WHERE s.status != 'completed'
+              AND NOT EXISTS (
+                SELECT 1 FROM word_familiarity_responses wf WHERE wf.session_id = s.id
+              )
+        """),
+        "known_word_responses": scalar(conn, "SELECT SUM(word_known) FROM word_familiarity_responses"),
+        "unknown_word_responses": scalar(conn, "SELECT COUNT(*) - SUM(word_known) FROM word_familiarity_responses"),
+        "capelin_known_responses": scalar(conn, "SELECT SUM(word_known) FROM word_familiarity_responses WHERE word_number = 23 AND target_word = 'capelin'"),
+        "canonical_word_familiarity_mismatches": canonical_word_familiarity_mismatches,
+        "completed_analysis_rows_missing_word_known": scalar(conn, """
+            SELECT COUNT(*)
+            FROM rating_trials rt
+            JOIN sessions s ON s.id = rt.session_id
+            LEFT JOIN word_familiarity_responses wf
+              ON wf.session_id = rt.session_id
+             AND wf.word_number = CAST(rt.word_number AS INTEGER)
+             AND LOWER(wf.target_word) = LOWER(rt.target_word)
+            WHERE s.status = 'completed'
+              AND rt.phase = 'main'
+              AND wf.word_known IS NULL
+        """),
+        "completed_analysis_rows_missing_word_submitted_at": scalar(conn, """
+            SELECT COUNT(*)
+            FROM rating_trials rt
+            JOIN sessions s ON s.id = rt.session_id
+            LEFT JOIN word_familiarity_responses wf
+              ON wf.session_id = rt.session_id
+             AND wf.word_number = CAST(rt.word_number AS INTEGER)
+             AND LOWER(wf.target_word) = LOWER(rt.target_word)
+            WHERE s.status = 'completed'
+              AND rt.phase = 'main'
+              AND wf.submitted_at IS NULL
+        """),
     }
     cell_rows = fetch_all(conn, """
         SELECT cell_id, COUNT(*) AS n
@@ -978,12 +1233,24 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "blank_without_unidentified": 0,
         "missing_saved_trials": dropout_count,
         "completion_urls_issued": completed_count,
+        "word_familiarity_required_sessions": participant_count,
+        "word_familiarity_responses": expected_word_familiarity,
+        "completed_word_familiarity_responses": completed_count * TARGET_WORD_COUNT,
+        "completed_sessions_with_full_word_familiarity": completed_count,
+        "completed_sessions_missing_word_familiarity": 0,
+        "dropout_sessions_with_full_word_familiarity": 0,
+        "dropout_sessions_with_partial_word_familiarity": generation["dropout_sessions_with_partial_word_familiarity"],
+        "dropout_sessions_without_word_familiarity": generation["dropout_sessions_without_word_familiarity"],
+        "canonical_word_familiarity_mismatches": 0,
+        "completed_analysis_rows_missing_word_known": 0,
+        "completed_analysis_rows_missing_word_submitted_at": 0,
         "ratings.csv": expected_total_trials,
         "assignments.csv": participant_count * TRIAL_COUNT,
         "sessions.csv": participant_count,
         "counterbalance.csv": participant_count,
         "analysis.csv": expected_analysis,
         "quality.csv": participant_count,
+        "word-familiarity.csv": expected_word_familiarity,
     }
     for key, expected_value in expected.items():
         actual = exports.get(key) if key.endswith(".csv") else checks.get(key)
@@ -1001,6 +1268,14 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         failures.append("max_replay_count should show more than one replay in at least one trial")
     if checks["missing_response_order"] != 0:
         failures.append("all saved main trials should include response_order")
+    if checks["known_word_responses"] <= 0 or checks["unknown_word_responses"] <= 0:
+        failures.append("word-familiarity simulation should include both known and unknown responses")
+    capelin_response_count = scalar(
+        conn,
+        "SELECT COUNT(*) FROM word_familiarity_responses WHERE word_number = 23 AND target_word = 'capelin'",
+    )
+    if capelin_response_count and checks["capelin_known_responses"] >= capelin_response_count:
+        failures.append("capelin should be unknown for at least one simulated participant")
     if failures:
         raise AssertionError("; ".join(failures))
     return {

@@ -1,0 +1,9 @@
+ALTER TABLE sessions ADD COLUMN participant_age_years INTEGER;
+ALTER TABLE sessions ADD COLUMN english_variety TEXT;
+ALTER TABLE sessions ADD COLUMN english_variety_other TEXT;
+ALTER TABLE sessions ADD COLUMN gender TEXT;
+ALTER TABLE sessions ADD COLUMN gender_other TEXT;
+ALTER TABLE sessions ADD COLUMN english_teaching_experience TEXT;
+ALTER TABLE sessions ADD COLUMN english_teaching_experience_details TEXT;
+ALTER TABLE sessions ADD COLUMN linguistics_knowledge TEXT;
+ALTER TABLE sessions ADD COLUMN linguistics_knowledge_details TEXT;

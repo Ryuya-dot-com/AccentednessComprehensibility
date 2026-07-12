@@ -121,7 +121,12 @@ function checkRequiredAppSnippets(appText) {
     "error.data?.retryable === true",
     "Confirming saved responses...",
     "resumeExistingServerSessionIfNeeded",
-    "applyServerFamiliarityValues",
+    "applyServerBackgroundValues",
+    "showWordFamiliarityChecklist",
+    'postJson("/api/session/word-familiarity"',
+    "state.wordFamiliarityRequired = data.word_familiarity_required !== false",
+    "if (state.wordFamiliarityRequired)",
+    "error.data?.reload_required === true",
     "serverCompletedTrialKeys",
     "serverCompletedDistractorIndexes",
   ];
@@ -135,6 +140,26 @@ function checkRequiredAppSnippets(appText) {
   }
   for (const snippet of forbidden) {
     if (appText.includes(snippet)) problems.push(`live app.js still contains forbidden snippet: ${snippet}`);
+  }
+  return problems;
+}
+
+function checkRequiredIndexSnippets(indexText) {
+  const required = [
+    'id="word-familiarity-panel"',
+    'id="word-familiarity-grid"',
+    "Review all 50 words",
+    "If you were unfamiliar with it",
+    "Rate how strong the speaker's <strong>accent</strong> sounded.",
+    "Rate how easy the word was to <strong>understand</strong>.",
+  ];
+  const problems = required
+    .filter((snippet) => !indexText.includes(snippet))
+    .map((snippet) => `live index.html missing snippet: ${snippet}`);
+  const accentIndex = indexText.indexOf("Rate how strong the speaker's");
+  const understandingIndex = indexText.indexOf("Rate how easy the word was");
+  if (accentIndex < 0 || understandingIndex < 0 || accentIndex > understandingIndex) {
+    problems.push("live task instructions are not Accentedness-first");
   }
   return problems;
 }
@@ -163,20 +188,40 @@ async function liveApiDryRunStartCheck(baseUrl) {
     rater_id: `live_check_${nonce}`,
     session_label: `live_check_${nonce}`,
     task_mode: "combined",
-    platform_version: "live_check",
+    platform_version: "pronunciation_rating_v0.7.0",
     seed: `live_check_${nonce}`,
     dry_run: "1",
     prolific_pid: `LIVE_CHECK_${nonce}`,
     prolific_study_id: "DRY_RUN",
     prolific_session_id: `LIVE_CHECK_SESSION_${nonce}`,
+    participant_age_years: 30,
+    english_variety: "american",
+    english_variety_other: "",
+    gender: "no_answer",
+    gender_other: "",
+    english_teaching_experience: "no",
+    english_teaching_experience_details: "",
+    linguistics_knowledge: "no",
+    linguistics_knowledge_details: "",
     japanese_familiarity_1_6: 3,
     chinese_familiarity_1_6: 3,
     counterbalance: { enabled: true },
     practice_assignment: [],
   };
+  const resumePayload = {
+    rater_id: payload.rater_id,
+    session_label: payload.session_label,
+    platform_version: "pronunciation_rating_v0.7.0",
+    dry_run: "1",
+    resume_only: true,
+    prolific_pid: payload.prolific_pid,
+    prolific_study_id: payload.prolific_study_id,
+    prolific_session_id: payload.prolific_session_id,
+    counterbalance: { enabled: true },
+  };
   const result = await postJson(baseUrl, "/api/session/start", payload);
   const duplicate = result.response.status === 200 && result.data.ok === true
-    ? await postJson(baseUrl, "/api/session/start", payload)
+    ? await postJson(baseUrl, "/api/session/start", resumePayload)
     : null;
   const assignment = Array.isArray(result.data.main_assignment)
     ? result.data.main_assignment
@@ -211,9 +256,16 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
           ...(Array.isArray(duplicate.data.saved_trials) ? [] : ["duplicate start did not return saved_trials"]),
           ...(Array.isArray(duplicate.data.distractor_completed_trial_indexes) ? [] : ["duplicate start did not return distractor_completed_trial_indexes"]),
-          ...(["practice", "main", "complete"].includes(duplicateResume.next_phase) ? [] : ["duplicate start did not return a valid resume.next_phase"]),
+          ...(["practice", "main", "word_familiarity", "complete"].includes(duplicateResume.next_phase) ? [] : ["duplicate start did not return a valid resume.next_phase"]),
+          ...(duplicate.data.word_familiarity_required === true ? [] : ["duplicate start did not preserve word_familiarity_required"]),
+          ...(Array.isArray(duplicate.data.word_familiarity) ? [] : ["duplicate start did not return word_familiarity"]),
           ...(Number(duplicate.data.japanese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original japanese_familiarity_1_6"]),
           ...(Number(duplicate.data.chinese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original chinese_familiarity_1_6"]),
+          ...(Number(duplicate.data.participant_age_years) === 30 ? [] : ["duplicate start did not return original participant_age_years"]),
+          ...(duplicate.data.english_variety === "american" ? [] : ["duplicate start did not return original english_variety"]),
+          ...(duplicate.data.gender === "no_answer" ? [] : ["duplicate start did not return original gender"]),
+          ...(duplicate.data.english_teaching_experience === "no" ? [] : ["duplicate start did not return original english_teaching_experience"]),
+          ...(duplicate.data.linguistics_knowledge === "no" ? [] : ["duplicate start did not return original linguistics_knowledge"]),
         ]
       : []),
   ];
@@ -289,7 +341,10 @@ const repoManifestLooksDemo = manifestRows.length < 2497 || manifestRows.some((r
 const checks = [
   {
     name: "Index security headers",
-    problems: checkSecurityHeaders(index.response, "index"),
+    problems: [
+      ...checkSecurityHeaders(index.response, "index"),
+      ...checkRequiredIndexSnippets(index.text),
+    ],
     summary: JSON.stringify(summarizeHeaders(index.response)),
   },
   {

@@ -21,6 +21,21 @@ import {
   safeJson,
 } from "./_utils.js";
 
+const SESSION_BACKGROUND_FIELDS = new Set([
+  "participant_age_years",
+  "english_variety",
+  "english_variety_other",
+  "gender",
+  "gender_other",
+  "english_teaching_experience",
+  "english_teaching_experience_details",
+  "linguistics_knowledge",
+  "linguistics_knowledge_details",
+  "japanese_familiarity_1_6",
+  "chinese_familiarity_1_6",
+  "background",
+]);
+
 function normalizeResponse(value) {
   return cleanText(value)
     .toLowerCase()
@@ -35,6 +50,13 @@ function assertOptionalAllowed(name, value, allowedValues) {
   const text = cleanText(value);
   if (!text) return;
   assertAllowed(name, text, allowedValues);
+}
+
+function rawTrialPayload(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return {};
+  return Object.fromEntries(
+    Object.entries(row).filter(([key]) => !SESSION_BACKGROUND_FIELDS.has(key)),
+  );
 }
 
 async function insertNonCriticalEvent(db, event) {
@@ -317,7 +339,7 @@ export async function onRequestPost(context) {
         nullableNumber(row.unidentified_selected_rt_ms),
         nullableText(row.completed_at) || receivedAt,
         receivedAt,
-        safeJson(row),
+        safeJson(rawTrialPayload(row)),
       )
       .run();
 

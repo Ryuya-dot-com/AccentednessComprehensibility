@@ -237,8 +237,14 @@ export function nullableText(value) {
 
 export function nullableInt(value) {
   if (value === null || value === undefined || value === "") return null;
-  const number = Number.parseInt(value, 10);
-  return Number.isFinite(number) ? number : null;
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!/^[+-]?\d+$/.test(text)) return null;
+  const number = Number(text);
+  return Number.isSafeInteger(number) ? number : null;
 }
 
 export function nullableNumber(value) {
@@ -412,7 +418,10 @@ export async function verifyTurnstile(request, env, token) {
 
 export function csvCell(value) {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  let text = String(value);
+  if (typeof value === "string" && /^\s*[=+\-@]/u.test(text)) {
+    text = `'${text}`;
+  }
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

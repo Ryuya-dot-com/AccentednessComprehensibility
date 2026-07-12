@@ -16,8 +16,18 @@ CREATE TABLE IF NOT EXISTS sessions (
   seed TEXT,
   user_agent TEXT,
   timezone TEXT,
+  participant_age_years INTEGER,
+  english_variety TEXT,
+  english_variety_other TEXT,
+  gender TEXT,
+  gender_other TEXT,
+  english_teaching_experience TEXT,
+  english_teaching_experience_details TEXT,
+  linguistics_knowledge TEXT,
+  linguistics_knowledge_details TEXT,
   japanese_familiarity_1_6 INTEGER,
   chinese_familiarity_1_6 INTEGER,
+  word_familiarity_required INTEGER NOT NULL DEFAULT 0,
   completion_code TEXT,
   session_token_hash TEXT,
   turnstile_verified INTEGER NOT NULL DEFAULT 0,
@@ -180,6 +190,17 @@ CREATE TABLE IF NOT EXISTS rating_trials (
   FOREIGN KEY(assignment_id) REFERENCES rating_assignments(id)
 );
 
+CREATE TABLE IF NOT EXISTS word_familiarity_responses (
+  session_id TEXT NOT NULL,
+  word_number INTEGER NOT NULL CHECK(word_number BETWEEN 1 AND 50),
+  target_word TEXT NOT NULL,
+  word_known INTEGER NOT NULL CHECK(word_known IN (0, 1)),
+  submitted_at TEXT NOT NULL,
+  submitted_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(session_id, word_number),
+  FOREIGN KEY(session_id) REFERENCES sessions(id)
+);
+
 CREATE TABLE IF NOT EXISTS event_logs (
   id TEXT PRIMARY KEY,
   session_id TEXT,
@@ -249,6 +270,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_prolific_pid_study_unique
 CREATE INDEX IF NOT EXISTS idx_assignments_session ON rating_assignments(session_id, phase, trial_index);
 CREATE INDEX IF NOT EXISTS idx_trials_session ON rating_trials(session_id, phase, trial_index);
 CREATE INDEX IF NOT EXISTS idx_trials_participant ON rating_trials(participant_id);
+CREATE INDEX IF NOT EXISTS idx_word_familiarity_target
+  ON word_familiarity_responses(target_word, word_known);
 CREATE INDEX IF NOT EXISTS idx_events_session ON event_logs(session_id, event_at);
 CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_cell ON counterbalance_allocations(cell_id, status);
 CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_updated ON counterbalance_allocations(status, updated_at);
