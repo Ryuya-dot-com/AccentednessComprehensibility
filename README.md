@@ -39,16 +39,21 @@ http://127.0.0.1:8765/?manual=1&local=1
    - 4 selected ElevenLabs MP3 combined trials.
    - Each trial first asks for the typed English word, then shows a separate rating page.
    - If the word cannot be identified, participants can mark `I could not identify the word` instead of typing a forced guess.
-   - The correct word and reference ratings are shown after each practice response.
+   - The word played and Accentedness/Comprehensibility reference ratings are shown after each practice response.
 9. For each sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then rate accentedness followed by comprehensibility as displayed from top to bottom.
 10. In the server-backed counterbalanced task, complete a short calculation distractor task between main stimulus-list blocks.
-11. At the end, the participant is returned to Prolific only after the server marks the session as completed. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved trials remain in D1, but no Prolific completion URL is issued.
+11. After the final rating, review the 50-word familiarity checklist. Check words known before the study and leave unfamiliar words blank; all 50 explicit 0/1 responses are saved.
+12. The participant is returned to Prolific only after all trials and the required checklist are saved and the server marks the session as completed. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved data remain in D1, but no Prolific completion URL is issued.
 
 ## GitHub Audio Workflow
 
 Use `remote_manifest.csv` when stimulus recordings are already uploaded to GitHub, GitHub Pages, Cloudflare Pages, R2, or another static host. The bundled `remote_manifest.csv` is a small demo manifest, not a production counterbalance manifest. For production, replace it with the final counterbalance-ready manifest or set `COUNTERBALANCE_MANIFEST_URL`. A custom manifest URL is available through the `Use a custom stimulus manifest` option for local/manual preview workflows.
 
 For the Cloudflare/Prolific version, server-side counterbalancing is enabled by default. The server reads the authoritative stimulus pool from `remote_manifest.csv`, or from the `COUNTERBALANCE_MANIFEST_URL` Pages secret when that secret is set, and assigns each participant to one of 20 counterbalance cells. External manifest URLs must use HTTPS, and `COUNTERBALANCE_ALLOWED_HOSTS` can restrict manifest/audio hosts. The browser does not provide the main stimulus pool to `/api/session/start`. Participant write APIs require a per-session token issued by `/api/session/start`; the token hash is stored in D1 and the raw token is kept only in browser memory. In production, `/api/session/start` requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`; D1 enforces one `participant_key` per `STUDY_ID + PROLIFIC_PID`. Use `?manual=1` only for the older manual participant-selection workflow.
+
+Before practice, participants complete the required background questionnaire: age; first-language English variety; gender; familiarity with Japanese-accented and Chinese-accented English; English-teaching experience; and relevant linguistics knowledge. `Other`/`Yes` detail fields are conditionally required. The server accepts only whole-number ages from 1–120, exact enumerated choices, familiarity ratings from 1–6, and bounded free text. Responses are stored once on the `sessions` row rather than copied into every trial. A `resume_only` lookup restores an open Prolific session and its saved background responses without asking the participant to answer the questionnaire again.
+
+The final checklist contains the canonical 50 English target words in CounterBalance workbook number order. Meanings/translations are not shown because they would reveal the lexical knowledge being measured. A normalized `word_familiarity_responses` table stores one `word_known` value per session and word number. `analysis.csv` joins the appropriate 0/1 value to each main-trial row, so trials such as `capelin` can be filtered without inferring unfamiliarity from the dictation response. Sessions started by v0.6 and earlier remain compatible and export a blank checklist value rather than an incorrect zero.
 
 For live dry runs, open `https://accentednesscomprehensibility.pages.dev/admin/dry-run.html` after Cloudflare Access login. The page generates a unique URL with `STUDY_ID=DRY_RUN`, `dry_run=1`, and synthetic Prolific-style IDs. Dry-run sessions use the same server manifest, block construction, and counterbalance assignment code as production, but their counterbalance allocation statuses are stored as `dry_run_*`. They are excluded from `analysis.csv`, `quality.csv`, and production counterbalance counts; restricted raw exports still include them for audit.
 
@@ -253,7 +258,7 @@ Current practice audio uses selected ElevenLabs MP3 files:
   - `pizza`: `JPN/accented`
   - `sofa`: `CHN/accented`
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
-- Practice feedback shows the correct word and reference ratings. It does not ask participants to justify their ratings.
+- Practice feedback uses `The word played`, then shows Accentedness followed by Comprehensibility reference ratings. It does not ask participants to justify their ratings.
 
 Practice audio paths are under `practice_training_audio/elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703/`. The current non-ENG reference ratings are temporary researcher-selected values for dry-run and can be revised after collaborator listening review.
 
@@ -302,10 +307,11 @@ Server-side files:
 ```text
 functions/api/
   session/start.js       # create a rater session and persist trial order
+  session/word-familiarity.js # save the final 50-word checklist
   trial.js               # save each rating trial immediately
   event.js               # save UI/event logs
   session/complete.js    # mark a session complete
-  admin/summary.js       # admin counts
+  admin/summary.js       # admin counts and paginated background-response rows
   admin/finalize-stale.js # mark stale started sessions as dropout/abandoned
   admin/export/[dataset].js
 admin/
@@ -383,6 +389,18 @@ If the D1 database was created before Sheet2 speaker-pattern metadata was added,
 wrangler d1 execute <DB_NAME> --file=./db/migrations/0011_speaker_pattern.sql
 ```
 
+If the D1 database was created before the background questionnaire was added, run this migration once:
+
+```sh
+wrangler d1 execute <DB_NAME> --file=./db/migrations/0012_background_questionnaire.sql
+```
+
+If the D1 database was created before the final word-familiarity checklist was added, run this migration once before deploying v0.7 code:
+
+```sh
+wrangler d1 execute <DB_NAME> --file=./db/migrations/0013_word_familiarity.sql
+```
+
 For a partially migrated Cloudflare D1 database, use the guarded schema updater after `npx wrangler login`. It checks live columns first, exports a backup when applying, and adds only missing additive columns:
 
 ```sh
@@ -435,7 +453,7 @@ This preserves the package manifest rows and fills `audio_url` from `audio_file`
 Admin APIs fail closed when `ADMIN_TOKEN` is missing.
 For production, protect `/admin/*` and `/api/admin/*` with Cloudflare Access and set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`; `ADMIN_TOKEN` remains as a second layer.
 
-Rater responses are saved trial-by-trial to D1. The local ZIP download remains as a backup, but the server-backed workflow advances only after the current response has been saved. The Prolific return URL is issued only by `/api/session/complete` after all trials are present and the session token is valid.
+Rater responses are saved trial-by-trial to D1. The final checklist is saved as 50 normalized rows before completion. The local ZIP download remains as a backup and includes `*_word_familiarity.csv`. The Prolific return URL is issued only by `/api/session/complete` after all trials and any version-required checklist rows are present and the session token is valid.
 
 Each saved trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Audio replay starts are also logged in `events.csv` with replay status and relative play time.
 
@@ -447,14 +465,17 @@ The researcher export page is:
 /admin/
 ```
 
+After Cloudflare Access login and `ADMIN_TOKEN` entry, the admin page shows a bounded, paginated table of recent participant background responses and checklist counts. Prolific IDs are deliberately shown in full in this protected view. Live sessions are shown by default; enable `Include dry runs` to inspect deployment checks. Free-text responses are inserted with `textContent`, not HTML. Existing sessions created before the questionnaire display blank background fields.
+
 Use `Download all CSVs ZIP` for routine exports. It downloads every CSV below in one archive while preserving the individual long-format CSV files for analysis scripts and audit checks.
 
 Available CSV exports:
 
-- `analysis.csv`: analysis-ready main-trial responses from completed sessions only. Prolific IDs are excluded and rows are labeled with `analysis_participant_id`.
-- `quality.csv`: anonymized one-row-per-session quality export with completion status, missing-trial counts, active elapsed time, replay summaries, distractor accuracy/RT summaries, timing summaries, unidentified-word counts, manual-review counts, and response-quality flags.
+- `analysis.csv`: analysis-ready main-trial responses from completed sessions only. Prolific IDs are excluded; rows retain `analysis_participant_id`, add a stable `session_id` join key, and include the structured background covariates plus the trial word's `word_known` value.
+- `quality.csv`: anonymized one-row-per-session quality export with completion status, missing-trial/checklist counts, known-word count, active elapsed time, replay summaries, distractor accuracy/RT summaries, timing summaries, unidentified-word counts, manual-review counts, and response-quality flags.
 - `ratings.csv`: restricted raw export with all practice and main responses, response times, response-order fields, rating interaction fields, intelligibility fields, 9-point rating values, practice feedback/reasons, familiarity ratings, and audio metadata.
-- `sessions.csv`: participant/session/prolific metadata, `participant_key`, familiarity ratings, completion code, counterbalance cell, millisecond audit fields, duplicate-start counts, and completion status.
+- `sessions.csv`: restricted participant/session/prolific metadata with the full Prolific ID, `participant_key`, all background answers, checklist coverage/known count, completion code, counterbalance cell, millisecond audit fields, duplicate-start counts, and completion status.
+- `word-familiarity.csv`: restricted long-format export with 50 explicit word-number/word-known rows for each submitted checklist and full Prolific identifiers.
 - `assignments.csv`: trial order shown to each participant, including counterbalance list/L1/pronunciation fields.
 - `events.csv`: session start, trial display, audio playback, first key, save, pause, and completion logs.
 - `counterbalance.csv`: cell allocation logs and completion status.
@@ -464,6 +485,27 @@ For local export smoke testing without Cloudflare, generate a 200-participant D1
 ```sh
 python scripts/generate_smoke_test_200.py --participants 200
 ```
+
+For a real local Pages Functions + D1 integration test, create an ignored `wrangler.toml` from `wrangler.toml.example`, set its D1 database ID, and use a fresh persistence directory:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --local \
+  --persist-to /tmp/accentedness-background-d1 \
+  --file db/schema.sql --yes
+
+npx wrangler pages dev . --port 8788 \
+  --persist-to /tmp/accentedness-background-d1 \
+  --binding ADMIN_TOKEN=local-admin-test \
+  --binding PROLIFIC_COMPLETION_CODE=LOCAL-COMPLETE \
+  --binding REQUIRE_TURNSTILE=0 \
+  --binding ENVIRONMENT=development
+
+node scripts/test_background_questionnaire_local.mjs \
+  --base-url http://127.0.0.1:8788/ \
+  --admin-token local-admin-test
+```
+
+The integration test rejects malformed ages and checklist payloads, verifies exact three-part Prolific resume identity, confirms that a missing `resume_only` lookup does not write, accepts a 50-word all-unfamiliar response, tests v0.6 compatibility, verifies CSV formula neutralization and the unmasked Prolific ID, and checks sessions, word-familiarity, quality, and analysis exports.
 
 The generated SQLite database and CSV files are written to `exports/smoke_test_200/`.
 

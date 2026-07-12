@@ -16,6 +16,10 @@ wrangler.toml
 rating_trials.csv
 rating_assignments.csv
 sessions.csv
+word_familiarity.csv
+analysis_main_completed.csv
+data_quality_sessions.csv
+rating_platform_exports.zip
 event_logs.csv
 counterbalance_allocations.csv
 

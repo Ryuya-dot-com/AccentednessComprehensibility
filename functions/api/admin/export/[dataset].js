@@ -82,6 +82,19 @@ const EXPORTS = {
       "accentedness_last_rt_ms",
       "accentedness_selection_count",
       "unidentified_selected_rt_ms",
+      "session_id",
+      "participant_age_years",
+      "english_variety",
+      "english_variety_other",
+      "gender",
+      "gender_other",
+      "english_teaching_experience",
+      "english_teaching_experience_details",
+      "linguistics_knowledge",
+      "linguistics_knowledge_details",
+      "word_familiarity_required",
+      "word_known",
+      "word_familiarity_submitted_at",
     ],
     sql: `SELECT
         s.id AS session_id,
@@ -91,6 +104,18 @@ const EXPORTS = {
         s.pronunciation_style,
         s.japanese_familiarity_1_6,
         s.chinese_familiarity_1_6,
+        s.participant_age_years,
+        s.english_variety,
+        s.english_variety_other,
+        s.gender,
+        s.gender_other,
+        s.english_teaching_experience,
+        s.english_teaching_experience_details,
+        s.linguistics_knowledge,
+        s.linguistics_knowledge_details,
+        s.word_familiarity_required,
+        wf.word_known,
+        wf.submitted_at AS word_familiarity_submitted_at,
         rt.trial_index,
         rt.block_index,
         rt.block_list,
@@ -144,6 +169,10 @@ const EXPORTS = {
         rt.unidentified_selected_rt_ms
       FROM rating_trials rt
       JOIN sessions s ON s.id = rt.session_id
+      LEFT JOIN word_familiarity_responses wf
+        ON wf.session_id = rt.session_id
+       AND wf.word_number = CAST(rt.word_number AS INTEGER)
+       AND LOWER(wf.target_word) = LOWER(rt.target_word)
       WHERE s.status = 'completed'
         AND rt.phase = 'main'
         AND ${liveSessionSql("s")}
@@ -311,6 +340,19 @@ const EXPORTS = {
       "duplicate_start_last_at_ms",
       "timezone",
       "user_agent",
+      "participant_age_years",
+      "english_variety",
+      "english_variety_other",
+      "gender",
+      "gender_other",
+      "english_teaching_experience",
+      "english_teaching_experience_details",
+      "linguistics_knowledge",
+      "linguistics_knowledge_details",
+      "word_familiarity_required",
+      "word_familiarity_response_count",
+      "known_word_count",
+      "word_familiarity_submitted_at",
     ],
     sql: `SELECT
         id, role, rater_id, session_label, task_mode, platform_version,
@@ -323,9 +365,56 @@ const EXPORTS = {
         completed_trial_count, completion_url_issued_at,
         completion_url_issued_at_ms, completion_url_issued_count,
         duplicate_start_count, duplicate_start_last_at, duplicate_start_last_at_ms,
-        timezone, user_agent
-      FROM sessions
+        timezone, user_agent,
+        participant_age_years, english_variety, english_variety_other,
+        gender, gender_other, english_teaching_experience,
+        english_teaching_experience_details, linguistics_knowledge,
+        linguistics_knowledge_details,
+        word_familiarity_required,
+        (SELECT COUNT(*)
+         FROM word_familiarity_responses wf
+         WHERE wf.session_id = s.id) AS word_familiarity_response_count,
+        (SELECT SUM(wf.word_known)
+         FROM word_familiarity_responses wf
+         WHERE wf.session_id = s.id) AS known_word_count,
+        (SELECT MAX(wf.submitted_at)
+         FROM word_familiarity_responses wf
+         WHERE wf.session_id = s.id) AS word_familiarity_submitted_at
+      FROM sessions s
       ORDER BY started_at`,
+  },
+  "word-familiarity": {
+    fileName: "word_familiarity.csv",
+    columns: [
+      "session_id",
+      "rater_id",
+      "prolific_pid",
+      "prolific_study_id",
+      "prolific_session_id",
+      "platform_version",
+      "session_status",
+      "word_number",
+      "target_word",
+      "word_known",
+      "submitted_at",
+      "submitted_at_ms",
+    ],
+    sql: `SELECT
+        wf.session_id,
+        s.rater_id,
+        s.prolific_pid,
+        s.prolific_study_id,
+        s.prolific_session_id,
+        s.platform_version,
+        s.status AS session_status,
+        wf.word_number,
+        wf.target_word,
+        wf.word_known,
+        wf.submitted_at,
+        wf.submitted_at_ms
+      FROM word_familiarity_responses wf
+      JOIN sessions s ON s.id = wf.session_id
+      ORDER BY s.started_at_ms, s.started_at, wf.session_id, wf.word_number`,
   },
   assignments: {
     fileName: "rating_assignments.csv",
@@ -456,6 +545,10 @@ const EXPORTS = {
       "counterbalance_cell",
       "list_comb",
       "pronunciation_style",
+      "word_familiarity_required",
+      "word_familiarity_response_count",
+      "known_word_count",
+      "missing_word_familiarity_count",
     ],
     sql: `SELECT
         s.id AS session_id,
@@ -501,7 +594,15 @@ const EXPORTS = {
         s.completion_url_issued_count,
         s.counterbalance_cell,
         s.list_comb,
-        s.pronunciation_style
+        s.pronunciation_style,
+        s.word_familiarity_required,
+        COALESCE(wf.word_familiarity_response_count, 0) AS word_familiarity_response_count,
+        COALESCE(wf.known_word_count, 0) AS known_word_count,
+        CASE
+           WHEN s.word_familiarity_required = 1
+           THEN MAX(0, 50 - COALESCE(wf.word_familiarity_response_count, 0))
+           ELSE 0
+         END AS missing_word_familiarity_count
       FROM sessions s
       LEFT JOIN rating_trials rt ON rt.session_id = s.id
       LEFT JOIN (
@@ -515,6 +616,14 @@ const EXPORTS = {
         WHERE event_type = 'distractor_complete'
         GROUP BY session_id
       ) de ON de.session_id = s.id
+      LEFT JOIN (
+        SELECT
+          session_id,
+          COUNT(*) AS word_familiarity_response_count,
+          SUM(word_known) AS known_word_count
+        FROM word_familiarity_responses
+        GROUP BY session_id
+      ) wf ON wf.session_id = s.id
       WHERE ${liveSessionSql("s")}
       GROUP BY s.id
       ORDER BY s.started_at_ms, s.started_at`,
@@ -530,6 +639,7 @@ const BUNDLE_DATASETS = [
   "assignments",
   "events",
   "counterbalance",
+  "word-familiarity",
 ];
 
 const ZIP_UTF8_FLAG = 0x0800;
@@ -706,7 +816,7 @@ export async function onRequestGet(context) {
     const exportSpec = EXPORTS[dataset];
     if (!wantsZip && !exportSpec) {
       return errorResponse(
-        "Unknown export. Use all.zip, analysis.csv, ratings.csv, sessions.csv, assignments.csv, events.csv, counterbalance.csv, or quality.csv.",
+        "Unknown export. Use all.zip, analysis.csv, ratings.csv, sessions.csv, assignments.csv, events.csv, counterbalance.csv, word-familiarity.csv, or quality.csv.",
         404,
       );
     }

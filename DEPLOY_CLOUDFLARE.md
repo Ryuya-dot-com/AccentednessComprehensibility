@@ -227,11 +227,34 @@ If the database was created before Sheet2 speaker-pattern metadata was added, ru
 npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0011_speaker_pattern.sql
 ```
 
+If the database was created before the participant background questionnaire was added, run this migration once:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0012_background_questionnaire.sql
+```
+
+Before deploying v0.7 or later, add the final 50-word familiarity table and the version-gated session flag:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0013_word_familiarity.sql
+```
+
+Apply this D1 migration before the Pages code. Existing v0.6 sessions receive `word_familiarity_required=0`, so they can finish without being misclassified as unfamiliar; new v0.7 sessions require all 50 rows before completion.
+
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
 ```sh
 node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility
 node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply
+```
+
+The updater includes all nine questionnaire columns, the word-familiarity requirement flag, and the normalized checklist table/index. For production, always write the backup outside the repository and apply the schema before deploying code that reads the new schema:
+
+```sh
+node scripts/apply_d1_schema_updates.mjs \
+  --database accentedness-comprehensibility \
+  --apply --backup-before-apply \
+  --backup-output /private/tmp/accentedness-d1-before-background.sql
 ```
 
 ## 6. Host Production Audio
@@ -433,7 +456,7 @@ Keep `ADMIN_TOKEN` enabled. The admin API requires both the Cloudflare Access JW
 
 ## 9. Deploy
 
-Deploy the current directory:
+This project is connected to GitHub. Merge the reviewed branch into the configured production branch (`main`) and let Cloudflare Pages Git integration create the production deployment. Use a direct Wrangler upload only as an explicitly documented fallback:
 
 ```sh
 npx wrangler pages deploy . --project-name accentednesscomprehensibility --branch main
@@ -457,7 +480,7 @@ Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
 ```
 
-The current public deployment fails the full check because live `/remote_manifest.csv` is still the 12-row demo manifest and the remote D1 database has not yet received `db/migrations/0011_speaker_pattern.sql`; live `/api/session/start` currently returns `D1_ERROR: table rating_assignments has no column named speaker_pattern_index`. Live `/app.js`, the selected ElevenLabs practice MP3 path, production config endpoint, security headers, and admin dry-run protection pass. Do not run Prolific participants until the live API dry-run start passes with the production manifest path.
+Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that the saved age/background choices and word-checklist requirement are returned by a questionnaire-free `resume_only` lookup.
 
 After Wrangler authentication is available, run the aggregate readiness audit:
 
@@ -513,6 +536,7 @@ After saving a few trials, confirm records exist in D1:
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS sessions FROM sessions;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS trials FROM rating_trials;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS events FROM event_logs;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS checklist_rows, SUM(word_known) AS known_words FROM word_familiarity_responses;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT cell_id, status, COUNT(*) AS n FROM counterbalance_allocations GROUP BY cell_id, status;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT block_index, block_list, COUNT(*) AS n FROM rating_assignments WHERE phase = 'main' GROUP BY block_index, block_list ORDER BY block_index;"
 ```
@@ -526,10 +550,13 @@ On `/admin/`, confirm that these CSV downloads work:
 - `assignments.csv`
 - `events.csv`
 - `counterbalance.csv`
+- `word-familiarity.csv`
 
 To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
 To test reload recovery, start a pilot session from a Prolific-style URL, save several practice/main trials, then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, the browser resumes at the first unsaved trial rather than the beginning, already completed block distractors are not repeated, and completion is issued only after the remaining assignments are saved.
+
+To test the final checklist, finish all ratings and confirm that the 50-word screen appears before any completion code or Prolific redirect. Leave `capelin` blank in a test response, submit all 50 explicit values, and verify `word-familiarity.csv` contains `word_number=23,target_word=capelin,word_known=0` while the matching `analysis.csv` trial rows also contain `word_known=0`. A zero-known-word submission is valid; failing to review/submit the checklist is not.
 
 To test unintelligible-word handling, complete a pilot trial using `I could not identify the word`. Confirm that the row is saved with `intelligibility_response_status=unidentified`, `intelligibility_unidentified=1`, `intelligibility_exact=0`, and no increase in `manual_review_count`.
 
@@ -551,7 +578,7 @@ https://accentednesscomprehensibility.pages.dev/?PROLIFIC_PID={{%PROLIFIC_PID%}}
 
 Do not include the completion code or completion URL in the Prolific participant URL. Store the full return URL in `PROLIFIC_COMPLETION_URL`, or store the code in `PROLIFIC_COMPLETION_CODE`.
 
-After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side `rating_assignments` row has a matching saved `rating_trials` row. If completion saving fails, the server detects missing assignments/trials, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
+After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side assignment has a saved rating and every version-required word-familiarity row is present. If completion saving fails, the server detects missing assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
 
 ## 13. Important Checks Before Production
 
@@ -567,7 +594,9 @@ Before running the actual study:
 - Apply `db/migrations/0009_response_order_metrics.sql` to existing D1 databases.
 - Apply `db/migrations/0010_staged_response_flow.sql` to existing D1 databases.
 - Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
-- For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`; it exports a SQL backup first and adds only missing columns.
+- Apply `db/migrations/0012_background_questionnaire.sql` to existing D1 databases, or confirm all nine columns through the guarded updater.
+- Apply `db/migrations/0013_word_familiarity.sql` before v0.7 code, or confirm the flag, table, and index through the guarded updater.
+- For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`; it exports a SQL backup first and applies only missing additive schema.
 - Confirm the Prolific Study URL includes `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`.
 - Protect `/admin/*` and `/api/admin/*` with Cloudflare Access; set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`.
 - Configure WAF rate limiting rules for participant and admin API paths.
@@ -596,6 +625,9 @@ Before running the actual study:
 - Confirm that one pilot run presents four 25-trial blocks with calculation distractor tasks between Blocks 1-3.
 - Confirm that the intended D1 data location or jurisdiction is acceptable for the ethics and data management plan.
 - Confirm that `/admin/` requires the real `ADMIN_TOKEN`.
+- Confirm that `/admin/` shows the full Prolific ID and all background responses, and that its live/dry-run filter and pagination work.
+- Confirm the final screen lists exactly the canonical 50 English words without translations, uses the corrected unfamiliar/blank instruction, and preserves Accentedness before Comprehensibility in task instructions and practice feedback.
+- Download `sessions.csv`, `word-familiarity.csv`, `quality.csv`, and `analysis.csv`; verify checklist coverage, `capelin` word number 23, trial-level `word_known`, questionnaire columns, and the stable `session_id` analysis join key.
 - Complete at least one full pilot run and one partial dropout pilot, then download all CSV files from `/admin/`.
 
 ## Local UI Testing Only

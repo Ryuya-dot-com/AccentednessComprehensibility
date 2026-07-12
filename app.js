@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.5.1";
+  const VERSION = "pronunciation_rating_v0.7.0";
   const DEFAULT_REMOTE_MANIFEST_URL = "remote_manifest.csv";
   const AUDIO_EXTENSIONS = /\.(wav|mp3|m4a|ogg|webm)$/i;
   const REQUIRED_MANIFEST_FILE_COLUMNS = [
@@ -90,12 +90,31 @@
     },
   ];
 
+  // Canonical CounterBalance.xlsx Sheet1 order. Keep this in sync with
+  // functions/api/_word-familiarity.js; production preflight checks all 50 words.
+  const TARGET_WORDS = Object.freeze([
+    "tweezers", "persimmon", "thermometer", "razor", "mantis",
+    "pacifier", "podium", "labyrinth", "loquat", "scapula",
+    "burdock", "protractor", "acorn", "scalpel", "cocoon",
+    "cicada", "toboggan", "chisel", "casket", "detergent",
+    "nostril", "rickshaw", "capelin", "lotus", "tadpole",
+    "burglar", "xylophone", "walrus", "icicle", "abalone",
+    "porcupine", "carousel", "faucet", "cobweb", "pylon",
+    "pupa", "binoculars", "spatula", "lawnmower", "ladle",
+    "raccoon", "syringe", "catapult", "treadmill", "wardrobe",
+    "strainer", "parakeet", "scallop", "toupee", "abacus",
+  ].map((targetWord, index) => Object.freeze({
+    word_number: index + 1,
+    target_word: targetWord,
+  })));
+
   const els = {
     versionLabel: document.getElementById("version-label"),
     setupPanel: document.getElementById("setup-panel"),
     taskPanel: document.getElementById("task-panel"),
     breakPanel: document.getElementById("break-panel"),
     distractorPanel: document.getElementById("distractor-panel"),
+    wordFamiliarityPanel: document.getElementById("word-familiarity-panel"),
     completePanel: document.getElementById("complete-panel"),
     setupStatus: document.getElementById("setup-status"),
     statusAudio: document.getElementById("status-audio"),
@@ -111,6 +130,16 @@
     participantIdField: document.getElementById("participant-id-field"),
     prolificDetectedNote: document.getElementById("prolific-detected-note"),
     raterId: document.getElementById("rater-id"),
+    participantAge: document.getElementById("participant-age"),
+    englishVarietyOther: document.getElementById("english-variety-other"),
+    englishVarietyOtherField: document.getElementById("english-variety-other-field"),
+    genderOther: document.getElementById("gender-other"),
+    genderOtherField: document.getElementById("gender-other-field"),
+    englishTeachingExperienceDetails: document.getElementById("english-teaching-experience-details"),
+    englishTeachingExperienceDetailsField: document.getElementById("english-teaching-experience-details-field"),
+    linguisticsKnowledgeDetails: document.getElementById("linguistics-knowledge-details"),
+    linguisticsKnowledgeDetailsField: document.getElementById("linguistics-knowledge-details-field"),
+    backgroundValidationMessage: document.getElementById("background-validation-message"),
     sessionId: document.getElementById("session-id"),
     seed: document.getElementById("seed"),
     taskMode: document.getElementById("task-mode"),
@@ -163,6 +192,11 @@
     distractorProblems: document.getElementById("distractor-problems"),
     distractorStatus: document.getElementById("distractor-status"),
     distractorSubmitBtn: document.getElementById("distractor-submit-btn"),
+    wordFamiliarityGrid: document.getElementById("word-familiarity-grid"),
+    wordFamiliarityCount: document.getElementById("word-familiarity-count"),
+    wordFamiliarityConfirmed: document.getElementById("word-familiarity-confirmed"),
+    wordFamiliarityStatus: document.getElementById("word-familiarity-status"),
+    wordFamiliaritySubmitBtn: document.getElementById("word-familiarity-submit-btn"),
     completeMessage: document.getElementById("complete-message"),
     completionCode: document.getElementById("completion-code"),
     prolificReturnLink: document.getElementById("prolific-return-link"),
@@ -206,6 +240,8 @@
     serverResume: null,
     serverCompletedTrialKeys: new Set(),
     serverCompletedDistractorIndexes: new Set(),
+    wordFamiliarity: [],
+    wordFamiliarityRequired: true,
     productionMode: false,
     onboardingStep: "identity",
     securityConfigLoaded: false,
@@ -274,7 +310,14 @@
   }
 
   function showOnly(panel) {
-    [els.setupPanel, els.taskPanel, els.breakPanel, els.distractorPanel, els.completePanel].forEach((el) => {
+    [
+      els.setupPanel,
+      els.taskPanel,
+      els.breakPanel,
+      els.distractorPanel,
+      els.wordFamiliarityPanel,
+      els.completePanel,
+    ].forEach((el) => {
       el.classList.toggle("hidden", el !== panel);
     });
   }
@@ -336,12 +379,20 @@
     return selected ? selected.value : "";
   }
 
+  function textInputValue(element) {
+    return element ? element.value.trim() : "";
+  }
+
   function setRadioValue(name, value) {
     const normalized = String(value || "");
-    if (!normalized) return;
     document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
       input.checked = input.value === normalized;
     });
+  }
+
+  function setTextValue(element, value) {
+    if (!element) return;
+    element.value = String(value ?? "").trim();
   }
 
   function familiarityValues() {
@@ -351,15 +402,177 @@
     };
   }
 
-  function applyServerFamiliarityValues(data) {
+  function backgroundValues() {
+    const englishVariety = selectedRadioValue("english-variety");
+    const gender = selectedRadioValue("gender");
+    const englishTeachingExperience = selectedRadioValue("english-teaching-experience");
+    const linguisticsKnowledge = selectedRadioValue("linguistics-knowledge");
+    return {
+      participant_age_years: textInputValue(els.participantAge),
+      english_variety: englishVariety,
+      english_variety_other: englishVariety === "other" ? textInputValue(els.englishVarietyOther) : "",
+      gender,
+      gender_other: gender === "other" ? textInputValue(els.genderOther) : "",
+      english_teaching_experience: englishTeachingExperience,
+      english_teaching_experience_details:
+        englishTeachingExperience === "yes" ? textInputValue(els.englishTeachingExperienceDetails) : "",
+      linguistics_knowledge: linguisticsKnowledge,
+      linguistics_knowledge_details:
+        linguisticsKnowledge === "yes" ? textInputValue(els.linguisticsKnowledgeDetails) : "",
+      ...familiarityValues(),
+    };
+  }
+
+  function setConditionalField(field, input, visible) {
+    if (!field || !input) return;
+    field.classList.toggle("hidden", !visible);
+    input.disabled = !visible;
+    if (!visible) input.removeAttribute("aria-invalid");
+  }
+
+  function syncBackgroundConditionals() {
+    setConditionalField(
+      els.englishVarietyOtherField,
+      els.englishVarietyOther,
+      selectedRadioValue("english-variety") === "other",
+    );
+    setConditionalField(
+      els.genderOtherField,
+      els.genderOther,
+      selectedRadioValue("gender") === "other",
+    );
+    setConditionalField(
+      els.englishTeachingExperienceDetailsField,
+      els.englishTeachingExperienceDetails,
+      selectedRadioValue("english-teaching-experience") === "yes",
+    );
+    setConditionalField(
+      els.linguisticsKnowledgeDetailsField,
+      els.linguisticsKnowledgeDetails,
+      selectedRadioValue("linguistics-knowledge") === "yes",
+    );
+  }
+
+  function validAge(value) {
+    if (!/^\d{1,3}$/.test(value)) return false;
+    const age = Number(value);
+    return Number.isInteger(age) && age >= 1 && age <= 120;
+  }
+
+  function backgroundValidationIssue() {
+    const values = backgroundValues();
+    if (!validAge(values.participant_age_years)) {
+      return { control: els.participantAge, message: "Enter your age as a whole number from 1 to 120." };
+    }
+    if (!values.english_variety) {
+      return {
+        control: document.querySelector('input[name="english-variety"]'),
+        message: "Select the variety of English you speak as your first language.",
+      };
+    }
+    if (values.english_variety === "other" && !values.english_variety_other) {
+      return { control: els.englishVarietyOther, message: "Specify your other variety of English." };
+    }
+    if (values.english_variety_other.length > 80) {
+      return { control: els.englishVarietyOther, message: "Keep the English variety description within 80 characters." };
+    }
+    if (!values.gender) {
+      return { control: document.querySelector('input[name="gender"]'), message: "Select a gender response." };
+    }
+    if (values.gender === "other" && !values.gender_other) {
+      return { control: els.genderOther, message: "Specify your gender response." };
+    }
+    if (values.gender_other.length > 80) {
+      return { control: els.genderOther, message: "Keep the gender description within 80 characters." };
+    }
+    if (!values.japanese_familiarity_1_6) {
+      return {
+        control: document.querySelector('input[name="japanese-familiarity"]'),
+        message: "Rate your familiarity with Japanese-accented English.",
+      };
+    }
+    if (!values.chinese_familiarity_1_6) {
+      return {
+        control: document.querySelector('input[name="chinese-familiarity"]'),
+        message: "Rate your familiarity with Chinese-accented English.",
+      };
+    }
+    if (!values.english_teaching_experience) {
+      return {
+        control: document.querySelector('input[name="english-teaching-experience"]'),
+        message: "Indicate whether you have English teaching experience.",
+      };
+    }
+    if (values.english_teaching_experience === "yes" && !values.english_teaching_experience_details) {
+      return {
+        control: els.englishTeachingExperienceDetails,
+        message: "Describe your English teaching experience.",
+      };
+    }
+    if (values.english_teaching_experience_details.length > 1000) {
+      return {
+        control: els.englishTeachingExperienceDetails,
+        message: "Keep the English teaching experience description within 1000 characters.",
+      };
+    }
+    if (!values.linguistics_knowledge) {
+      return {
+        control: document.querySelector('input[name="linguistics-knowledge"]'),
+        message: "Indicate whether you have relevant linguistics knowledge.",
+      };
+    }
+    if (values.linguistics_knowledge === "yes" && !values.linguistics_knowledge_details) {
+      return { control: els.linguisticsKnowledgeDetails, message: "Describe your relevant linguistics knowledge." };
+    }
+    if (values.linguistics_knowledge_details.length > 1000) {
+      return {
+        control: els.linguisticsKnowledgeDetails,
+        message: "Keep the linguistics knowledge description within 1000 characters.",
+      };
+    }
+    return null;
+  }
+
+  function clearBackgroundValidation() {
+    document.querySelectorAll("[data-background-field][aria-invalid='true']").forEach((control) => {
+      control.removeAttribute("aria-invalid");
+    });
+    if (els.backgroundValidationMessage) {
+      els.backgroundValidationMessage.textContent = "";
+      els.backgroundValidationMessage.classList.add("hidden");
+    }
+  }
+
+  function showBackgroundValidationIssue(issue) {
+    clearBackgroundValidation();
+    if (!issue) return;
+    issue.control?.setAttribute("aria-invalid", "true");
+    if (els.backgroundValidationMessage) {
+      els.backgroundValidationMessage.textContent = issue.message;
+      els.backgroundValidationMessage.classList.remove("hidden");
+    }
+    issue.control?.focus();
+  }
+
+  function applyServerBackgroundValues(data) {
+    setTextValue(els.participantAge, data?.participant_age_years);
+    setRadioValue("english-variety", data?.english_variety);
+    setTextValue(els.englishVarietyOther, data?.english_variety_other);
+    setRadioValue("gender", data?.gender);
+    setTextValue(els.genderOther, data?.gender_other);
+    setRadioValue("english-teaching-experience", data?.english_teaching_experience);
+    setTextValue(els.englishTeachingExperienceDetails, data?.english_teaching_experience_details);
+    setRadioValue("linguistics-knowledge", data?.linguistics_knowledge);
+    setTextValue(els.linguisticsKnowledgeDetails, data?.linguistics_knowledge_details);
     setRadioValue("japanese-familiarity", data?.japanese_familiarity_1_6);
     setRadioValue("chinese-familiarity", data?.chinese_familiarity_1_6);
+    syncBackgroundConditionals();
+    clearBackgroundValidation();
     updateSelectedMaterialSummary();
   }
 
-  function familiarityComplete() {
-    const values = familiarityValues();
-    return Boolean(values.japanese_familiarity_1_6 && values.chinese_familiarity_1_6);
+  function backgroundComplete() {
+    return backgroundValidationIssue() === null;
   }
 
   function participantIdComplete() {
@@ -374,9 +587,9 @@
   function onboardingStepComplete(step) {
     if (productionProlificLinkMissing()) return false;
     if (step === "identity") return participantIdComplete();
-    if (step === "familiarity") return familiarityComplete();
+    if (step === "familiarity") return backgroundComplete();
     if (step === "instructions") return true;
-    if (step === "ready") return participantIdComplete() && familiarityComplete();
+    if (step === "ready") return participantIdComplete() && backgroundComplete();
     return false;
   }
 
@@ -386,11 +599,7 @@
       return;
     }
     if (state.onboardingStep === "familiarity") {
-      const missingName = selectedRadioValue("japanese-familiarity")
-        ? "chinese-familiarity"
-        : "japanese-familiarity";
-      const firstRadio = document.querySelector(`input[name="${missingName}"]`);
-      firstRadio?.focus();
+      showBackgroundValidationIssue(backgroundValidationIssue());
     }
   }
 
@@ -403,7 +612,7 @@
     } else if (!participantIdComplete() && activeIndex > 0) {
       state.onboardingStep = "identity";
       activeIndex = 0;
-    } else if (!familiarityComplete() && activeIndex > 1) {
+    } else if (!backgroundComplete() && activeIndex > 1) {
       state.onboardingStep = "familiarity";
       activeIndex = 1;
     }
@@ -426,7 +635,8 @@
     if (els.onboardingNextBtn) {
       const isReadyStep = state.onboardingStep === "ready";
       els.onboardingNextBtn.classList.toggle("hidden", isReadyStep);
-      els.onboardingNextBtn.disabled = isReadyStep || !onboardingStepComplete(state.onboardingStep);
+      els.onboardingNextBtn.disabled =
+        isReadyStep || (state.onboardingStep !== "familiarity" && !onboardingStepComplete(state.onboardingStep));
     }
   }
 
@@ -436,11 +646,43 @@
     renderOnboarding();
   }
 
-  function advanceOnboarding() {
+  async function advanceOnboarding() {
     if (!onboardingStepComplete(state.onboardingStep)) {
       focusCurrentOnboardingRequirement();
       return;
     }
+    if (
+      state.onboardingStep === "identity" &&
+      PARTICIPANT_MODE &&
+      !state.serverSessionId &&
+      !backgroundComplete()
+    ) {
+      const originalLabel = els.onboardingNextBtn?.textContent || "Continue";
+      if (els.onboardingNextBtn) {
+        els.onboardingNextBtn.disabled = true;
+        els.onboardingNextBtn.textContent = "Checking for saved session...";
+      }
+      setSetupStatus("Checking for saved session");
+      try {
+        await startServerSession({ resumeOnly: true });
+        if (state.existingServerSession) {
+          state.running = true;
+          if (!state.practiceTrials.length) state.practiceTrials = buildPracticeTrials();
+          setSetupStatus("Resuming", true);
+          if (await resumeExistingServerSessionIfNeeded()) return;
+        }
+      } catch (error) {
+        if (error.status === 409 && error.data?.duplicate_participant === true) {
+          setSetupStatus("Session already closed");
+          setLog(error.message || "This participant already has a closed session.");
+          return;
+        }
+        console.warn("saved-session lookup failed", error);
+      } finally {
+        if (els.onboardingNextBtn) els.onboardingNextBtn.textContent = originalLabel;
+      }
+    }
+    clearBackgroundValidation();
     const nextIndex = Math.min(currentOnboardingIndex() + 1, ONBOARDING_STEPS.length - 1);
     setOnboardingStep(ONBOARDING_STEPS[nextIndex]);
   }
@@ -452,15 +694,15 @@
 
   function setPreparedStartState(readyLabel = "Ready") {
     const participantReady = Boolean(els.raterId.value.trim());
-    const familiarityReady = familiarityComplete();
+    const backgroundReady = backgroundComplete();
     const prolificReady = !productionProlificLinkMissing();
-    const ready = participantReady && familiarityReady && prolificReady;
+    const ready = participantReady && backgroundReady && prolificReady;
     let status = "Open from Prolific";
     if (prolificReady) {
       status = participantReady
-        ? familiarityReady
+        ? backgroundReady
           ? readyLabel
-          : "Familiarity needed"
+          : "Background needed"
         : "Participant ID needed";
     }
     setSetupStatus(status, ready);
@@ -817,57 +1059,67 @@
     }
   }
 
-  async function startServerSession() {
+  async function startServerSession({ resumeOnly = false } = {}) {
     if (state.serverSessionId) return state.serverSessionId;
     ensureSessionLabel();
     const seed = els.seed.value.trim() || `${els.raterId.value.trim()}_${els.sessionId.value.trim()}_${VERSION}`;
     const payload = {
       rater_id: els.raterId.value.trim(),
       session_label: els.sessionId.value.trim(),
-      task_mode: els.taskMode.value,
       platform_version: VERSION,
-      seed,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-      turnstile_token: state.turnstileToken,
       dry_run: DRY_RUN_MODE ? "1" : "",
-      screen: clientScreenInfo(),
-      ...familiarityValues(),
+      resume_only: resumeOnly,
       ...prolificParams(),
     };
+    if (!resumeOnly) {
+      payload.task_mode = els.taskMode.value;
+      payload.seed = seed;
+      payload.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      payload.turnstile_token = state.turnstileToken;
+      payload.screen = clientScreenInfo();
+      Object.assign(payload, backgroundValues());
+    }
     if (state.counterbalance.enabled) {
       payload.counterbalance = { enabled: true };
-      payload.practice_assignment = buildPracticeTrials().map((item, index) => ({
-        phase: item.phase || "practice",
-        trial_index: index + 1,
-        source_path: item.source_path,
-        audio_url: item.audio_url || "",
-        file_name: item.file_name,
-        target_word: item.target_word,
-        participant_id: item.participant_id,
-        native_language: item.native_language,
-        accent_condition: item.accent_condition,
-        condition: item.condition,
-        talker: item.talker,
-        pass_number: item.pass_number,
-        word_number: item.word_number,
-        trial_number: item.trial_number,
-        take_number: item.take_number,
-        spoken_form: item.spoken_form,
-        practice_note: item.practice_note,
-        source_format: item.source_format,
-        practice_kind: item.practice_kind,
-        practice_group: item.practice_group,
-        expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
-        expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
-      }));
-    } else {
+      if (!resumeOnly) {
+        payload.practice_assignment = buildPracticeTrials().map((item, index) => ({
+          phase: item.phase || "practice",
+          trial_index: index + 1,
+          source_path: item.source_path,
+          audio_url: item.audio_url || "",
+          file_name: item.file_name,
+          target_word: item.target_word,
+          participant_id: item.participant_id,
+          native_language: item.native_language,
+          accent_condition: item.accent_condition,
+          condition: item.condition,
+          talker: item.talker,
+          pass_number: item.pass_number,
+          word_number: item.word_number,
+          trial_number: item.trial_number,
+          take_number: item.take_number,
+          spoken_form: item.spoken_form,
+          practice_note: item.practice_note,
+          source_format: item.source_format,
+          practice_kind: item.practice_kind,
+          practice_group: item.practice_group,
+          expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
+          expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
+        }));
+      }
+    } else if (!resumeOnly) {
       payload.assignment = serverAssignmentRows();
     }
 
     const data = await postJson("/api/session/start", payload);
+    if (resumeOnly && data.existing_session !== true) {
+      state.existingServerSession = false;
+      state.serverResume = null;
+      return "";
+    }
     state.serverSessionId = data.session_id;
     state.serverSessionToken = data.session_token || "";
-    if (data.existing_session === true) applyServerFamiliarityValues(data);
+    if (data.existing_session === true) applyServerBackgroundValues(data);
     state.existingServerSession = data.existing_session === true;
     state.serverResume = data.resume || null;
     state.serverCompletedTrialKeys = new Set(
@@ -884,8 +1136,25 @@
             .filter((value) => Number.isFinite(value))
         : [],
     );
+    state.wordFamiliarity = Array.isArray(data.word_familiarity)
+      ? data.word_familiarity
+          .map((row) => ({
+            word_number: Number.parseInt(row.word_number, 10),
+            target_word: String(row.target_word || "").trim().toLowerCase(),
+            known: row.known === true,
+          }))
+          .filter((row) => Number.isFinite(row.word_number) && row.target_word)
+      : [];
+    state.wordFamiliarityRequired = data.word_familiarity_required !== false;
     if (data.counterbalance) {
       state.counterbalance.assigned = data.counterbalance;
+    }
+    if (Array.isArray(data.practice_assignment) && data.practice_assignment.length) {
+      state.practiceTrials = data.practice_assignment.map((item) => ({
+        ...item,
+        file: null,
+        phase: "practice",
+      }));
     }
     if (Array.isArray(data.main_assignment) && data.main_assignment.length) {
       state.mainTrials = data.main_assignment.map((item) => ({
@@ -910,6 +1179,13 @@
       await completeSession();
       return true;
     }
+    if (resume.next_phase === "word_familiarity") {
+      state.phase = "main";
+      state.trials = state.mainTrials;
+      setLog("All rating responses were found. Please complete the final word checklist.");
+      showWordFamiliarityChecklist();
+      return true;
+    }
 
     const nextIndex = Math.max(0, Number.parseInt(resume.next_trial_index, 10) - 1);
     if (resume.next_phase === "main") {
@@ -923,7 +1199,7 @@
     if (!state.trials.length) return false;
     if (nextIndex >= state.trials.length) {
       if (state.phase === "practice") startMainTrials();
-      else await completeSession();
+      else await finishRatings();
       return true;
     }
 
@@ -993,7 +1269,10 @@
 
   function csvCell(value) {
     if (value === null || value === undefined) return "";
-    const text = String(value);
+    let text = String(value);
+    if (typeof value === "string" && /^\s*[=+\-@]/u.test(text)) {
+      text = `'${text}`;
+    }
     return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   }
 
@@ -1745,7 +2024,6 @@
   }
 
   function buildPracticeFeedback(row, item) {
-    const exact = row.intelligibility_exact === 1;
     const expertComp = Number(item.expert_comprehensibility_1_9);
     const expertAccent = Number(item.expert_accentedness_1_9);
     const userComp = selectedRatingNumber("comprehensibility");
@@ -1756,10 +2034,11 @@
     return {
       requiresReason: false,
       text:
-        `Correct word: ${item.target_word}\n` +
-        `Your answer: ${answerText} ${exact ? "(matched)" : "(not an exact match)"}\n` +
-        `Accentedness reference: ${expertAccent}; your rating: ${userAccent}.\n` +
-        `Comprehensibility reference: ${expertComp}; your rating: ${userComp}.\n` +
+        `The word played: ${item.target_word}\n` +
+        `Your answer: ${answerText}\n` +
+        "Expert raters rated this as:\n" +
+        `Accentedness: ${expertAccent} (Your rating: ${userAccent})\n` +
+        `Comprehensibility: ${expertComp} (Your rating: ${userComp})\n` +
         "These reference ratings are only for practice.",
     };
   }
@@ -1821,10 +2100,11 @@
       els.startBtn.disabled = false;
       return;
     }
-    if (!familiarityComplete()) {
-      setSetupStatus("Familiarity needed");
-      setLog("Answer both familiarity questions before starting.");
+    if (!backgroundComplete()) {
+      setSetupStatus("Background needed");
+      setLog("Answer all background questions before starting.");
       setOnboardingStep("familiarity");
+      showBackgroundValidationIssue(backgroundValidationIssue());
       updateSelectedMaterialSummary();
       return;
     }
@@ -1839,6 +2119,14 @@
       await startServerSession();
       setSetupStatus("Starting", true);
     } catch (error) {
+      if (error.status === 409 && error.data?.reload_required === true) {
+        state.serverSaveFailed = false;
+        resetTurnstile();
+        setSetupStatus("Updating study");
+        setLog("The study was updated. Reloading the latest version now...");
+        window.setTimeout(() => window.location.reload(), 800);
+        return;
+      }
       state.serverSaveFailed = true;
       resetTurnstile();
       setSetupStatus(PARTICIPANT_MODE ? "Start failed" : "Server save failed");
@@ -1856,7 +2144,7 @@
       }
     }
     state.running = true;
-    state.practiceTrials = buildPracticeTrials();
+    if (!state.practiceTrials.length) state.practiceTrials = buildPracticeTrials();
     if (await resumeExistingServerSessionIfNeeded()) return;
     state.phase = "practice";
     state.trials = state.practiceTrials;
@@ -2351,7 +2639,6 @@
       practice_feedback: "",
       practice_requires_reason: "",
       practice_reason: "",
-      ...familiarityValues(),
     };
   }
 
@@ -2384,7 +2671,7 @@
         startMainTrials();
         return;
       }
-      await completeSession();
+      await finishRatings();
       return;
     }
     if (shouldShowBlockDistractor(nextIndex)) {
@@ -2706,8 +2993,126 @@
     }
   }
 
+  async function finishRatings() {
+    if (state.wordFamiliarityRequired) {
+      showWordFamiliarityChecklist();
+      return;
+    }
+    await completeSession();
+  }
+
+  function updateWordFamiliarityCount() {
+    const inputs = Array.from(
+      els.wordFamiliarityGrid.querySelectorAll('input[type="checkbox"]'),
+    );
+    const knownCount = inputs.filter((input) => input.checked).length;
+    els.wordFamiliarityCount.textContent = `${knownCount} of ${TARGET_WORDS.length} marked as known`;
+  }
+
+  function showWordFamiliarityChecklist() {
+    cleanupAudio();
+    state.running = true;
+    const existing = new Map(
+      state.wordFamiliarity.map((row) => [Number(row.word_number), row.known === true]),
+    );
+    els.wordFamiliarityGrid.replaceChildren();
+    for (const word of TARGET_WORDS) {
+      const label = document.createElement("label");
+      label.className = "word-familiarity-option";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.dataset.wordNumber = String(word.word_number);
+      input.dataset.targetWord = word.target_word;
+      input.checked = existing.get(word.word_number) === true;
+      input.addEventListener("change", updateWordFamiliarityCount);
+      const text = document.createElement("span");
+      text.textContent = word.target_word;
+      label.append(input, text);
+      els.wordFamiliarityGrid.appendChild(label);
+    }
+    els.wordFamiliarityConfirmed.checked = false;
+    els.wordFamiliarityStatus.textContent = "";
+    els.wordFamiliaritySubmitBtn.disabled = false;
+    els.wordFamiliaritySubmitBtn.textContent = "Save checklist and finish";
+    updateWordFamiliarityCount();
+    showOnly(els.wordFamiliarityPanel);
+    els.wordFamiliarityGrid.querySelector("input")?.focus();
+  }
+
+  function collectWordFamiliarity() {
+    return Array.from(
+      els.wordFamiliarityGrid.querySelectorAll('input[type="checkbox"]'),
+    ).map((input) => ({
+      word_number: Number.parseInt(input.dataset.wordNumber, 10),
+      target_word: input.dataset.targetWord,
+      known: input.checked,
+    }));
+  }
+
+  async function saveServerWordFamiliarity(responses) {
+    if (!state.serverSessionId) return null;
+    return postJson("/api/session/word-familiarity", {
+      session_id: state.serverSessionId,
+      session_token: state.serverSessionToken,
+      word_familiarity: responses,
+    });
+  }
+
+  async function submitWordFamiliarity() {
+    if (!els.wordFamiliarityConfirmed.checked) {
+      els.wordFamiliarityStatus.textContent =
+        "Please confirm that you reviewed all 50 words. Unfamiliar words should remain blank.";
+      els.wordFamiliarityConfirmed.focus();
+      return;
+    }
+
+    const responses = collectWordFamiliarity();
+    if (responses.length !== TARGET_WORDS.length) {
+      els.wordFamiliarityStatus.textContent =
+        "The complete 50-word checklist could not be loaded. Please contact the researcher.";
+      return;
+    }
+
+    els.wordFamiliaritySubmitBtn.disabled = true;
+    els.wordFamiliaritySubmitBtn.textContent = "Saving checklist...";
+    els.wordFamiliarityStatus.textContent = "Saving all 50 responses...";
+    try {
+      await saveServerWordFamiliarity(responses);
+      state.wordFamiliarity = responses;
+      els.wordFamiliarityStatus.textContent = "Checklist saved. Confirming completion...";
+      await completeSession();
+    } catch (error) {
+      state.serverSaveFailed = true;
+      els.wordFamiliarityStatus.textContent = PARTICIPANT_MODE
+        ? "Your checklist could not be saved. Please try again."
+        : `Checklist save failed: ${error.message}`;
+      els.wordFamiliaritySubmitBtn.disabled = false;
+      els.wordFamiliaritySubmitBtn.textContent = "Save checklist and finish";
+    }
+  }
+
   async function buildDownload() {
-    const csv = rowsToCsv(state.rows);
+    const knownByWord = new Map(
+      state.wordFamiliarity.map((row) => [String(row.target_word || "").toLowerCase(), row.known]),
+    );
+    const exportRows = state.rows.map((row) => ({
+      ...row,
+      word_known: row.phase === "main"
+        ? knownByWord.has(String(row.target_word || "").toLowerCase())
+          ? knownByWord.get(String(row.target_word || "").toLowerCase()) === true
+            ? 1
+            : 0
+          : ""
+        : "",
+    }));
+    const csv = rowsToCsv(exportRows);
+    const wordFamiliarityCsv = rowsToCsv(
+      state.wordFamiliarity.map((row) => ({
+        word_number: row.word_number,
+        target_word: row.target_word,
+        word_known: row.known ? 1 : 0,
+      })),
+    );
     const assignment = {
       platform_version: VERSION,
       rater_id: els.raterId.value.trim(),
@@ -2715,9 +3120,10 @@
       task_mode: els.taskMode.value,
       completion_code: prolificCompletionCode(),
       counterbalance: state.counterbalance.assigned || "",
-      ...familiarityValues(),
+      ...backgroundValues(),
       created_at: new Date().toISOString(),
       trial_count: state.practiceTrials.length + state.mainTrials.length,
+      word_familiarity: state.wordFamiliarity,
       trial_order: [...state.practiceTrials, ...state.mainTrials].map((item, index) => ({
         phase: item.phase || "",
         trial_index: index + 1,
@@ -2749,6 +3155,7 @@
     if (window.JSZip) {
       const zip = new JSZip();
       zip.file(`${baseName}.csv`, csv);
+      zip.file(`${baseName}_word_familiarity.csv`, wordFamiliarityCsv);
       zip.file(`${baseName}_assignment.json`, JSON.stringify(assignment, null, 2));
       const blob = await zip.generateAsync({ type: "blob" });
       setDownload(blob, `${baseName}.zip`);
@@ -2845,6 +3252,8 @@
     state.serverResume = null;
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
+    state.wordFamiliarity = [];
+    state.wordFamiliarityRequired = true;
     state.distractor = null;
     els.startBtn.disabled = true;
     els.downloadBtn.disabled = true;
@@ -2907,7 +3316,15 @@
   });
   els.prepareRemoteBtn.addEventListener("click", prepareSelectedRemoteParticipant);
   if (els.onboardingBackBtn) els.onboardingBackBtn.addEventListener("click", retreatOnboarding);
-  if (els.onboardingNextBtn) els.onboardingNextBtn.addEventListener("click", advanceOnboarding);
+  if (els.onboardingNextBtn) {
+    els.onboardingNextBtn.addEventListener("click", () => {
+      advanceOnboarding().catch((error) => {
+        setSetupStatus("Could not continue");
+        setLog(`Onboarding could not continue: ${error.message}`);
+        renderOnboarding();
+      });
+    });
+  }
   if (els.readyBackBtn) els.readyBackBtn.addEventListener("click", retreatOnboarding);
   els.raterId.addEventListener("input", updateSelectedMaterialSummary);
   els.sessionId.addEventListener("input", updateSelectedMaterialSummary);
@@ -2940,6 +3357,16 @@
       els.distractorSubmitBtn.textContent = "Continue";
     });
   });
+  els.wordFamiliaritySubmitBtn.addEventListener("click", () => {
+    submitWordFamiliarity().catch((error) => {
+      els.wordFamiliarityStatus.textContent = `Checklist save failed: ${error.message}`;
+      els.wordFamiliaritySubmitBtn.disabled = false;
+      els.wordFamiliaritySubmitBtn.textContent = "Save checklist and finish";
+    });
+  });
+  els.wordFamiliarityConfirmed.addEventListener("change", () => {
+    if (els.wordFamiliarityConfirmed.checked) els.wordFamiliarityStatus.textContent = "";
+  });
   els.playBtn.addEventListener("click", () => {
     playCurrentAudio().catch((error) => {
       resetPlaybackAttemptAfterError();
@@ -2967,11 +3394,15 @@
   els.audioFiles.addEventListener("change", updateSelectedMaterialSummary);
   els.audioFolder.addEventListener("change", updateSelectedMaterialSummary);
   els.manifestFile.addEventListener("change", updateSelectedMaterialSummary);
-  document
-    .querySelectorAll('input[name="japanese-familiarity"], input[name="chinese-familiarity"]')
-    .forEach((input) => {
-      input.addEventListener("change", updateSelectedMaterialSummary);
-    });
+  document.querySelectorAll("[data-background-field]").forEach((input) => {
+    const handleBackgroundChange = () => {
+      syncBackgroundConditionals();
+      clearBackgroundValidation();
+      updateSelectedMaterialSummary();
+    };
+    input.addEventListener("change", handleBackgroundChange);
+    input.addEventListener("input", handleBackgroundChange);
+  });
   els.breakInterval.value = String(DEFAULT_BREAK_INTERVAL);
   if (COUNTERBALANCE_ENABLED) {
     els.taskMode.value = "combined";
@@ -2982,6 +3413,7 @@
   }
   if (els.completionCode) els.completionCode.textContent = prolificCompletionCode();
   initializeParticipantMode();
+  syncBackgroundConditionals();
   loadSecurityConfig();
   syncCustomManifestVisibility();
   updateSelectedMaterialSummary();

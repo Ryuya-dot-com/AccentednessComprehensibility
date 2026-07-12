@@ -21,6 +21,16 @@ function liveSessionSql(alias = "s") {
   return `NOT ${dryRunSessionSql(alias)}`;
 }
 
+const RECENT_SESSION_DEFAULT_LIMIT = 25;
+const RECENT_SESSION_MAX_LIMIT = 100;
+const RECENT_SESSION_MAX_OFFSET = 100_000;
+
+function boundedQueryInt(value, fallback, min, max) {
+  const parsed = nullableInt(value);
+  if (parsed === null) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 async function logAdminSummary(db, request, accessPayload) {
   try {
     const email = cleanText(
@@ -46,13 +56,37 @@ export async function onRequestGet(context) {
     const accessPayload = await requireAdmin(context.request, context.env);
     const db = requireDb(context.env);
     await logAdminSummary(db, context.request, accessPayload);
+    const url = new URL(context.request.url);
+    const recentLimit = boundedQueryInt(
+      url.searchParams.get("recent_limit"),
+      RECENT_SESSION_DEFAULT_LIMIT,
+      1,
+      RECENT_SESSION_MAX_LIMIT,
+    );
+    const recentOffset = boundedQueryInt(
+      url.searchParams.get("recent_offset"),
+      0,
+      0,
+      RECENT_SESSION_MAX_OFFSET,
+    );
+    const includeDryRun = url.searchParams.get("include_dry_run") === "1";
+    const recentWhereSql = includeDryRun ? "1 = 1" : liveSessionSql("s");
     const staleAfterMinutes = Math.max(1, nullableInt(context.env.STALE_SESSION_MINUTES) || 240);
     const staleCutoffMs = nowMs() - staleAfterMinutes * 60_000;
-    const [sessions, trials, assignments, events] = await Promise.all([
+    const [sessions, trials, assignments, events, wordFamiliarity] = await Promise.all([
       db.prepare("SELECT COUNT(*) AS count FROM sessions").first(),
       db.prepare("SELECT COUNT(*) AS count FROM rating_trials").first(),
       db.prepare("SELECT COUNT(*) AS count FROM rating_assignments").first(),
       db.prepare("SELECT COUNT(*) AS count FROM event_logs").first(),
+      db
+        .prepare(
+          `SELECT
+             COUNT(*) AS count,
+             COUNT(DISTINCT session_id) AS session_count,
+             SUM(word_known) AS known_count
+           FROM word_familiarity_responses`,
+        )
+        .first(),
     ]);
 
     const statusRows = await db
@@ -117,6 +151,24 @@ export async function onRequestGet(context) {
       )
       .first();
 
+    const wordFamiliarityQuality = await db
+      .prepare(
+        `SELECT
+           SUM(CASE
+             WHEN s.word_familiarity_required = 1
+              AND COALESCE(wf.response_count, 0) < 50
+             THEN 1 ELSE 0
+           END) AS sessions_missing_word_familiarity
+         FROM sessions s
+         LEFT JOIN (
+           SELECT session_id, COUNT(*) AS response_count
+           FROM word_familiarity_responses
+           GROUP BY session_id
+         ) wf ON wf.session_id = s.id
+         WHERE ${liveSessionSql("s")}`,
+      )
+      .first();
+
     const completedMainTrials = await db
       .prepare(
         `SELECT COUNT(*) AS count
@@ -142,6 +194,57 @@ export async function onRequestGet(context) {
       )
       .first();
 
+    const [recentSessionCount, recentSessionRows] = await Promise.all([
+      db
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM sessions s
+           WHERE ${recentWhereSql}`,
+        )
+        .first(),
+      db
+        .prepare(
+          `SELECT
+             s.id AS session_id,
+             CASE WHEN ${dryRunSessionSql("s")} THEN 1 ELSE 0 END AS is_dry_run,
+             s.status,
+             s.started_at,
+             s.last_seen_at,
+             s.completed_at,
+             s.prolific_pid,
+             s.participant_age_years,
+             s.english_variety,
+             s.english_variety_other,
+             s.gender,
+             s.gender_other,
+             s.japanese_familiarity_1_6,
+             s.chinese_familiarity_1_6,
+             s.english_teaching_experience,
+             s.english_teaching_experience_details,
+             s.linguistics_knowledge,
+             s.linguistics_knowledge_details,
+             s.word_familiarity_required,
+             (SELECT COUNT(*)
+              FROM word_familiarity_responses wf
+              WHERE wf.session_id = s.id) AS word_familiarity_response_count,
+             (SELECT SUM(wf.word_known)
+              FROM word_familiarity_responses wf
+              WHERE wf.session_id = s.id) AS known_word_count,
+             (SELECT MAX(wf.submitted_at)
+              FROM word_familiarity_responses wf
+              WHERE wf.session_id = s.id) AS word_familiarity_submitted_at
+           FROM sessions s
+           WHERE ${recentWhereSql}
+           ORDER BY COALESCE(s.completed_at_ms, s.last_seen_at_ms, s.started_at_ms, 0) DESC,
+                    s.id DESC
+           LIMIT ? OFFSET ?`,
+        )
+        .bind(recentLimit, recentOffset)
+        .all(),
+    ]);
+    const recentSessions = recentSessionRows.results || [];
+    const recentSessionTotal = Number(recentSessionCount?.count || 0);
+
     return jsonResponse({
       ok: true,
       counts: {
@@ -149,6 +252,7 @@ export async function onRequestGet(context) {
         rating_trials: Number(trials?.count || 0),
         rating_assignments: Number(assignments?.count || 0),
         event_logs: Number(events?.count || 0),
+        word_familiarity_responses: Number(wordFamiliarity?.count || 0),
       },
       quality: {
         completed_sessions: Number(quality?.completed_sessions || 0),
@@ -167,9 +271,24 @@ export async function onRequestGet(context) {
         blank_dictation_count: Number(intelligibility?.blank_dictation_count || 0),
         stale_after_minutes: staleAfterMinutes,
         dry_run_sessions: Number(dryRunSessions?.count || 0),
+        word_familiarity_sessions: Number(wordFamiliarity?.session_count || 0),
+        known_word_responses: Number(wordFamiliarity?.known_count || 0),
+        sessions_missing_word_familiarity: Number(
+          wordFamiliarityQuality?.sessions_missing_word_familiarity || 0,
+        ),
       },
       sessions_by_status: statusRows.results || [],
       counterbalance_by_cell: counterbalanceRows.results || [],
+      recent_sessions: recentSessions,
+      recent_sessions_page: {
+        limit: recentLimit,
+        offset: recentOffset,
+        returned: recentSessions.length,
+        total: recentSessionTotal,
+        include_dry_run: includeDryRun,
+        has_previous: recentOffset > 0,
+        has_next: recentOffset + recentSessions.length < recentSessionTotal,
+      },
     });
   } catch (error) {
     return errorResponse(error.message || "Could not load admin summary.", error.status || 500);

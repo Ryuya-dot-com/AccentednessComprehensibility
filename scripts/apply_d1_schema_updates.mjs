@@ -24,6 +24,16 @@ const REQUIRED_COLUMNS = {
     ["duplicate_start_count", "INTEGER NOT NULL DEFAULT 0"],
     ["duplicate_start_last_at", "TEXT"],
     ["duplicate_start_last_at_ms", "INTEGER"],
+    ["participant_age_years", "INTEGER"],
+    ["english_variety", "TEXT"],
+    ["english_variety_other", "TEXT"],
+    ["gender", "TEXT"],
+    ["gender_other", "TEXT"],
+    ["english_teaching_experience", "TEXT"],
+    ["english_teaching_experience_details", "TEXT"],
+    ["linguistics_knowledge", "TEXT"],
+    ["linguistics_knowledge_details", "TEXT"],
+    ["word_familiarity_required", "INTEGER NOT NULL DEFAULT 0"],
   ],
   rating_assignments: [
     ["counterbalance_cell", "INTEGER"],
@@ -134,7 +144,21 @@ const REQUIRED_SETUP_SQL = [
   ON counterbalance_allocations(cell_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_updated
   ON counterbalance_allocations(status, updated_at)`,
+  `CREATE TABLE IF NOT EXISTS word_familiarity_responses (
+  session_id TEXT NOT NULL,
+  word_number INTEGER NOT NULL CHECK(word_number BETWEEN 1 AND 50),
+  target_word TEXT NOT NULL,
+  word_known INTEGER NOT NULL CHECK(word_known IN (0, 1)),
+  submitted_at TEXT NOT NULL,
+  submitted_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(session_id, word_number),
+  FOREIGN KEY(session_id) REFERENCES sessions(id)
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_word_familiarity_target
+  ON word_familiarity_responses(target_word, word_known)`,
 ];
+
+const REQUIRED_SETUP_TABLES = ["word_familiarity_responses"];
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -344,14 +368,25 @@ async function main() {
     );
   }
 
+  const missingSetupTables = [];
+  for (const table of REQUIRED_SETUP_TABLES) {
+    const stdout = runWrangler(database, `PRAGMA table_info(${quoteIdent(table)});`, true);
+    if (!parseJsonRows(stdout).length) missingSetupTables.push(table);
+  }
+
   const statements = [...missingStatements, ...REQUIRED_SETUP_SQL];
   console.log(`database: ${database}`);
   console.log(`mode: ${hasFlag("--local") ? "local" : "remote"}`);
   console.log(`missing_column_statements: ${missingStatements.length}`);
+  console.log(`missing_setup_tables: ${missingSetupTables.length ? missingSetupTables.join(",") : "none"}`);
   console.log(`setup_statements: ${REQUIRED_SETUP_SQL.length}`);
 
   if (!missingStatements.length && !apply) {
-    console.log("schema_status: no missing columns; setup SQL is idempotent");
+    console.log(
+      missingSetupTables.length
+        ? "schema_status: setup tables pending; rerun with --apply after reviewing the statements"
+        : "schema_status: no missing columns or setup tables; setup SQL is idempotent",
+    );
     for (const statement of REQUIRED_SETUP_SQL) console.log(`${statement};`);
     return;
   }
@@ -389,6 +424,17 @@ async function main() {
   console.log(`remaining_missing_columns: ${remainingMissing}`);
   if (remainingMissing) {
     throw new Error("Schema update finished but required columns are still missing.");
+  }
+  const remainingSetupTables = [];
+  for (const table of REQUIRED_SETUP_TABLES) {
+    const stdout = runWrangler(database, `PRAGMA table_info(${quoteIdent(table)});`, true);
+    if (!parseJsonRows(stdout).length) remainingSetupTables.push(table);
+  }
+  console.log(
+    `remaining_missing_setup_tables: ${remainingSetupTables.length ? remainingSetupTables.join(",") : "none"}`,
+  );
+  if (remainingSetupTables.length) {
+    throw new Error("Schema update finished but required setup tables are still missing.");
   }
 }
 

@@ -15,13 +15,26 @@ const DEFAULTS = {
   lexicalPairwise: path.join(PACKAGE_ROOT, "metadata", "lexical_balance_pairwise_differences.csv"),
   selectedPracticeManifest: path.join(PACKAGE_ROOT, "metadata", "selected_practice_manifest.csv"),
   durationSummary: path.join(PACKAGE_ROOT, "metadata", "duration_estimate_summary.csv"),
+  indexHtml: path.join(REPO_ROOT, "index.html"),
   appJs: path.join(REPO_ROOT, "app.js"),
+  utilsApi: path.join(REPO_ROOT, "functions", "api", "_utils.js"),
+  wordFamiliarityModule: path.join(REPO_ROOT, "functions", "api", "_word-familiarity.js"),
+  wordFamiliarityApi: path.join(REPO_ROOT, "functions", "api", "session", "word-familiarity.js"),
   completeApi: path.join(REPO_ROOT, "functions", "api", "session", "complete.js"),
   trialApi: path.join(REPO_ROOT, "functions", "api", "trial.js"),
   startApi: path.join(REPO_ROOT, "functions", "api", "session", "start.js"),
   counterbalanceApi: path.join(REPO_ROOT, "functions", "api", "_counterbalance.js"),
   finalizeStaleApi: path.join(REPO_ROOT, "functions", "api", "admin", "finalize-stale.js"),
+  adminSummaryApi: path.join(REPO_ROOT, "functions", "api", "admin", "summary.js"),
+  adminExportApi: path.join(REPO_ROOT, "functions", "api", "admin", "export", "[dataset].js"),
+  adminIndex: path.join(REPO_ROOT, "admin", "index.html"),
+  adminJs: path.join(REPO_ROOT, "admin", "admin.js"),
   schema: path.join(REPO_ROOT, "db", "schema.sql"),
+  wordFamiliarityMigration: path.join(REPO_ROOT, "db", "migrations", "0013_word_familiarity.sql"),
+  schemaUpdater: path.join(REPO_ROOT, "scripts", "apply_d1_schema_updates.mjs"),
+  backgroundLocalTest: path.join(REPO_ROOT, "scripts", "test_background_questionnaire_local.mjs"),
+  liveCheck: path.join(REPO_ROOT, "scripts", "check_live_deployment.mjs"),
+  stressCheck: path.join(REPO_ROOT, "scripts", "stress_live_counterbalance_concurrency.mjs"),
   out: path.join(PACKAGE_ROOT, "metadata", "PREFLIGHT_REPORT_20260703.md"),
 };
 
@@ -156,6 +169,24 @@ function checkProductionManifest(rows) {
       problems.push(`word_number ${wordNumber} maps to multiple words: ${[...words].sort().join(", ")}`);
     }
   }
+  for (const [index, expectedWord] of CANONICAL_TARGET_WORDS.entries()) {
+    const wordNumber = String(index + 1);
+    const actualWords = wordsByNumber.get(wordNumber) || new Set();
+    if (actualWords.size !== 1 || !actualWords.has(expectedWord)) {
+      problems.push(
+        `word_number ${wordNumber} must map to canonical target ${expectedWord}; found ${
+          [...actualWords].sort().join(", ") || "none"
+        }`,
+      );
+    }
+  }
+  const unexpectedWordNumbers = [...wordsByNumber.keys()].filter((wordNumber) => {
+    const number = Number.parseInt(wordNumber, 10);
+    return !Number.isInteger(number) || number < 1 || number > CANONICAL_TARGET_WORDS.length;
+  });
+  if (unexpectedWordNumbers.length) {
+    problems.push(`unexpected canonical word_number value(s): ${unexpectedWordNumbers.sort().join(", ")}`);
+  }
   return problems;
 }
 
@@ -255,23 +286,96 @@ function forbidSnippet(problems, label, text, snippet) {
   if (text.includes(snippet)) problems.push(`${label} still contains forbidden snippet: ${snippet}`);
 }
 
+function requireBefore(problems, label, text, first, second) {
+  const firstIndex = text.indexOf(first);
+  const secondIndex = text.indexOf(second);
+  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
+    problems.push(`${label} must contain ${first} before ${second}`);
+  }
+}
+
+function requireOccurrenceCount(problems, label, text, snippet, expected) {
+  const count = text.split(snippet).length - 1;
+  if (count !== expected) {
+    problems.push(`${label} must contain ${snippet} exactly ${expected} time(s), found ${count}`);
+  }
+}
+
+const CANONICAL_TARGET_WORDS = [
+  "tweezers", "persimmon", "thermometer", "razor", "mantis",
+  "pacifier", "podium", "labyrinth", "loquat", "scapula",
+  "burdock", "protractor", "acorn", "scalpel", "cocoon",
+  "cicada", "toboggan", "chisel", "casket", "detergent",
+  "nostril", "rickshaw", "capelin", "lotus", "tadpole",
+  "burglar", "xylophone", "walrus", "icicle", "abalone",
+  "porcupine", "carousel", "faucet", "cobweb", "pylon",
+  "pupa", "binoculars", "spatula", "lawnmower", "ladle",
+  "raccoon", "syringe", "catapult", "treadmill", "wardrobe",
+  "strainer", "parakeet", "scallop", "toupee", "abacus",
+];
+
+function checkCanonicalWordSources(app, serverModule) {
+  const problems = [];
+  const appBlock = app.match(/const TARGET_WORDS = Object\.freeze\(\[([\s\S]*?)\]\.map/);
+  const appWords = appBlock
+    ? [...appBlock[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1])
+    : [];
+  const serverBlock = serverModule.match(/export const TARGET_WORDS = Object\.freeze\(\[([\s\S]*?)\]\);/);
+  const serverWords = serverBlock
+    ? [...serverBlock[1].matchAll(/target_word:\s*"([a-z]+)"/g)].map((match) => match[1])
+    : [];
+  if (JSON.stringify(appWords) !== JSON.stringify(CANONICAL_TARGET_WORDS)) {
+    problems.push(`app.js TARGET_WORDS does not match the canonical 50-word order (${appWords.length} found)`);
+  }
+  if (JSON.stringify(serverWords) !== JSON.stringify(CANONICAL_TARGET_WORDS)) {
+    problems.push(`_word-familiarity.js TARGET_WORDS does not match the canonical 50-word order (${serverWords.length} found)`);
+  }
+  return problems;
+}
+
 function checkProlificFlowSourceGuards(options) {
   const problems = [];
+  const index = readTextIfExists(options.indexHtml);
   const app = readTextIfExists(options.appJs);
+  const utils = readTextIfExists(options.utilsApi);
+  const wordFamiliarityModule = readTextIfExists(options.wordFamiliarityModule);
+  const wordFamiliarityApi = readTextIfExists(options.wordFamiliarityApi);
   const complete = readTextIfExists(options.completeApi);
   const trial = readTextIfExists(options.trialApi);
   const start = readTextIfExists(options.startApi);
   const counterbalance = readTextIfExists(options.counterbalanceApi);
   const finalizeStale = readTextIfExists(options.finalizeStaleApi);
+  const adminSummary = readTextIfExists(options.adminSummaryApi);
+  const adminExport = readTextIfExists(options.adminExportApi);
+  const adminIndex = readTextIfExists(options.adminIndex);
+  const adminJs = readTextIfExists(options.adminJs);
   const schema = readTextIfExists(options.schema);
+  const wordFamiliarityMigration = readTextIfExists(options.wordFamiliarityMigration);
+  const schemaUpdater = readTextIfExists(options.schemaUpdater);
+  const backgroundLocalTest = readTextIfExists(options.backgroundLocalTest);
+  const liveCheck = readTextIfExists(options.liveCheck);
+  const stressCheck = readTextIfExists(options.stressCheck);
   for (const [label, text] of [
+    ["index.html", index],
     ["app.js", app],
+    ["_utils.js", utils],
+    ["_word-familiarity.js", wordFamiliarityModule],
+    ["session/word-familiarity.js", wordFamiliarityApi],
     ["session/complete.js", complete],
     ["trial.js", trial],
     ["session/start.js", start],
     ["_counterbalance.js", counterbalance],
     ["admin/finalize-stale.js", finalizeStale],
+    ["admin/summary.js", adminSummary],
+    ["admin/export/[dataset].js", adminExport],
+    ["admin/index.html", adminIndex],
+    ["admin/admin.js", adminJs],
     ["db/schema.sql", schema],
+    ["db/migrations/0013_word_familiarity.sql", wordFamiliarityMigration],
+    ["scripts/apply_d1_schema_updates.mjs", schemaUpdater],
+    ["scripts/test_background_questionnaire_local.mjs", backgroundLocalTest],
+    ["scripts/check_live_deployment.mjs", liveCheck],
+    ["scripts/stress_live_counterbalance_concurrency.mjs", stressCheck],
   ]) {
     if (!text) problems.push(`${label} is missing or empty`);
   }
@@ -283,7 +387,44 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "app.js", app, "resumeExistingServerSessionIfNeeded");
   requireSnippet(problems, "app.js", app, "serverCompletedTrialKeys");
   requireSnippet(problems, "app.js", app, "serverCompletedDistractorIndexes");
-  requireSnippet(problems, "app.js", app, "applyServerFamiliarityValues");
+  requireSnippet(problems, "app.js", app, "showWordFamiliarityChecklist");
+  requireSnippet(problems, "app.js", app, 'postJson("/api/session/word-familiarity"');
+  requireSnippet(
+    problems,
+    "app.js",
+    app,
+    "state.wordFamiliarityRequired = data.word_familiarity_required !== false",
+  );
+  requireSnippet(problems, "app.js", app, "if (state.wordFamiliarityRequired)");
+  requireSnippet(problems, "app.js", app, "error.data?.reload_required === true");
+  requireSnippet(problems, "app.js", app, "The word played:");
+  requireSnippet(problems, "app.js", app, "Expert raters rated this as:");
+  requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
+  requireSnippet(problems, "index.html", index, 'id="word-familiarity-panel"');
+  requireSnippet(problems, "index.html", index, "Review all 50 words");
+  requireSnippet(problems, "index.html", index, "If you were unfamiliar with it");
+  requireBefore(
+    problems,
+    "index.html",
+    index,
+    "Rate how strong the speaker's",
+    "Rate how easy the word was",
+  );
+  problems.push(...checkCanonicalWordSources(app, wordFamiliarityModule));
+  requireSnippet(problems, "index.html", index, 'id="background-validation-message"');
+  requireSnippet(problems, "index.html", index, 'id="participant-age"');
+  requireSnippet(problems, "index.html", index, 'maxlength="80"');
+  requireSnippet(problems, "index.html", index, 'maxlength="1000"');
+  requireBefore(problems, "index.html", index, "<span>Accentedness</span>", "<span>Comprehensibility</span>");
+  requireSnippet(problems, "app.js", app, "function backgroundValues()");
+  requireSnippet(problems, "app.js", app, "function backgroundValidationIssue()");
+  requireSnippet(problems, "app.js", app, "applyServerBackgroundValues");
+  requireSnippet(problems, "app.js", app, "Checking for saved session...");
+  requireSnippet(problems, "app.js", app, "Number.isInteger(age)");
+  requireSnippet(problems, "app.js", app, "Object.assign(payload, backgroundValues())");
+  requireOccurrenceCount(problems, "app.js", app, "...backgroundValues()", 1);
+  requireSnippet(problems, "app.js", app, "resume_only: resumeOnly");
+  requireSnippet(problems, "app.js", app, "startServerSession({ resumeOnly: true })");
   forbidSnippet(problems, "app.js", app, 'params.get("completion_code")');
   forbidSnippet(problems, "app.js", app, 'params.get("PROLIFIC_CODE")');
   requireSnippet(problems, "session/complete.js", complete, "LEFT JOIN rating_trials rt");
@@ -293,6 +434,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/complete.js", complete, "retryable: true");
   requireSnippet(problems, "session/complete.js", complete, "completed_too_fast");
   requireSnippet(problems, "session/complete.js", complete, "insertNonCriticalEvent");
+  requireSnippet(problems, "session/complete.js", complete, "word_familiarity_required");
+  requireSnippet(problems, "session/complete.js", complete, "TARGET_WORD_COUNT");
+  requireSnippet(problems, "session/word-familiarity.js", wordFamiliarityApi, "validateWordFamiliarityResponses");
+  requireSnippet(problems, "session/word-familiarity.js", wordFamiliarityApi, "Complete all rating trials before the word checklist.");
+  requireSnippet(problems, "session/word-familiarity.js", wordFamiliarityApi, "ON CONFLICT(session_id, word_number) DO UPDATE");
   requireSnippet(problems, "trial.js", trial, "await requireSessionToken(context.request, body, session)");
   requireSnippet(problems, "trial.js", trial, "INSERT OR IGNORE INTO rating_trials");
   requireSnippet(problems, "trial.js", trial, "insertNonCriticalEvent");
@@ -302,7 +448,32 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/start.js", start, "saved_trials");
   requireSnippet(problems, "session/start.js", start, "distractor_completed_trial_indexes");
   requireSnippet(problems, "session/start.js", start, "pending_distractor");
+  requireSnippet(problems, "session/start.js", start, "prolificIdentityMatches");
+  requireSnippet(problems, "session/start.js", start, "constantTimeEqual");
+  requireSnippet(problems, "session/start.js", start, '"word_familiarity"');
+  requireSnippet(problems, "session/start.js", start, 'CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.7.0"');
+  requireSnippet(problems, "session/start.js", start, "reload_required: true");
   requireSnippet(problems, "session/start.js", start, "japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6)");
+  requireSnippet(problems, "session/start.js", start, 'requiredIntegerInRange(\n      "participant_age_years"');
+  requireSnippet(problems, "session/start.js", start, 'optionalText(\n      "english_variety_other"');
+  requireBefore(
+    problems,
+    "session/start.js",
+    start,
+    "const existing = await findExistingProlificSession",
+    "const participantAgeYears = requiredIntegerInRange",
+  );
+  requireBefore(
+    problems,
+    "session/start.js",
+    start,
+    "const existing = await findExistingProlificSession",
+    "const turnstileVerified = await verifyTurnstile",
+  );
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "participant_age_years: 30");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_variety: "american"');
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "resume_only: true");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "participant_age_years: 30");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "SELECT COUNT(*)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status IN (?, ?)");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status = ?");
@@ -311,9 +482,43 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "incomplete_dropout");
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "abandoned");
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "orphan_allocation_finalized_total");
+  requireSnippet(problems, "admin/index.html", adminIndex, 'id="recent-sessions-body"');
+  requireSnippet(problems, "admin/index.html", adminIndex, 'id="recent-include-dry-run"');
+  requireSnippet(problems, "admin/admin.js", adminJs, "function renderRecentSessions");
+  requireSnippet(problems, "admin/admin.js", adminJs, "cell.textContent = displayValue(value)");
+  forbidSnippet(problems, "admin/admin.js", adminJs, "innerHTML");
+  requireSnippet(problems, "admin/summary.js", adminSummary, "const accessPayload = await requireAdmin");
+  requireSnippet(problems, "admin/summary.js", adminSummary, "LIMIT ? OFFSET ?");
+  requireSnippet(problems, "admin/summary.js", adminSummary, "s.participant_age_years");
+  requireSnippet(problems, "admin/summary.js", adminSummary, "s.japanese_familiarity_1_6");
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"session_id"');
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"participant_age_years"');
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, "s.id AS session_id");
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"word-familiarity"');
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"word_known"');
+  requireSnippet(problems, "_utils.js", utils, "typeof value === \"string\"");
+  requireSnippet(problems, "_utils.js", utils, "^\\s*[=+\\-@]");
+  requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, '["participant_age_years", "INTEGER"]');
+  requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, 'word_familiarity_required');
+  requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, 'CREATE TABLE IF NOT EXISTS word_familiarity_responses');
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_without_questionnaire: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_identity_triple_match: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "csv_formula_neutralized: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "word_familiarity_rows: 50");
+  requireSnippet(
+    problems,
+    "scripts/test_background_questionnaire_local.mjs",
+    backgroundLocalTest,
+    "legacy_v060_mid_task_resume: true",
+  );
   requireSnippet(problems, "db/schema.sql", schema, "idx_sessions_participant_key_unique");
   requireSnippet(problems, "db/schema.sql", schema, "idx_sessions_prolific_session_unique");
   requireSnippet(problems, "db/schema.sql", schema, "UNIQUE(session_id, phase, trial_index)");
+  requireSnippet(problems, "db/schema.sql", schema, "participant_age_years INTEGER");
+  requireSnippet(problems, "db/schema.sql", schema, "english_teaching_experience_details TEXT");
+  requireSnippet(problems, "db/schema.sql", schema, "word_familiarity_required INTEGER NOT NULL DEFAULT 0");
+  requireSnippet(problems, "db/schema.sql", schema, "CREATE TABLE IF NOT EXISTS word_familiarity_responses");
+  requireSnippet(problems, "db/migrations/0013_word_familiarity.sql", wordFamiliarityMigration, "ALTER TABLE sessions ADD COLUMN word_familiarity_required");
 
   return problems;
 }
@@ -357,13 +562,26 @@ const options = {
   lexicalPairwise: path.resolve(argValue("--lexical-pairwise", DEFAULTS.lexicalPairwise)),
   selectedPracticeManifest: path.resolve(argValue("--selected-practice-manifest", DEFAULTS.selectedPracticeManifest)),
   durationSummary: path.resolve(argValue("--duration-summary", DEFAULTS.durationSummary)),
+  indexHtml: path.resolve(argValue("--index-html", DEFAULTS.indexHtml)),
   appJs: path.resolve(argValue("--app-js", DEFAULTS.appJs)),
+  utilsApi: path.resolve(argValue("--utils-api", DEFAULTS.utilsApi)),
+  wordFamiliarityModule: path.resolve(argValue("--word-familiarity-module", DEFAULTS.wordFamiliarityModule)),
+  wordFamiliarityApi: path.resolve(argValue("--word-familiarity-api", DEFAULTS.wordFamiliarityApi)),
   completeApi: path.resolve(argValue("--complete-api", DEFAULTS.completeApi)),
   trialApi: path.resolve(argValue("--trial-api", DEFAULTS.trialApi)),
   startApi: path.resolve(argValue("--start-api", DEFAULTS.startApi)),
   counterbalanceApi: path.resolve(argValue("--counterbalance-api", DEFAULTS.counterbalanceApi)),
   finalizeStaleApi: path.resolve(argValue("--finalize-stale-api", DEFAULTS.finalizeStaleApi)),
+  adminSummaryApi: path.resolve(argValue("--admin-summary-api", DEFAULTS.adminSummaryApi)),
+  adminExportApi: path.resolve(argValue("--admin-export-api", DEFAULTS.adminExportApi)),
+  adminIndex: path.resolve(argValue("--admin-index", DEFAULTS.adminIndex)),
+  adminJs: path.resolve(argValue("--admin-js", DEFAULTS.adminJs)),
   schema: path.resolve(argValue("--schema", DEFAULTS.schema)),
+  wordFamiliarityMigration: path.resolve(argValue("--word-familiarity-migration", DEFAULTS.wordFamiliarityMigration)),
+  schemaUpdater: path.resolve(argValue("--schema-updater", DEFAULTS.schemaUpdater)),
+  backgroundLocalTest: path.resolve(argValue("--background-local-test", DEFAULTS.backgroundLocalTest)),
+  liveCheck: path.resolve(argValue("--live-check", DEFAULTS.liveCheck)),
+  stressCheck: path.resolve(argValue("--stress-check", DEFAULTS.stressCheck)),
   out: path.resolve(argValue("--out", DEFAULTS.out)),
   usingExternalManifestSecret: hasFlag("--using-external-manifest-secret"),
   requireAudioUrls: !hasFlag("--allow-relative-audio-files"),

@@ -49,6 +49,7 @@
           <button id="assignments-btn" class="secondary">Download raw assignments CSV</button>
           <button id="events-btn" class="secondary">Download raw event logs CSV</button>
           <button id="counterbalance-btn" class="secondary">Download raw counterbalance CSV</button>
+          <button id="word-familiarity-btn" class="secondary">Download word familiarity CSV</button>
         </div>
 
         <div class="admin-grid">
@@ -68,7 +69,86 @@
             <span>Event logs</span>
             <strong id="count-events">0</strong>
           </div>
+          <div class="admin-card">
+            <span>Word familiarity responses</span>
+            <strong id="count-word-familiarity">0</strong>
+          </div>
         </div>
+
+        <section class="admin-recent" aria-labelledby="recent-sessions-heading">
+          <div class="admin-recent-heading">
+            <div>
+              <h3 id="recent-sessions-heading">Recent participant sessions</h3>
+              <p>
+                Prolific IDs, background responses, and word-checklist counts are shown without masking in this
+                protected admin view. Dry-run sessions are hidden unless included below.
+              </p>
+            </div>
+            <div class="admin-recent-controls">
+              <label class="admin-inline-control">
+                Rows per page
+                <select id="recent-page-size">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
+              <label class="admin-checkbox-control">
+                <input id="recent-include-dry-run" type="checkbox" />
+                Include dry runs
+              </label>
+            </div>
+          </div>
+
+          <div
+            class="admin-session-table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Recent participant background responses; scroll horizontally to view all columns"
+          >
+            <table class="admin-session-table">
+              <thead>
+                <tr>
+                  <th scope="col">Type</th>
+                  <th scope="col">Session ID</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Started</th>
+                  <th scope="col">Last seen</th>
+                  <th scope="col">Completed</th>
+                  <th scope="col">Prolific ID</th>
+                  <th scope="col">Age</th>
+                  <th scope="col">English variety</th>
+                  <th scope="col">English variety (other)</th>
+                  <th scope="col">Gender</th>
+                  <th scope="col">Gender (other)</th>
+                  <th scope="col">Japanese-accent familiarity</th>
+                  <th scope="col">Chinese-accent familiarity</th>
+                  <th scope="col">English teaching experience</th>
+                  <th scope="col">Teaching details</th>
+                  <th scope="col">Linguistics knowledge</th>
+                  <th scope="col">Linguistics details</th>
+                  <th scope="col">Checklist required</th>
+                  <th scope="col">Checklist responses</th>
+                  <th scope="col">Known words</th>
+                </tr>
+              </thead>
+              <tbody id="recent-sessions-body">
+                <tr>
+                  <td class="admin-empty-row" colspan="21">Enter the admin token and refresh the summary.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="admin-pagination">
+            <p id="recent-page-status" aria-live="polite">No participant sessions loaded.</p>
+            <div>
+              <button id="recent-prev-btn" class="secondary" type="button" disabled>Previous</button>
+              <button id="recent-next-btn" class="secondary" type="button" disabled>Next</button>
+            </div>
+          </div>
+        </section>
 
         <pre id="admin-log" class="log" aria-live="polite"></pre>
       </section>

@@ -1,6 +1,6 @@
 import {
-  assertRequiredIntRange,
   cleanText,
+  constantTimeEqual,
   errorResponse,
   insertEvent,
   isDryRunClient,
@@ -29,6 +29,18 @@ import {
   safeMaterialsJson,
 } from "../_counterbalance.js";
 
+const ENGLISH_VARIETIES = [
+  "american",
+  "british",
+  "australian",
+  "new_zealand",
+  "canadian",
+  "other",
+];
+const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
+const YES_NO = ["yes", "no"];
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.7.0";
+
 const ASSIGNMENT_SELECT = `
   SELECT
     phase, trial_index, source_path, audio_url, file_name, target_word,
@@ -56,8 +68,79 @@ function hasProlificIdentity(client) {
   );
 }
 
+function badRequest(message) {
+  const error = new Error(message);
+  error.status = 400;
+  throw error;
+}
+
+function requiredIntegerInRange(name, value, min, max) {
+  let number = null;
+  if (typeof value === "number") {
+    number = value;
+  } else if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+    number = Number(value.trim());
+  }
+  if (!Number.isSafeInteger(number) || number < min || number > max) {
+    badRequest(`${name} must be an integer between ${min} and ${max}.`);
+  }
+  return number;
+}
+
+function requiredChoice(name, value, allowedValues) {
+  if (typeof value !== "string") badRequest(`${name} is required.`);
+  const choice = value.trim();
+  if (!allowedValues.includes(choice)) badRequest(`${name} is not allowed.`);
+  return choice;
+}
+
+function optionalText(name, value, maxLength) {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value !== "string") badRequest(`${name} must be text.`);
+  const text = value.trim();
+  if (text.length > maxLength) badRequest(`${name} is too long.`);
+  return text;
+}
+
+function requireText(name, text) {
+  if (!text) badRequest(`${name} is required.`);
+  return text;
+}
+
+function conditionalText(choice, expectedChoice, text) {
+  return choice === expectedChoice ? nullableText(text) : null;
+}
+
 function canonicalKey(value) {
   return cleanText(value).toLowerCase();
+}
+
+function prolificIdentityMatches(session, client) {
+  return (
+    constantTimeEqual(canonicalKey(session?.prolific_pid), canonicalKey(client?.prolific_pid)) &&
+    constantTimeEqual(
+      canonicalKey(session?.prolific_study_id),
+      canonicalKey(client?.prolific_study_id),
+    ) &&
+    constantTimeEqual(
+      canonicalKey(session?.prolific_session_id),
+      canonicalKey(client?.prolific_session_id),
+    )
+  );
+}
+
+function identityMismatchResponse() {
+  return errorResponse("Saved session identity could not be verified.", 401);
+}
+
+function platformRequiresWordFamiliarity(platformVersion) {
+  const match = /^pronunciation_rating_v(\d+)\.(\d+)\.(\d+)$/i.exec(
+    cleanText(platformVersion),
+  );
+  if (!match) return false;
+  const major = Number.parseInt(match[1], 10);
+  const minor = Number.parseInt(match[2], 10);
+  return major > 0 || minor >= 7;
 }
 
 function participantKey(client, raterId, sessionLabel) {
@@ -160,7 +243,13 @@ async function recordDuplicateStart(db, sessionId, timestampIso, timestampMs) {
 }
 
 async function existingSessionResponse(db, session, sessionToken) {
-  const [practiceAssignment, mainAssignment, completedTrials, distractorEvents] = await Promise.all([
+  const [
+    practiceAssignment,
+    mainAssignment,
+    completedTrials,
+    distractorEvents,
+    wordFamiliarity,
+  ] = await Promise.all([
     db.prepare(ASSIGNMENT_SELECT).bind(session.id, "practice").all(),
     db.prepare(ASSIGNMENT_SELECT).bind(session.id, "main").all(),
     db
@@ -183,6 +272,15 @@ async function existingSessionResponse(db, session, sessionToken) {
       )
       .bind(session.id)
       .all(),
+    db
+      .prepare(
+        `SELECT word_number, target_word, word_known, submitted_at
+         FROM word_familiarity_responses
+         WHERE session_id = ?
+         ORDER BY word_number`,
+      )
+      .bind(session.id)
+      .all(),
   ]);
   const practiceRows = practiceAssignment.results || [];
   const mainRows = mainAssignment.results || [];
@@ -199,6 +297,12 @@ async function existingSessionResponse(db, session, sessionToken) {
     .map((row) => nullableInt(row.trial_index))
     .filter(Boolean);
   const distractorCompletedIndexSet = new Set(distractorCompletedIndexes);
+  const wordFamiliarityRows = (wordFamiliarity.results || []).map((row) => ({
+    word_number: nullableInt(row.word_number),
+    target_word: cleanText(row.target_word),
+    known: Number(row.word_known) === 1,
+    submitted_at: cleanText(row.submitted_at),
+  }));
   const nextAssignment = [...practiceRows, ...mainRows].find((row) => {
     const phase = cleanText(row.phase);
     const trialIndex = nullableInt(row.trial_index);
@@ -210,7 +314,10 @@ async function existingSessionResponse(db, session, sessionToken) {
         next_trial_index: nullableInt(nextAssignment.trial_index),
       }
     : {
-        next_phase: "complete",
+        next_phase:
+          Number(session.word_familiarity_required) !== 1 || wordFamiliarityRows.length === 50
+            ? "complete"
+            : "word_familiarity",
         next_trial_index: null,
       };
   if (resume.next_phase === "main" && resume.next_trial_index > 1) {
@@ -236,11 +343,22 @@ async function existingSessionResponse(db, session, sessionToken) {
     trial_count: Number(session.trial_count || 0),
     japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6),
     chinese_familiarity_1_6: nullableInt(session.chinese_familiarity_1_6),
+    participant_age_years: nullableInt(session.participant_age_years),
+    english_variety: cleanText(session.english_variety),
+    english_variety_other: cleanText(session.english_variety_other),
+    gender: cleanText(session.gender),
+    gender_other: cleanText(session.gender_other),
+    english_teaching_experience: cleanText(session.english_teaching_experience),
+    english_teaching_experience_details: cleanText(session.english_teaching_experience_details),
+    linguistics_knowledge: cleanText(session.linguistics_knowledge),
+    linguistics_knowledge_details: cleanText(session.linguistics_knowledge_details),
     session_token: sessionToken,
     counterbalance: counterbalancePayload(counterbalanceFromSession(session)),
     practice_assignment: practiceRows,
     main_assignment: mainRows,
     saved_trials: savedTrials,
+    word_familiarity: wordFamiliarityRows,
+    word_familiarity_required: Number(session.word_familiarity_required) === 1,
     distractor_completed_trial_indexes: distractorCompletedIndexes,
     resume,
   };
@@ -319,24 +437,115 @@ export async function onRequestPost(context) {
     if (isProduction(context.env) && !counterbalanceEnabled) {
       return errorResponse("Server-side counterbalancing is required in production.", 400);
     }
-    assertRequiredIntRange("japanese_familiarity_1_6", body.japanese_familiarity_1_6, 1, 6);
-    assertRequiredIntRange("chinese_familiarity_1_6", body.chinese_familiarity_1_6, 1, 6);
-
     client = requestClientContext(context.request, body);
     requireProlificIdentity(client, context.env);
     const dryRun = isDryRunClient(client);
     const key = participantKey(client, raterId, sessionLabel);
+    if (hasProlificIdentity(client)) {
+      const existing = await findExistingProlificSession(db, client, key);
+      if (existing) {
+        if (!prolificIdentityMatches(existing, client)) return identityMismatchResponse();
+        return duplicateStartResponse(db, existing);
+      }
+    }
+    if (body.resume_only === true) {
+      return jsonResponse({ ok: true, existing_session: false, resume_only: true });
+    }
+    if (isProduction(context.env) && platformVersion !== CURRENT_PLATFORM_VERSION) {
+      return jsonResponse(
+        {
+          ok: false,
+          reload_required: true,
+          error: "The study was updated. Reload this page before starting.",
+        },
+        409,
+      );
+    }
     const turnstileVerified = await verifyTurnstile(
       context.request,
       context.env,
       body.turnstile_token,
     );
-    if (hasProlificIdentity(client)) {
-      const existing = await findExistingProlificSession(db, client, key);
-      if (existing) {
-        return duplicateStartResponse(db, existing);
-      }
+
+    const participantAgeYears = requiredIntegerInRange(
+      "participant_age_years",
+      body.participant_age_years,
+      1,
+      120,
+    );
+    const japaneseFamiliarity = requiredIntegerInRange(
+      "japanese_familiarity_1_6",
+      body.japanese_familiarity_1_6,
+      1,
+      6,
+    );
+    const chineseFamiliarity = requiredIntegerInRange(
+      "chinese_familiarity_1_6",
+      body.chinese_familiarity_1_6,
+      1,
+      6,
+    );
+    const englishVariety = requiredChoice(
+      "english_variety",
+      body.english_variety,
+      ENGLISH_VARIETIES,
+    );
+    const gender = requiredChoice("gender", body.gender, GENDER_OPTIONS);
+    const englishTeachingExperience = requiredChoice(
+      "english_teaching_experience",
+      body.english_teaching_experience,
+      YES_NO,
+    );
+    const linguisticsKnowledge = requiredChoice(
+      "linguistics_knowledge",
+      body.linguistics_knowledge,
+      YES_NO,
+    );
+    const englishVarietyOtherInput = optionalText(
+      "english_variety_other",
+      body.english_variety_other,
+      80,
+    );
+    const genderOtherInput = optionalText("gender_other", body.gender_other, 80);
+    const englishTeachingExperienceDetailsInput = optionalText(
+      "english_teaching_experience_details",
+      body.english_teaching_experience_details,
+      1000,
+    );
+    const linguisticsKnowledgeDetailsInput = optionalText(
+      "linguistics_knowledge_details",
+      body.linguistics_knowledge_details,
+      1000,
+    );
+    if (englishVariety === "other") {
+      requireText("english_variety_other", englishVarietyOtherInput);
     }
+    if (gender === "other") requireText("gender_other", genderOtherInput);
+    if (englishTeachingExperience === "yes") {
+      requireText(
+        "english_teaching_experience_details",
+        englishTeachingExperienceDetailsInput,
+      );
+    }
+    if (linguisticsKnowledge === "yes") {
+      requireText("linguistics_knowledge_details", linguisticsKnowledgeDetailsInput);
+    }
+    const englishVarietyOther = conditionalText(
+      englishVariety,
+      "other",
+      englishVarietyOtherInput,
+    );
+    const genderOther = conditionalText(gender, "other", genderOtherInput);
+    const englishTeachingExperienceDetails = conditionalText(
+      englishTeachingExperience,
+      "yes",
+      englishTeachingExperienceDetailsInput,
+    );
+    const linguisticsKnowledgeDetails = conditionalText(
+      linguisticsKnowledge,
+      "yes",
+      linguisticsKnowledgeDetailsInput,
+    );
 
     sessionId = crypto.randomUUID();
     const sessionToken = randomToken();
@@ -345,6 +554,8 @@ export async function onRequestPost(context) {
     const startedAt = new Date(startedAtMs).toISOString();
     const screenJson = safeJson(body.screen || {});
     const seed = cleanText(body.seed) || `${raterId}_${sessionLabel}_${platformVersion}`;
+    const wordFamiliarityRequired = isProduction(context.env) ||
+      platformRequiresWordFamiliarity(platformVersion);
     let manifestSummary = null;
 
     if (counterbalanceEnabled) {
@@ -392,14 +603,19 @@ export async function onRequestPost(context) {
           `INSERT INTO sessions (
             id, role, rater_id, session_label, task_mode, platform_version,
             prolific_pid, prolific_study_id, prolific_session_id, participant_key, seed,
-            user_agent, timezone, japanese_familiarity_1_6,
-            chinese_familiarity_1_6, completion_code, session_token_hash,
+            user_agent, timezone, participant_age_years, english_variety,
+            english_variety_other, gender, gender_other,
+            english_teaching_experience, english_teaching_experience_details,
+            linguistics_knowledge, linguistics_knowledge_details,
+            japanese_familiarity_1_6, chinese_familiarity_1_6,
+            word_familiarity_required,
+            completion_code, session_token_hash,
             turnstile_verified,
             counterbalance_allocation_id, counterbalance_cell, list_comb,
             pronunciation_style, screen_json,
             started_at, started_at_ms, last_seen_at, last_seen_at_ms,
             status, trial_count, completed_trial_count
-          ) VALUES (?, 'rater', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'started', ?, 0)`,
+          ) VALUES (?, 'rater', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'started', ?, 0)`,
         )
         .bind(
           sessionId,
@@ -414,8 +630,18 @@ export async function onRequestPost(context) {
           nullableText(seed),
           nullableText(client.user_agent),
           nullableText(body.timezone),
-          nullableInt(body.japanese_familiarity_1_6),
-          nullableInt(body.chinese_familiarity_1_6),
+          participantAgeYears,
+          englishVariety,
+          englishVarietyOther,
+          gender,
+          genderOther,
+          englishTeachingExperience,
+          englishTeachingExperienceDetails,
+          linguisticsKnowledge,
+          linguisticsKnowledgeDetails,
+          japaneseFamiliarity,
+          chineseFamiliarity,
+          wordFamiliarityRequired ? 1 : 0,
           null,
           sessionTokenHash,
           Number(turnstileVerified),
@@ -498,6 +724,7 @@ export async function onRequestPost(context) {
       if (isUniqueConstraintError(error) && hasProlificIdentity(client)) {
         const existing = await findExistingProlificSession(db, client, key);
         if (existing) {
+          if (!prolificIdentityMatches(existing, client)) return identityMismatchResponse();
           return duplicateStartResponse(db, existing);
         }
       }
@@ -516,8 +743,8 @@ export async function onRequestPost(context) {
         trial_count: assignment.length,
         started_at_ms: startedAtMs,
         seed: cleanText(body.seed),
-        japanese_familiarity_1_6: body.japanese_familiarity_1_6,
-        chinese_familiarity_1_6: body.chinese_familiarity_1_6,
+        japanese_familiarity_1_6: japaneseFamiliarity,
+        chinese_familiarity_1_6: chineseFamiliarity,
         counterbalance: counterbalancePayload(counterbalance),
         counterbalance_enabled: counterbalanceEnabled,
         dry_run: dryRun,
@@ -531,6 +758,7 @@ export async function onRequestPost(context) {
       session_token: sessionToken,
       trial_count: assignment.length,
       dry_run: dryRun,
+      word_familiarity_required: wordFamiliarityRequired,
       counterbalance: counterbalancePayload(counterbalance),
       main_assignment: mainAssignment,
     });

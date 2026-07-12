@@ -14,6 +14,7 @@ import {
   requireSameOrigin,
   requireSessionToken,
 } from "../_utils.js";
+import { TARGET_WORD_COUNT } from "../_word-familiarity.js";
 
 async function insertNonCriticalEvent(db, event) {
   try {
@@ -38,6 +39,7 @@ export async function onRequestPost(context) {
         `SELECT id, rater_id, trial_count, counterbalance_allocation_id,
            session_token_hash, started_at, started_at_ms, status,
            completed_trial_count, completion_url_issued_count,
+           word_familiarity_required,
            prolific_pid, prolific_study_id, prolific_session_id, participant_key
          FROM sessions WHERE id = ?`,
       )
@@ -89,14 +91,18 @@ export async function onRequestPost(context) {
              AND ra.phase = rt.phase
              AND ra.trial_index = rt.trial_index
             WHERE rt.session_id = ?
-              AND ra.id IS NULL) AS orphan_trial_count`,
+              AND ra.id IS NULL) AS orphan_trial_count,
+           (SELECT COUNT(*)
+            FROM word_familiarity_responses
+            WHERE session_id = ?) AS word_familiarity_count`,
       )
-      .bind(sessionId, sessionId, sessionId, sessionId)
+      .bind(sessionId, sessionId, sessionId, sessionId, sessionId)
       .first();
     const assignmentCount = Number(coverageRow?.assignment_count || 0);
     const completedCount = Number(coverageRow?.completed_count || 0);
     const missingAssignmentCount = Number(coverageRow?.missing_assignment_count || 0);
     const orphanTrialCount = Number(coverageRow?.orphan_trial_count || 0);
+    const wordFamiliarityCount = Number(coverageRow?.word_familiarity_count || 0);
     const expectedTrialCount = Number(session.trial_count || 0);
     const completedAtMs = nowMs();
     const completedAt = new Date(completedAtMs).toISOString();
@@ -150,6 +156,37 @@ export async function onRequestPost(context) {
           completed_trial_count: completedCount,
           missing_assignment_count: missingAssignmentCount,
           orphan_trial_count: orphanTrialCount,
+          completion_code: "",
+          completion_url: "",
+          redirect_after_ms: 0,
+        },
+        409,
+      );
+    }
+
+    if (
+      Number(session.word_familiarity_required) === 1 &&
+      wordFamiliarityCount !== TARGET_WORD_COUNT
+    ) {
+      await insertNonCriticalEvent(db, {
+        session_id: sessionId,
+        rater_id: session.rater_id,
+        event_type: "session_complete_rejected_word_familiarity",
+        event_at: completedAt,
+        payload: {
+          word_familiarity_count: wordFamiliarityCount,
+          required_word_familiarity_count: TARGET_WORD_COUNT,
+          dry_run: dryRun,
+        },
+      });
+      return jsonResponse(
+        {
+          ok: false,
+          retryable: false,
+          session_id: sessionId,
+          status: "word_familiarity_required",
+          word_familiarity_count: wordFamiliarityCount,
+          required_word_familiarity_count: TARGET_WORD_COUNT,
           completion_code: "",
           completion_url: "",
           redirect_after_ms: 0,
@@ -240,6 +277,7 @@ export async function onRequestPost(context) {
         completed_trial_count: completedCount,
         missing_assignment_count: missingAssignmentCount,
         orphan_trial_count: orphanTrialCount,
+        word_familiarity_count: wordFamiliarityCount,
         status,
         elapsed_seconds: elapsed,
         elapsed_ms: elapsedMs,
@@ -258,6 +296,7 @@ export async function onRequestPost(context) {
       completed_trial_count: completedCount,
       missing_assignment_count: missingAssignmentCount,
       orphan_trial_count: orphanTrialCount,
+      word_familiarity_count: wordFamiliarityCount,
       completion_code: completion.code,
       completion_url: completion.url,
       redirect_after_ms: completion.url ? 1200 : 0,
