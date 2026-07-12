@@ -259,7 +259,7 @@ function practiceAssignment() {
     participant_id: item.talker,
     native_language: item.l1_condition,
     accent_condition: item.pronunciation_condition,
-    condition: "practice",
+    condition: `practice_${item.pronunciation_condition}`,
     talker: item.talker,
     word_number: String(item.trial_index),
     trial_number: String(item.trial_index),
@@ -439,7 +439,9 @@ async function liveApiDryRunStartCheck(baseUrl) {
               actual.participant_id === expected.talker &&
               actual.talker === expected.talker &&
               actual.spoken_form === expected.spoken_form &&
-              actual.source_format === expected.source_format
+              actual.source_format === expected.source_format &&
+              actual.accent_condition === expected.pronunciation_condition &&
+              actual.condition === `practice_${expected.pronunciation_condition}`
               ? []
               : [`practice assignment ${index + 1} does not match authoritative metadata for ${expected.target_word}`];
           }),

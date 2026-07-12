@@ -263,6 +263,12 @@ function checkPractice(rows, options) {
         `practice row ${index + 1}: expected pronunciation ${expected.pronunciation}, found ${row.pronunciation_condition || "(missing)"}`,
       );
     }
+    if (String(row.accent_condition || "").trim() !== expected.pronunciation) {
+      problems.push(`practice row ${index + 1}: expected accent_condition ${expected.pronunciation}`);
+    }
+    if (String(row.condition || "").trim() !== `practice_${expected.pronunciation}`) {
+      problems.push(`practice row ${index + 1}: expected condition practice_${expected.pronunciation}`);
+    }
     if (String(row.expert_accentedness_range || "").trim() !== expected.range) {
       problems.push(`practice row ${index + 1}: expected Accentedness range ${expected.range}`);
     }
@@ -468,6 +474,7 @@ function checkProlificFlowSourceGuards(options) {
     requireSnippet(problems, "app.js", app, expected.sourceFormat);
   }
   forbidSnippet(problems, "app.js", app, "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703");
+  forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
   forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
   requireSnippet(problems, "index.html", index, 'src="app.js?v=0.8.0"');

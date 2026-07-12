@@ -102,7 +102,7 @@ function practiceAssignment() {
     participant_id: item.talker,
     native_language: item.l1,
     accent_condition: item.pronunciation,
-    condition: "practice",
+    condition: `practice_${item.pronunciation}`,
     talker: item.talker,
     word_number: String(index + 1),
     trial_number: String(index + 1),
@@ -284,7 +284,8 @@ async function main() {
   );
   assert(
     !appPage.text.includes("elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703") &&
-      !appPage.text.includes("CHN_Male_shelter_Practice.wav"),
+      !appPage.text.includes("CHN_Male_shelter_Practice.wav") &&
+      !appPage.text.includes("practice_elevenlabs_mp3_norm"),
     "Participant app still contains the superseded practice set.",
   );
 
@@ -694,7 +695,9 @@ async function main() {
       primaryPracticeFour?.participant_id === "macos_tts_tingting" &&
       primaryPracticeFour?.talker === "macos_tts_tingting" &&
       primaryPracticeFour?.spoken_form === "披萨" &&
-      primaryPracticeFour?.source_format === "macos_say_tingting_tts_wav",
+      primaryPracticeFour?.source_format === "macos_say_tingting_tts_wav" &&
+      primaryPracticeFour?.accent_condition === "accented" &&
+      primaryPracticeFour?.condition === "practice_accented",
     "Tingting pizza provenance is not preserved in ratings.csv.",
   );
   const progressPracticeRows = ratingRows.filter(

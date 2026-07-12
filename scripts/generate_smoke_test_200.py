@@ -406,7 +406,7 @@ def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
             "participant_id": talker,
             "native_language": l1,
             "accent_condition": pron,
-            "condition": "practice",
+            "condition": f"practice_{pron}",
             "talker": talker,
             "pass_number": "",
             "word_number": "",
@@ -1219,6 +1219,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             "talker": item[4],
             "spoken_form": item[8],
             "source_format": item[9],
+            "condition": f"practice_{item[3]}",
+            "accent_condition": item[3],
         }
         for index, item in enumerate(PRACTICE_ITEMS, start=1)
     }
@@ -1226,7 +1228,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         conn,
         """
         SELECT trial_index, target_word, practice_group, l1_condition,
-               pronunciation_condition, audio_url, participant_id, talker,
+               pronunciation_condition, accent_condition, condition,
+               audio_url, participant_id, talker,
                spoken_form, practice_note, source_format,
                expert_comprehensibility_1_9, expert_accentedness_1_9
         FROM rating_assignments
@@ -1242,6 +1245,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             or row["practice_group"] != expected_item["practice_group"]
             or row["l1_condition"] != expected_item["l1_condition"]
             or row["pronunciation_condition"] != expected_item["pronunciation_condition"]
+            or row["accent_condition"] != expected_item["accent_condition"]
+            or row["condition"] != expected_item["condition"]
             or row["audio_url"] != expected_item["audio_url"]
             or row["participant_id"] != expected_item["talker"]
             or row["talker"] != expected_item["talker"]
