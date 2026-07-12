@@ -29,7 +29,7 @@ def insert_session(
           id, rater_id, session_label, task_mode, platform_version,
           prolific_pid, prolific_study_id, prolific_session_id,
           participant_key, started_at, last_seen_at, status, trial_count
-        ) VALUES (?, ?, ?, 'combined', 'pronunciation_rating_v0.8.0',
+        ) VALUES (?, ?, ?, 'combined', 'pronunciation_rating_v0.8.1',
                   ?, ?, ?, ?, '2026-07-13T00:00:00.000Z',
                   '2026-07-13T00:00:00.000Z', ?, 104)
         """,

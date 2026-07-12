@@ -8,7 +8,7 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
@@ -26,6 +26,8 @@ const DEFAULTS = {
   durationSummary: path.join(PACKAGE_ROOT, "metadata", "duration_estimate_summary.csv"),
   indexHtml: path.join(REPO_ROOT, "index.html"),
   appJs: path.join(REPO_ROOT, "app.js"),
+  audioLifecycle: path.join(REPO_ROOT, "audio-lifecycle.js"),
+  audioLifecycleTest: path.join(REPO_ROOT, "scripts", "test_audio_lifecycle.cjs"),
   utilsApi: path.join(REPO_ROOT, "functions", "api", "_utils.js"),
   wordFamiliarityModule: path.join(REPO_ROOT, "functions", "api", "_word-familiarity.js"),
   wordFamiliarityApi: path.join(REPO_ROOT, "functions", "api", "session", "word-familiarity.js"),
@@ -387,6 +389,8 @@ function checkProlificFlowSourceGuards(options) {
   const problems = [];
   const index = readTextIfExists(options.indexHtml);
   const app = readTextIfExists(options.appJs);
+  const audioLifecycle = readTextIfExists(options.audioLifecycle);
+  const audioLifecycleTest = readTextIfExists(options.audioLifecycleTest);
   const utils = readTextIfExists(options.utilsApi);
   const wordFamiliarityModule = readTextIfExists(options.wordFamiliarityModule);
   const wordFamiliarityApi = readTextIfExists(options.wordFamiliarityApi);
@@ -411,6 +415,8 @@ function checkProlificFlowSourceGuards(options) {
   for (const [label, text] of [
     ["index.html", index],
     ["app.js", app],
+    ["audio-lifecycle.js", audioLifecycle],
+    ["scripts/test_audio_lifecycle.cjs", audioLifecycleTest],
     ["_utils.js", utils],
     ["_word-familiarity.js", wordFamiliarityModule],
     ["session/word-familiarity.js", wordFamiliarityApi],
@@ -464,6 +470,16 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "app.js", app, "saveResult?.duplicate !== true");
   requireSnippet(problems, "app.js", app, "replayPracticeFeedbackAudio");
   requireSnippet(problems, "app.js", app, "practiceFeedbackReplayGeneration");
+  requireSnippet(problems, "app.js", app, "audioPlaybackGeneration");
+  requireSnippet(problems, "app.js", app, "playbackSettled");
+  requireSnippet(problems, "app.js", app, "AUDIO_LIFECYCLE.isPlaybackCurrent");
+  requireSnippet(problems, "app.js", app, "AUDIO_LIFECYCLE.createFeedbackReplayLifecycle");
+  requireSnippet(problems, "audio-lifecycle.js", audioLifecycle, "createFeedbackReplayLifecycle");
+  requireSnippet(problems, "audio-lifecycle.js", audioLifecycle, "isPlaybackCurrent");
+  requireSnippet(problems, "audio-lifecycle.js", audioLifecycle, 'complete("timeupdate")');
+  requireSnippet(problems, "audio-lifecycle.js", audioLifecycle, '"timeout"');
+  requireSnippet(problems, "scripts/test_audio_lifecycle.cjs", audioLifecycleTest, "practice_feedback_three_sequential_replays: true");
+  requireSnippet(problems, "scripts/test_audio_lifecycle.cjs", audioLifecycleTest, "stale_audio_error_guard: true");
   requireSnippet(problems, "app.js", app, "You may replay this practice audio as many times as needed.");
   requireSnippet(problems, "app.js", app, "Expert raters rated this as:");
   requireSnippet(problems, "app.js", app, "Comprehensibility: — (Your rating:");
@@ -483,7 +499,8 @@ function checkProlificFlowSourceGuards(options) {
   forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
   forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
-  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.8.0"');
+  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.8.1"');
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.8.1"');
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-btn"');
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-status"');
   requireSnippet(problems, "index.html", index, "You may replay the audio while reviewing this practice feedback.");
@@ -571,7 +588,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.8.0_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.8.1_smoke");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "session_resume_practice_required");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "practice_feedback_replay_start");
@@ -612,7 +629,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_identity_triple_match: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "csv_formula_neutralized: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "word_familiarity_rows: 50");
-  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_set_v080_exact: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_set_v081_exact: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_feedback_unlimited_replay_contract: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_replays_all_practice: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_preserves_first_unsaved_main: true");
@@ -681,6 +698,8 @@ const options = {
   durationSummary: path.resolve(argValue("--duration-summary", DEFAULTS.durationSummary)),
   indexHtml: path.resolve(argValue("--index-html", DEFAULTS.indexHtml)),
   appJs: path.resolve(argValue("--app-js", DEFAULTS.appJs)),
+  audioLifecycle: path.resolve(argValue("--audio-lifecycle", DEFAULTS.audioLifecycle)),
+  audioLifecycleTest: path.resolve(argValue("--audio-lifecycle-test", DEFAULTS.audioLifecycleTest)),
   utilsApi: path.resolve(argValue("--utils-api", DEFAULTS.utilsApi)),
   wordFamiliarityModule: path.resolve(argValue("--word-familiarity-module", DEFAULTS.wordFamiliarityModule)),
   wordFamiliarityApi: path.resolve(argValue("--word-familiarity-api", DEFAULTS.wordFamiliarityApi)),

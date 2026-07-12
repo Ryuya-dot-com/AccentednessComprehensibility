@@ -1,7 +1,11 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.8.0";
+  const VERSION = "pronunciation_rating_v0.8.1";
+  const AUDIO_LIFECYCLE = window.AudioLifecycle;
+  if (!AUDIO_LIFECYCLE?.createFeedbackReplayLifecycle || !AUDIO_LIFECYCLE?.isPlaybackCurrent) {
+    throw new Error("Audio lifecycle helper is unavailable.");
+  }
   const DEFAULT_REMOTE_MANIFEST_URL = "remote_manifest.csv";
   const AUDIO_EXTENSIONS = /\.(wav|mp3|m4a|ogg|webm)$/i;
   const REQUIRED_MANIFEST_FILE_COLUMNS = [
@@ -229,6 +233,7 @@
     practiceFeedbackReplayGeneration: 0,
     currentUrl: null,
     currentAudio: null,
+    audioPlaybackGeneration: 0,
     audioStartMs: null,
     playedAtIso: "",
     trialStage: "single",
@@ -2301,10 +2306,13 @@
   }
 
   function cleanupAudio() {
-    if (state.currentAudio) {
-      state.currentAudio.pause();
-      state.currentAudio.src = "";
-      state.currentAudio = null;
+    state.audioPlaybackGeneration += 1;
+    const audio = state.currentAudio;
+    state.currentAudio = null;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
     }
     if (state.currentUrl) {
       URL.revokeObjectURL(state.currentUrl);
@@ -2440,6 +2448,11 @@
   async function playCurrentAudio() {
     const item = state.trials[state.currentIndex];
     if (!item) return;
+    if (state.pendingPracticeRow) {
+      els.playBtn.disabled = true;
+      els.playBtn.textContent = "Practice response complete";
+      return;
+    }
     if (!AUDIO_REPLAY_ALLOWED && currentStagePlayed()) {
       els.playBtn.disabled = true;
       els.playBtn.textContent = "Audio played";
@@ -2462,6 +2475,12 @@
       throw new Error("No audio source is attached to this trial.");
     }
     state.currentAudio = audio;
+    state.audioPlaybackGeneration += 1;
+    const playbackGeneration = state.audioPlaybackGeneration;
+    let playbackSettled = false;
+    const playbackIsCurrent = () =>
+      !playbackSettled &&
+      AUDIO_LIFECYCLE.isPlaybackCurrent(state, audio, playbackGeneration);
 
     els.playBtn.disabled = true;
     els.audioState.textContent = "Playing...";
@@ -2482,6 +2501,8 @@
     );
 
     audio.addEventListener("ended", () => {
+      if (!playbackIsCurrent()) return;
+      playbackSettled = true;
       logServerEvent(
         "audio_play_end",
         {
@@ -2496,6 +2517,8 @@
     }, { once: true });
 
     audio.addEventListener("error", () => {
+      if (!playbackIsCurrent()) return;
+      playbackSettled = true;
       resetPlaybackAttemptAfterError();
       els.audioState.textContent = "This audio file could not be played.";
       els.playBtn.disabled = false;
@@ -2783,6 +2806,9 @@
       els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
     }
     if (els.practiceFeedback) els.practiceFeedback.classList.remove("hidden");
+    els.playBtn.disabled = true;
+    els.playBtn.textContent = "Practice response complete";
+    els.audioState.textContent = "Use Replay practice audio below to listen again.";
     setScaleInputsDisabled(true);
     if (els.dictationInput) els.dictationInput.disabled = true;
     if (els.practiceReasonBlock) {
@@ -2795,6 +2821,8 @@
   async function replayPracticeFeedbackAudio() {
     const item = currentTrial();
     if (!state.pendingPracticeRow || !isPracticeTrial(item)) return;
+    const pendingPracticeRow = state.pendingPracticeRow;
+    const replayTrialIndex = state.currentIndex;
     cleanupAudio();
     let audio;
     if (item.audio_url) {
@@ -2810,10 +2838,10 @@
     state.practiceFeedbackAudioPlaying = true;
     state.practiceFeedbackReplayGeneration += 1;
     const replayGeneration = state.practiceFeedbackReplayGeneration;
-    let replayFinished = false;
     const replayIsCurrent = () =>
-      !replayFinished &&
       state.practiceFeedbackReplayGeneration === replayGeneration &&
+      state.pendingPracticeRow === pendingPracticeRow &&
+      state.currentIndex === replayTrialIndex &&
       state.currentAudio === audio;
     const replayNumber = state.practiceFeedbackReplayCount;
     els.practiceFeedbackReplayBtn.disabled = true;
@@ -2829,66 +2857,53 @@
       },
       state.currentIndex + 1,
     );
-    audio.addEventListener("ended", () => {
-      if (!replayIsCurrent()) return;
-      replayFinished = true;
-      state.practiceFeedbackAudioPlaying = false;
-      els.practiceFeedbackReplayBtn.disabled = false;
-      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
-      els.practiceFeedbackReplayStatus.textContent =
-        `Replay ${replayNumber} finished. You may listen again.`;
-      updateNextState();
-      logServerEvent(
-        "practice_feedback_replay_end",
-        {
-          file_name: item.file_name,
-          target_word: item.target_word,
-          replay_number: replayNumber,
-          duration_s: Number.isFinite(audio.duration) ? audio.duration : "",
-        },
-        state.currentIndex + 1,
-      );
-    }, { once: true });
-    audio.addEventListener("error", () => {
-      if (!replayIsCurrent()) return;
-      replayFinished = true;
-      state.practiceFeedbackAudioPlaying = false;
-      els.practiceFeedbackReplayBtn.disabled = false;
-      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
-      els.practiceFeedbackReplayStatus.textContent = "The practice audio could not be replayed.";
-      updateNextState();
-      logServerEvent(
-        "practice_feedback_replay_error",
-        {
-          file_name: item.file_name,
-          target_word: item.target_word,
-          replay_number: replayNumber,
-        },
-        state.currentIndex + 1,
-      );
-    }, { once: true });
+    const lifecycle = AUDIO_LIFECYCLE.createFeedbackReplayLifecycle(audio, {
+      isCurrent: replayIsCurrent,
+      onComplete: ({ source }) => {
+        state.practiceFeedbackAudioPlaying = false;
+        els.practiceFeedbackReplayBtn.disabled = false;
+        els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+        els.practiceFeedbackReplayStatus.textContent =
+          `Replay ${replayNumber} finished. You may listen again.`;
+        updateNextState();
+        logServerEvent(
+          "practice_feedback_replay_end",
+          {
+            file_name: item.file_name,
+            target_word: item.target_word,
+            replay_number: replayNumber,
+            duration_s: Number.isFinite(audio.duration) ? audio.duration : "",
+            completion_source: source,
+          },
+          state.currentIndex + 1,
+        );
+      },
+      onError: ({ error, source }) => {
+        if (source === "timeout") audio.pause();
+        state.practiceFeedbackAudioPlaying = false;
+        els.practiceFeedbackReplayBtn.disabled = false;
+        els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
+        els.practiceFeedbackReplayStatus.textContent = source === "timeout"
+          ? "Replay did not finish normally. You may try again."
+          : "The practice audio could not be replayed. Please try again.";
+        updateNextState();
+        logServerEvent(
+          "practice_feedback_replay_error",
+          {
+            file_name: item.file_name,
+            target_word: item.target_word,
+            replay_number: replayNumber,
+            error_source: source,
+            error: String(error?.message || error),
+          },
+          state.currentIndex + 1,
+        );
+      },
+    });
     try {
       await audio.play();
     } catch (error) {
-      if (!replayIsCurrent()) return;
-      replayFinished = true;
-      state.practiceFeedbackAudioPlaying = false;
-      els.practiceFeedbackReplayBtn.disabled = false;
-      els.practiceFeedbackReplayBtn.textContent = "Replay practice audio";
-      els.practiceFeedbackReplayStatus.textContent = PARTICIPANT_MODE
-        ? "The practice audio could not be replayed. Please try again."
-        : `Practice replay failed: ${error.message}`;
-      updateNextState();
-      logServerEvent(
-        "practice_feedback_replay_error",
-        {
-          file_name: item.file_name,
-          target_word: item.target_word,
-          replay_number: replayNumber,
-          error: String(error?.message || error),
-        },
-        state.currentIndex + 1,
-      );
+      lifecycle.fail(error, "play_rejected");
     }
   }
 

@@ -263,6 +263,7 @@ Current practice audio uses four researcher-selected WAV files hosted in product
 - Each practice trial follows the main-task flow: play the audio for word identification, type the English word, continue, play the same audio for rating, rate accentedness, and then rate comprehensibility.
 - Practice feedback uses `The word played`, shows the documented expert Accentedness reference range, and repeats the participant's Accentedness and Comprehensibility ratings. It does not invent a scalar expert rating and does not ask participants to justify their ratings.
 - The practice-feedback screen permits unlimited replay so the calibration stimulus can be checked. This exception applies only after a practice response; response pages and all main-task pages retain the one-playback rule.
+- Replay completion is guarded against stale events from the previous response-stage audio and has `ended`, near-end `timeupdate`, and timeout recovery paths, so the feedback Replay button is released after every attempt.
 
 The direct production audio base is `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`. The local source WAVs are under `/Users/tohokusla/Dropbox/Accentedness/Stimuli/Practice&Calibration/`, and the standardized R2 filenames and source provenance are recorded in `practice_manifest.csv`. Both scalar fields, `expert_comprehensibility_1_9` and `expert_accentedness_1_9`, remain blank because exact scalar expert ratings have not been established; `expert_accentedness_range` stores the documented ranges in that manifest.
 
