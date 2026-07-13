@@ -2,6 +2,7 @@ import {
   cleanText,
   errorResponse,
   insertEvent,
+  isDryRunSession,
   jsonResponse,
   nullableInt,
   nowMs,
@@ -150,6 +151,73 @@ export async function onRequestPost(context) {
       await db.batch(statements.slice(index, index + 50));
     }
 
+    const mismatchedAllocationRows = await db
+      .prepare(
+        `SELECT
+           ca.id, ca.status AS allocation_status,
+           s.id AS session_id, s.status AS session_status, s.completed_at,
+           s.prolific_study_id, s.participant_key
+         FROM counterbalance_allocations ca
+         JOIN sessions s ON s.id = ca.session_id
+         WHERE s.status != 'started'
+           AND ca.status != CASE
+             WHEN s.status = 'completed' THEN
+               CASE
+                 WHEN UPPER(COALESCE(s.prolific_study_id, '')) = 'DRY_RUN'
+                   OR LOWER(COALESCE(s.participant_key, '')) LIKE 'dry-run:%'
+                 THEN 'dry_run_completed'
+                 ELSE 'completed'
+               END
+             ELSE
+               CASE
+                 WHEN UPPER(COALESCE(s.prolific_study_id, '')) = 'DRY_RUN'
+                   OR LOWER(COALESCE(s.participant_key, '')) LIKE 'dry-run:%'
+                 THEN 'dry_run_incomplete'
+                 ELSE 'incomplete'
+               END
+           END
+         ORDER BY ca.assigned_at`,
+      )
+      .all();
+    const mismatchRows = mismatchedAllocationRows.results || [];
+    const reconciliationStatements = mismatchRows.map((row) => {
+      const desiredStatus = isDryRunSession(row)
+        ? cleanText(row.session_status) === "completed"
+          ? "dry_run_completed"
+          : "dry_run_incomplete"
+        : cleanText(row.session_status) === "completed"
+          ? "completed"
+          : "incomplete";
+      return db
+        .prepare(
+          `UPDATE counterbalance_allocations
+           SET status = ?, completed_at = ?, updated_at = ?
+           WHERE id = ?
+             AND status = ?
+             AND EXISTS (
+               SELECT 1 FROM sessions
+               WHERE id = ? AND status = ?
+             )`,
+        )
+        .bind(
+          desiredStatus,
+          desiredStatus.endsWith("completed") ? row.completed_at : null,
+          finalizedAt,
+          row.id,
+          row.allocation_status,
+          row.session_id,
+          row.session_status,
+        );
+    });
+    let reconciledAllocationTotal = 0;
+    for (let index = 0; index < reconciliationStatements.length; index += 50) {
+      const results = await db.batch(reconciliationStatements.slice(index, index + 50));
+      reconciledAllocationTotal += results.reduce(
+        (sum, result) => sum + Number(result?.meta?.changes || 0),
+        0,
+      );
+    }
+
     const finalizedRows = await db
       .prepare(
         `SELECT status, COUNT(*) AS count
@@ -181,6 +249,8 @@ export async function onRequestPost(context) {
         incomplete_dropout: incompleteDropout,
         abandoned,
         orphan_allocation_finalized_total: orphanAllocations.length,
+        allocation_mismatch_candidate_total: mismatchRows.length,
+        allocation_mismatch_reconciled_total: reconciledAllocationTotal,
       },
     });
 
@@ -196,6 +266,8 @@ export async function onRequestPost(context) {
       incomplete_dropout: incompleteDropout,
       abandoned,
       orphan_allocation_finalized_total: orphanAllocations.length,
+      allocation_mismatch_candidate_total: mismatchRows.length,
+      allocation_mismatch_reconciled_total: reconciledAllocationTotal,
     });
   } catch (error) {
     return errorResponse(error.message || "Could not finalize stale sessions.", error.status || 500);

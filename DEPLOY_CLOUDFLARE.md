@@ -58,6 +58,7 @@ Root directory: /
 D1 binding name: DB
 Pages secret: ADMIN_TOKEN
 Pages secret: PROLIFIC_COMPLETION_URL or PROLIFIC_COMPLETION_CODE
+Pages secret: COUNTERBALANCE_COHORTS_JSON
 Optional Pages secret: COUNTERBALANCE_MANIFEST_URL
 Optional Pages variable: COUNTERBALANCE_ALLOWED_HOSTS=<comma-separated hosts>
 Optional Pages secret: TURNSTILE_SECRET_KEY
@@ -248,6 +249,14 @@ npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migr
 ```
 
 The migration excludes only `status='start_failed'` rows from the three unique Prolific indexes. Active and completed rows remain locked. When archiving an incomplete researcher preview, also change its `participant_key` to a unique `dry-run:archived-preview:<session-id>` value and its counterbalance allocation status to `dry_run_incomplete`; do not blank or mask the stored Prolific IDs.
+
+Before deploying v0.9, apply the versioned speaker-pattern bundle migration:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migrations/0015_speaker_pattern_bundles.sql
+```
+
+Legacy rows intentionally keep `NULL` bundle/version/cohort values and resume their stored assignments; do not backfill them.
 
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 

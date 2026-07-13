@@ -24,6 +24,48 @@ function liveSessionSql(alias = "s") {
 const RECENT_SESSION_DEFAULT_LIMIT = 25;
 const RECENT_SESSION_MAX_LIMIT = 100;
 const RECENT_SESSION_MAX_OFFSET = 100_000;
+const CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
+
+function configuredAllocationCohorts(env) {
+  const cohorts = new Set([`dry_run:${CURRENT_ALLOCATION_STRATEGY_VERSION}`]);
+  const fixed = cleanText(env.COUNTERBALANCE_COHORT_ID);
+  if (fixed) cohorts.add(fixed);
+  const configuredMap = cleanText(env.COUNTERBALANCE_COHORTS_JSON);
+  if (configuredMap) {
+    try {
+      const parsed = JSON.parse(configuredMap);
+      if (parsed && typeof parsed === "object") {
+        for (const value of Object.values(parsed)) {
+          const cohort = cleanText(value);
+          if (cohort) cohorts.add(cohort);
+        }
+      }
+    } catch {
+      // Session start reports invalid cohort configuration. Keep the protected
+      // admin summary available so existing allocation scopes remain visible.
+    }
+  }
+  return [...cohorts].sort();
+}
+
+function allocationScopeCte(env) {
+  const cohorts = configuredAllocationCohorts(env);
+  return {
+    sql: `configured_scopes(allocation_cohort, allocation_strategy_version) AS (
+      VALUES ${cohorts.map(() => "(?, ?)").join(", ")}
+    ),
+    scopes AS (
+      SELECT allocation_cohort, allocation_strategy_version
+      FROM configured_scopes
+      UNION
+      SELECT DISTINCT allocation_cohort, allocation_strategy_version
+      FROM counterbalance_allocations
+      WHERE allocation_cohort IS NOT NULL
+        AND allocation_strategy_version IS NOT NULL
+    )`,
+    bindings: cohorts.flatMap((cohort) => [cohort, CURRENT_ALLOCATION_STRATEGY_VERSION]),
+  };
+}
 
 function boundedQueryInt(value, fallback, min, max) {
   const parsed = nullableInt(value);
@@ -73,7 +115,8 @@ export async function onRequestGet(context) {
     const recentWhereSql = includeDryRun ? "1 = 1" : liveSessionSql("s");
     const staleAfterMinutes = Math.max(1, nullableInt(context.env.STALE_SESSION_MINUTES) || 240);
     const staleCutoffMs = nowMs() - staleAfterMinutes * 60_000;
-    const [sessions, trials, assignments, events, wordFamiliarity] = await Promise.all([
+    const allocationScopes = allocationScopeCte(context.env);
+    const [sessions, trials, assignments, events, wordFamiliarity, speakerPatternBundles] = await Promise.all([
       db.prepare("SELECT COUNT(*) AS count FROM sessions").first(),
       db.prepare("SELECT COUNT(*) AS count FROM rating_trials").first(),
       db.prepare("SELECT COUNT(*) AS count FROM rating_assignments").first(),
@@ -87,6 +130,7 @@ export async function onRequestGet(context) {
            FROM word_familiarity_responses`,
         )
         .first(),
+      db.prepare("SELECT COUNT(*) AS count FROM speaker_pattern_bundles").first(),
     ]);
 
     const statusRows = await db
@@ -105,7 +149,10 @@ export async function onRequestGet(context) {
 
     const counterbalanceRows = await db
       .prepare(
-        `SELECT
+        `WITH ${allocationScopes.sql}
+        SELECT
+          sc.allocation_cohort,
+          sc.allocation_strategy_version,
           cc.cell_id,
           cc.list_comb,
           cc.pronunciation_style,
@@ -117,10 +164,120 @@ export async function onRequestGet(context) {
           SUM(CASE WHEN ca.status = 'dry_run_started' THEN 1 ELSE 0 END) AS dry_run_started,
           SUM(CASE WHEN ca.status = 'dry_run_incomplete' THEN 1 ELSE 0 END) AS dry_run_incomplete,
           SUM(CASE WHEN ca.status LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS dry_run_assigned
-        FROM counterbalance_cells cc
-        LEFT JOIN counterbalance_allocations ca ON ca.cell_id = cc.cell_id
-        GROUP BY cc.cell_id, cc.list_comb, cc.pronunciation_style
-        ORDER BY cc.cell_id`,
+        FROM scopes sc
+        CROSS JOIN counterbalance_cells cc
+        LEFT JOIN counterbalance_allocations ca
+          ON ca.cell_id = cc.cell_id
+         AND ca.allocation_cohort = sc.allocation_cohort
+         AND ca.allocation_strategy_version = sc.allocation_strategy_version
+        GROUP BY
+          sc.allocation_cohort, sc.allocation_strategy_version,
+          cc.cell_id, cc.list_comb, cc.pronunciation_style
+        UNION ALL
+        SELECT
+          ca.allocation_cohort,
+          ca.allocation_strategy_version,
+          ca.cell_id,
+          cc.list_comb,
+          cc.pronunciation_style,
+          SUM(CASE WHEN ca.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+          SUM(CASE WHEN ca.status = 'started' THEN 1 ELSE 0 END) AS started,
+          SUM(CASE WHEN ca.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete,
+          SUM(CASE WHEN ca.status NOT LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS assigned,
+          SUM(CASE WHEN ca.status = 'dry_run_completed' THEN 1 ELSE 0 END) AS dry_run_completed,
+          SUM(CASE WHEN ca.status = 'dry_run_started' THEN 1 ELSE 0 END) AS dry_run_started,
+          SUM(CASE WHEN ca.status = 'dry_run_incomplete' THEN 1 ELSE 0 END) AS dry_run_incomplete,
+          SUM(CASE WHEN ca.status LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS dry_run_assigned
+        FROM counterbalance_allocations ca
+        JOIN counterbalance_cells cc ON cc.cell_id = ca.cell_id
+        WHERE ca.allocation_cohort IS NULL
+           OR ca.allocation_strategy_version IS NULL
+        GROUP BY
+          ca.allocation_cohort, ca.allocation_strategy_version,
+          ca.cell_id, cc.list_comb, cc.pronunciation_style
+        ORDER BY 1, 2, 3`,
+      )
+      .bind(...allocationScopes.bindings)
+      .all();
+
+    const counterbalanceBundleRows = await db
+      .prepare(
+        `WITH ${allocationScopes.sql}
+        SELECT
+          sc.allocation_cohort,
+          sc.allocation_strategy_version,
+          cc.cell_id,
+          cc.list_comb,
+          cc.pronunciation_style,
+          spb.speaker_pattern_bundle,
+          spb.block_1_pattern,
+          spb.block_2_pattern,
+          spb.block_3_pattern,
+          spb.block_4_pattern,
+          SUM(CASE WHEN ca.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+          SUM(CASE WHEN ca.status = 'started' THEN 1 ELSE 0 END) AS started,
+          SUM(CASE WHEN ca.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete,
+          SUM(CASE WHEN ca.status NOT LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS assigned,
+          SUM(CASE WHEN ca.status = 'dry_run_completed' THEN 1 ELSE 0 END) AS dry_run_completed,
+          SUM(CASE WHEN ca.status = 'dry_run_started' THEN 1 ELSE 0 END) AS dry_run_started,
+          SUM(CASE WHEN ca.status = 'dry_run_incomplete' THEN 1 ELSE 0 END) AS dry_run_incomplete,
+          SUM(CASE WHEN ca.status LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS dry_run_assigned
+        FROM scopes sc
+        CROSS JOIN counterbalance_cells cc
+        JOIN speaker_pattern_bundles spb
+          ON spb.allocation_strategy_version = sc.allocation_strategy_version
+        LEFT JOIN counterbalance_allocations ca
+          ON ca.allocation_cohort = sc.allocation_cohort
+         AND ca.allocation_strategy_version = sc.allocation_strategy_version
+         AND ca.cell_id = cc.cell_id
+         AND ca.speaker_pattern_bundle = spb.speaker_pattern_bundle
+        GROUP BY
+          sc.allocation_cohort, sc.allocation_strategy_version, cc.cell_id,
+          cc.list_comb, cc.pronunciation_style, spb.speaker_pattern_bundle,
+          spb.block_1_pattern, spb.block_2_pattern, spb.block_3_pattern, spb.block_4_pattern
+        UNION ALL
+        SELECT
+          ca.allocation_cohort,
+          ca.allocation_strategy_version,
+          ca.cell_id,
+          cc.list_comb,
+          cc.pronunciation_style,
+          ca.speaker_pattern_bundle,
+          NULL AS block_1_pattern,
+          NULL AS block_2_pattern,
+          NULL AS block_3_pattern,
+          NULL AS block_4_pattern,
+          SUM(CASE WHEN ca.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+          SUM(CASE WHEN ca.status = 'started' THEN 1 ELSE 0 END) AS started,
+          SUM(CASE WHEN ca.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete,
+          SUM(CASE WHEN ca.status NOT LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS assigned,
+          SUM(CASE WHEN ca.status = 'dry_run_completed' THEN 1 ELSE 0 END) AS dry_run_completed,
+          SUM(CASE WHEN ca.status = 'dry_run_started' THEN 1 ELSE 0 END) AS dry_run_started,
+          SUM(CASE WHEN ca.status = 'dry_run_incomplete' THEN 1 ELSE 0 END) AS dry_run_incomplete,
+          SUM(CASE WHEN ca.status LIKE 'dry_run_%' THEN 1 ELSE 0 END) AS dry_run_assigned
+        FROM counterbalance_allocations ca
+        JOIN counterbalance_cells cc ON cc.cell_id = ca.cell_id
+        WHERE ca.allocation_cohort IS NULL
+           OR ca.allocation_strategy_version IS NULL
+        GROUP BY
+          ca.allocation_cohort, ca.allocation_strategy_version, ca.cell_id,
+          cc.list_comb, cc.pronunciation_style, ca.speaker_pattern_bundle
+        ORDER BY 1, 2, 3, 6`,
+      )
+      .bind(...allocationScopes.bindings)
+      .all();
+
+    const speakerPatternBundleRows = await db
+      .prepare(
+        `SELECT
+           allocation_strategy_version,
+           speaker_pattern_bundle,
+           block_1_pattern,
+           block_2_pattern,
+           block_3_pattern,
+           block_4_pattern
+         FROM speaker_pattern_bundles
+         ORDER BY allocation_strategy_version, speaker_pattern_bundle`,
       )
       .all();
 
@@ -136,7 +293,15 @@ export async function onRequestGet(context) {
           SUM(CASE WHEN completed_trial_count < trial_count THEN 1 ELSE 0 END) AS sessions_with_missing_trials,
           SUM(CASE WHEN duplicate_start_count > 0 THEN 1 ELSE 0 END) AS sessions_with_duplicate_starts,
           SUM(duplicate_start_count) AS duplicate_start_total,
-          SUM(completion_url_issued_count) AS completion_url_issued_total
+          SUM(completion_url_issued_count) AS completion_url_issued_total,
+          SUM(CASE WHEN speaker_pattern_bundle IS NOT NULL THEN 1 ELSE 0 END) AS speaker_bundle_sessions,
+          SUM(CASE
+            WHEN counterbalance_cell IS NOT NULL
+             AND (speaker_pattern_bundle IS NULL
+               OR allocation_strategy_version IS NULL
+               OR allocation_cohort IS NULL)
+            THEN 1 ELSE 0
+          END) AS legacy_or_unversioned_counterbalance_sessions
          FROM sessions s
          WHERE ${liveSessionSql("s")}`,
       )
@@ -224,6 +389,12 @@ export async function onRequestGet(context) {
              s.linguistics_knowledge,
              s.linguistics_knowledge_details,
              s.word_familiarity_required,
+             s.counterbalance_cell,
+             s.list_comb,
+             s.pronunciation_style,
+             s.speaker_pattern_bundle,
+             s.allocation_strategy_version,
+             s.allocation_cohort,
              (SELECT COUNT(*)
               FROM word_familiarity_responses wf
               WHERE wf.session_id = s.id) AS word_familiarity_response_count,
@@ -253,6 +424,7 @@ export async function onRequestGet(context) {
         rating_assignments: Number(assignments?.count || 0),
         event_logs: Number(events?.count || 0),
         word_familiarity_responses: Number(wordFamiliarity?.count || 0),
+        speaker_pattern_bundles: Number(speakerPatternBundles?.count || 0),
       },
       quality: {
         completed_sessions: Number(quality?.completed_sessions || 0),
@@ -265,6 +437,10 @@ export async function onRequestGet(context) {
         sessions_with_duplicate_starts: Number(quality?.sessions_with_duplicate_starts || 0),
         duplicate_start_total: Number(quality?.duplicate_start_total || 0),
         completion_url_issued_total: Number(quality?.completion_url_issued_total || 0),
+        speaker_bundle_sessions: Number(quality?.speaker_bundle_sessions || 0),
+        legacy_or_unversioned_counterbalance_sessions: Number(
+          quality?.legacy_or_unversioned_counterbalance_sessions || 0,
+        ),
         completed_main_trials: Number(completedMainTrials?.count || 0),
         unidentified_count: Number(intelligibility?.unidentified_count || 0),
         manual_review_count: Number(intelligibility?.manual_review_count || 0),
@@ -279,6 +455,8 @@ export async function onRequestGet(context) {
       },
       sessions_by_status: statusRows.results || [],
       counterbalance_by_cell: counterbalanceRows.results || [],
+      counterbalance_by_bundle: counterbalanceBundleRows.results || [],
+      speaker_pattern_bundles: speakerPatternBundleRows.results || [],
       recent_sessions: recentSessions,
       recent_sessions_page: {
         limit: recentLimit,

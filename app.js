@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.8.1";
+  const VERSION = "pronunciation_rating_v0.9.0";
   const AUDIO_LIFECYCLE = window.AudioLifecycle;
   if (!AUDIO_LIFECYCLE?.createFeedbackReplayLifecycle || !AUDIO_LIFECYCLE?.isPlaybackCurrent) {
     throw new Error("Audio lifecycle helper is unavailable.");
@@ -948,6 +948,9 @@
       counterbalance_cell: item.counterbalance_cell || "",
       list_comb: item.list_comb || "",
       pronunciation_style: item.pronunciation_style || "",
+      speaker_pattern_bundle: item.speaker_pattern_bundle || "",
+      allocation_strategy_version: item.allocation_strategy_version || "",
+      allocation_cohort: item.allocation_cohort || "",
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
@@ -982,6 +985,9 @@
       counterbalance_cell: item.counterbalance_cell || "",
       list_comb: item.list_comb || "",
       pronunciation_style: item.pronunciation_style || "",
+      speaker_pattern_bundle: item.speaker_pattern_bundle || "",
+      allocation_strategy_version: item.allocation_strategy_version || "",
+      allocation_cohort: item.allocation_cohort || "",
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
@@ -2667,6 +2673,9 @@
       counterbalance_cell: item.counterbalance_cell || state.counterbalance.assigned?.counterbalance_cell || "",
       list_comb: item.list_comb || state.counterbalance.assigned?.list_comb || "",
       pronunciation_style: item.pronunciation_style || state.counterbalance.assigned?.pronunciation_style || "",
+      speaker_pattern_bundle: item.speaker_pattern_bundle || state.counterbalance.assigned?.speaker_pattern_bundle || "",
+      allocation_strategy_version: item.allocation_strategy_version || state.counterbalance.assigned?.allocation_strategy_version || "",
+      allocation_cohort: item.allocation_cohort || state.counterbalance.assigned?.allocation_cohort || "",
       stimulus_list: item.stimulus_list || "",
       l1_condition: item.l1_condition || "",
       pronunciation_condition: item.pronunciation_condition || "",
@@ -3386,6 +3395,9 @@
         counterbalance_cell: item.counterbalance_cell || "",
         list_comb: item.list_comb || "",
         pronunciation_style: item.pronunciation_style || "",
+        speaker_pattern_bundle: item.speaker_pattern_bundle || "",
+        allocation_strategy_version: item.allocation_strategy_version || "",
+        allocation_cohort: item.allocation_cohort || "",
         stimulus_list: item.stimulus_list || "",
         l1_condition: item.l1_condition || "",
         pronunciation_condition: item.pronunciation_condition || "",

@@ -25,9 +25,11 @@ import {
   buildCounterbalancedAssignment,
   CANONICAL_PRACTICE_ASSIGNMENT,
   counterbalancePayload,
+  CURRENT_ALLOCATION_STRATEGY_VERSION,
   dryRunPlaceholderCounterbalanceMaterials,
   loadCounterbalanceMaterials,
   safeMaterialsJson,
+  speakerPatternIndexesForBundle,
 } from "../_counterbalance.js";
 
 const ENGLISH_VARIETIES = [
@@ -40,7 +42,7 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
 
 const ASSIGNMENT_SELECT = `
   SELECT
@@ -50,7 +52,8 @@ const ASSIGNMENT_SELECT = `
     practice_note, source_format, practice_kind, practice_group,
     counterbalance_cell, list_comb, pronunciation_style, stimulus_list,
     l1_condition, pronunciation_condition, block_index, block_list,
-    within_block_index, block_trial_count, speaker_pattern_index,
+    within_block_index, block_trial_count, speaker_pattern_bundle,
+    allocation_strategy_version, allocation_cohort, speaker_pattern_index,
     speaker_pattern_speaker, expert_comprehensibility_1_9,
     expert_accentedness_1_9
   FROM rating_assignments
@@ -179,6 +182,52 @@ function participantKey(client, raterId, sessionLabel) {
   return `manual:${canonicalKey(raterId)}:${canonicalKey(sessionLabel)}`;
 }
 
+function validAllocationCohort(value) {
+  const cohort = cleanText(value);
+  if (!/^[A-Za-z0-9._:-]{1,80}$/.test(cohort)) {
+    throw Object.assign(new Error("Counterbalance allocation cohort is invalid."), { status: 500 });
+  }
+  return cohort;
+}
+
+function trustedAllocationCohort(env, client, dryRun) {
+  if (dryRun) return "dry_run:speaker_bundle_latin_v1";
+
+  const studyId = canonicalKey(client.prolific_study_id);
+  const configuredMap = cleanText(env.COUNTERBALANCE_COHORTS_JSON);
+  if (configuredMap) {
+    let cohortMap;
+    try {
+      cohortMap = JSON.parse(configuredMap);
+    } catch {
+      throw Object.assign(new Error("COUNTERBALANCE_COHORTS_JSON is not valid JSON."), {
+        status: 500,
+      });
+    }
+    const normalizedCohortMap = cohortMap && typeof cohortMap === "object"
+      ? Object.fromEntries(
+          Object.entries(cohortMap).map(([key, value]) => [canonicalKey(key), value]),
+        )
+      : {};
+    const mapped = normalizedCohortMap[studyId];
+    if (mapped) return validAllocationCohort(mapped);
+    if (isProduction(env)) {
+      throw Object.assign(new Error("This Prolific study is not authorized for counterbalance allocation."), {
+        status: 403,
+      });
+    }
+  }
+
+  if (isProduction(env)) {
+    throw Object.assign(new Error("Counterbalance allocation cohorts are not configured."), {
+      status: 500,
+    });
+  }
+  const fixedCohort = cleanText(env.COUNTERBALANCE_COHORT_ID);
+  if (fixedCohort) return validAllocationCohort(fixedCohort);
+  return "local:speaker_bundle_latin_v1";
+}
+
 function canResumeSession(session) {
   return cleanText(session?.status) === "started";
 }
@@ -228,6 +277,10 @@ function counterbalanceFromSession(session) {
     cell_id: nullableInt(session.counterbalance_cell),
     list_comb: session.list_comb,
     pronunciation_style: session.pronunciation_style,
+    speaker_pattern_bundle: nullableInt(session.speaker_pattern_bundle),
+    allocation_strategy_version: nullableText(session.allocation_strategy_version),
+    allocation_cohort: nullableText(session.allocation_cohort),
+    speaker_pattern_indexes: speakerPatternIndexesForBundle(session.speaker_pattern_bundle),
   };
 }
 
@@ -486,6 +539,9 @@ export async function onRequestPost(context) {
     if (body.resume_only === true) {
       return jsonResponse({ ok: true, existing_session: false, resume_only: true });
     }
+    const allocationCohort = counterbalanceEnabled
+      ? trustedAllocationCohort(context.env, client, dryRun)
+      : "";
     const turnstileVerified = await verifyTurnstile(
       context.request,
       context.env,
@@ -586,7 +642,11 @@ export async function onRequestPost(context) {
     if (counterbalanceEnabled) {
       let loadedManifest = await loadCounterbalanceMaterials(context);
       manifestSummary = loadedManifest.summary;
-      counterbalance = await allocateCounterbalance(db, sessionId, startedAt, { dryRun });
+      counterbalance = await allocateCounterbalance(db, sessionId, startedAt, {
+        dryRun,
+        allocationCohort,
+        allocationStrategyVersion: CURRENT_ALLOCATION_STRATEGY_VERSION,
+      });
       try {
         mainAssignment = buildCounterbalancedAssignment(
           loadedManifest.materials,
@@ -623,7 +683,7 @@ export async function onRequestPost(context) {
     if (!assignment.length) return errorResponse("assignment must contain trials.");
 
     try {
-      await db
+      const sessionInsert = db
         .prepare(
           `INSERT INTO sessions (
             id, role, rater_id, session_label, task_mode, platform_version,
@@ -637,10 +697,11 @@ export async function onRequestPost(context) {
             completion_code, session_token_hash,
             turnstile_verified,
             counterbalance_allocation_id, counterbalance_cell, list_comb,
-            pronunciation_style, screen_json,
+            pronunciation_style, speaker_pattern_bundle,
+            allocation_strategy_version, allocation_cohort, screen_json,
             started_at, started_at_ms, last_seen_at, last_seen_at_ms,
             status, trial_count, completed_trial_count
-          ) VALUES (?, 'rater', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'started', ?, 0)`,
+          ) VALUES (?, 'rater', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'started', ?, 0)`,
         )
         .bind(
           sessionId,
@@ -674,14 +735,16 @@ export async function onRequestPost(context) {
           nullableInt(counterbalance?.cell_id),
           nullableText(counterbalance?.list_comb),
           nullableText(counterbalance?.pronunciation_style),
+          nullableInt(counterbalance?.speaker_pattern_bundle),
+          nullableText(counterbalance?.allocation_strategy_version),
+          nullableText(counterbalance?.allocation_cohort),
           screenJson,
           startedAt,
           startedAtMs,
           startedAt,
           startedAtMs,
           assignment.length,
-        )
-        .run();
+        );
 
       const statements = assignment.map((item, index) => {
         const trialIndex = Number.parseInt(item.trial_index || index + 1, 10);
@@ -697,10 +760,11 @@ export async function onRequestPost(context) {
               pronunciation_style, stimulus_list, l1_condition,
               pronunciation_condition, block_index, block_list,
               within_block_index, block_trial_count,
-              speaker_pattern_index, speaker_pattern_speaker,
+              speaker_pattern_bundle, allocation_strategy_version,
+              allocation_cohort, speaker_pattern_index, speaker_pattern_speaker,
               expert_comprehensibility_1_9, expert_accentedness_1_9,
               created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             `${sessionId}:${phase}:${trialIndex}`,
@@ -735,6 +799,11 @@ export async function onRequestPost(context) {
             nullableText(item.block_list),
             nullableInt(item.within_block_index),
             nullableInt(item.block_trial_count),
+            nullableInt(item.speaker_pattern_bundle || counterbalance?.speaker_pattern_bundle),
+            nullableText(
+              item.allocation_strategy_version || counterbalance?.allocation_strategy_version,
+            ),
+            nullableText(item.allocation_cohort || counterbalance?.allocation_cohort),
             nullableInt(item.speaker_pattern_index),
             nullableText(item.speaker_pattern_speaker),
             nullableInt(item.expert_comprehensibility_1_9),
@@ -743,7 +812,7 @@ export async function onRequestPost(context) {
           );
       });
 
-      await db.batch(statements);
+      await db.batch([sessionInsert, ...statements]);
     } catch (error) {
       await cleanupFailedStart(db, sessionId, counterbalance?.allocation_id);
       if (isUniqueConstraintError(error) && hasProlificIdentity(client)) {

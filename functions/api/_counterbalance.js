@@ -4,6 +4,7 @@ const L1_ORDER = ["ENG", "JPN", "CHN"];
 const CONSTRAINED_RUN_L1 = new Set(L1_ORDER);
 const MAX_CONSTRAINED_RUN = 2;
 const SPEAKER_PATTERN_COUNT = 10;
+export const CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const SPEAKER_PATTERN_SPEAKER_COUNT = {
   ENG: 5,
   JPN: 10,
@@ -164,6 +165,28 @@ export const COUNTERBALANCE_CELLS = [
   })),
 ];
 
+export const SPEAKER_PATTERN_BUNDLES = Object.freeze([
+  Object.freeze({ speaker_pattern_bundle: 1, patterns: Object.freeze([10, 8, 5, 9]) }),
+  Object.freeze({ speaker_pattern_bundle: 2, patterns: Object.freeze([6, 1, 9, 10]) }),
+  Object.freeze({ speaker_pattern_bundle: 3, patterns: Object.freeze([1, 6, 4, 3]) }),
+  Object.freeze({ speaker_pattern_bundle: 4, patterns: Object.freeze([8, 10, 3, 7]) }),
+  Object.freeze({ speaker_pattern_bundle: 5, patterns: Object.freeze([3, 5, 6, 2]) }),
+  Object.freeze({ speaker_pattern_bundle: 6, patterns: Object.freeze([9, 4, 8, 1]) }),
+  Object.freeze({ speaker_pattern_bundle: 7, patterns: Object.freeze([2, 9, 7, 6]) }),
+  Object.freeze({ speaker_pattern_bundle: 8, patterns: Object.freeze([4, 7, 10, 5]) }),
+  Object.freeze({ speaker_pattern_bundle: 9, patterns: Object.freeze([5, 2, 1, 8]) }),
+  Object.freeze({ speaker_pattern_bundle: 10, patterns: Object.freeze([7, 3, 2, 4]) }),
+]);
+
+const SPEAKER_PATTERN_BUNDLE_BY_ID = new Map(
+  SPEAKER_PATTERN_BUNDLES.map((bundle) => [bundle.speaker_pattern_bundle, bundle]),
+);
+
+export function speakerPatternIndexesForBundle(value) {
+  const bundle = SPEAKER_PATTERN_BUNDLE_BY_ID.get(Number(value));
+  return bundle ? bundle.patterns.slice() : null;
+}
+
 function range(start, end) {
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
@@ -291,6 +314,22 @@ function pickOne(items, seedText) {
 }
 
 function sheet2PatternIndex(seedText, cell, stimulusList, blockIndex) {
+  const strategyVersion = cleanText(cell.allocation_strategy_version);
+  const bundleId = Number(cell.speaker_pattern_bundle);
+  if (strategyVersion === CURRENT_ALLOCATION_STRATEGY_VERSION) {
+    if (!Number.isInteger(bundleId)) {
+      throw new Error("The current allocation strategy requires a speaker-pattern bundle.");
+    }
+    const bundle = SPEAKER_PATTERN_BUNDLE_BY_ID.get(bundleId);
+    if (!bundle) throw new Error(`Unknown speaker-pattern bundle: ${bundleId}`);
+    return bundle.patterns[blockIndex - 1];
+  }
+  if (strategyVersion) {
+    throw new Error(`Unsupported counterbalance allocation strategy: ${strategyVersion}`);
+  }
+  if (Number.isInteger(bundleId)) {
+    throw new Error("A speaker-pattern bundle requires an allocation strategy version.");
+  }
   return (hashString(`${seedText}:${cell.cell_id}:${stimulusList}:speaker-pattern:${blockIndex}`) % SPEAKER_PATTERN_COUNT) + 1;
 }
 
@@ -586,6 +625,9 @@ function canonicalizeAssignmentItem(item, metadata) {
     counterbalance_cell: String(metadata.cell.cell_id),
     list_comb: metadata.cell.list_comb,
     pronunciation_style: metadata.cell.pronunciation_style,
+    speaker_pattern_bundle: metadata.cell.speaker_pattern_bundle || null,
+    allocation_strategy_version: metadata.cell.allocation_strategy_version || null,
+    allocation_cohort: metadata.cell.allocation_cohort || null,
     stimulus_list: metadata.stimulus_list,
     l1_condition: metadata.l1,
     pronunciation_condition: metadata.expected_pronunciation,
@@ -610,6 +652,46 @@ export async function ensureCounterbalanceCells(db) {
       .bind(cell.cell_id, cell.list_comb, cell.pronunciation_style),
   );
   await db.batch(statements);
+}
+
+export async function ensureSpeakerPatternBundles(db) {
+  const statements = SPEAKER_PATTERN_BUNDLES.map((bundle) =>
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO speaker_pattern_bundles (
+          allocation_strategy_version, speaker_pattern_bundle,
+          block_1_pattern, block_2_pattern, block_3_pattern, block_4_pattern
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        CURRENT_ALLOCATION_STRATEGY_VERSION,
+        bundle.speaker_pattern_bundle,
+        ...bundle.patterns,
+      ),
+  );
+  await db.batch(statements);
+  const stored = await db
+    .prepare(
+      `SELECT speaker_pattern_bundle, block_1_pattern, block_2_pattern,
+              block_3_pattern, block_4_pattern
+       FROM speaker_pattern_bundles
+       WHERE allocation_strategy_version = ?
+       ORDER BY speaker_pattern_bundle`,
+    )
+    .bind(CURRENT_ALLOCATION_STRATEGY_VERSION)
+    .all();
+  const rows = stored.results || [];
+  const exact = rows.length === SPEAKER_PATTERN_BUNDLES.length &&
+    SPEAKER_PATTERN_BUNDLES.every((expected, index) => {
+      const actual = rows[index] || {};
+      return Number(actual.speaker_pattern_bundle) === expected.speaker_pattern_bundle &&
+        expected.patterns.every(
+          (pattern, blockIndex) => Number(actual[`block_${blockIndex + 1}_pattern`]) === pattern,
+        );
+    });
+  if (!exact) {
+    throw new Error("Stored speaker-pattern bundles do not match the deployed allocation strategy.");
+  }
 }
 
 export async function loadCounterbalanceMaterials(context) {
@@ -696,74 +778,135 @@ export function dryRunPlaceholderCounterbalanceMaterials(context, fallbackReason
   };
 }
 
-function allocationScopeSql(dryRun) {
-  return dryRun ? "ca.status LIKE 'dry_run_%'" : "ca.status NOT LIKE 'dry_run_%'";
-}
-
 export async function allocateCounterbalance(db, sessionId, assignedAt, options = {}) {
   await ensureCounterbalanceCells(db);
+  await ensureSpeakerPatternBundles(db);
   const allocationId = crypto.randomUUID();
   const dryRun = Boolean(options.dryRun);
+  const allocationStrategyVersion = cleanText(
+    options.allocationStrategyVersion || CURRENT_ALLOCATION_STRATEGY_VERSION,
+  );
+  const allocationCohort = cleanText(options.allocationCohort);
+  if (allocationStrategyVersion !== CURRENT_ALLOCATION_STRATEGY_VERSION) {
+    throw new Error(`Unsupported counterbalance allocation strategy: ${allocationStrategyVersion}`);
+  }
+  if (!allocationCohort) throw new Error("Counterbalance allocation cohort is required.");
   const startedStatus = dryRun ? "dry_run_started" : "started";
   const completedStatus = dryRun ? "dry_run_completed" : "completed";
-  const scopedAllocations = allocationScopeSql(dryRun);
-  const tieBreakerOffset = hashString(sessionId) % COUNTERBALANCE_CELLS.length;
-  await db
+  const candidateCount = COUNTERBALANCE_CELLS.length * SPEAKER_PATTERN_BUNDLES.length;
+  const tieBreakerOffset = hashString(sessionId) % candidateCount;
+  const allocationInsert = db
     .prepare(
-      `INSERT INTO counterbalance_allocations (
-        id, session_id, cell_id, status, assigned_at, updated_at
+      `WITH scoped AS (
+        SELECT cell_id, speaker_pattern_bundle, status
+        FROM counterbalance_allocations
+        WHERE allocation_cohort = ?
+          AND allocation_strategy_version = ?
+      ),
+      cell_stats AS (
+        SELECT
+          cell_id,
+          SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) AS active_completed,
+          SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed,
+          COUNT(*) AS historical
+        FROM scoped
+        GROUP BY cell_id
+      ),
+      combination_stats AS (
+        SELECT
+          cell_id,
+          speaker_pattern_bundle,
+          SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) AS active_completed,
+          SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed,
+          COUNT(*) AS historical
+        FROM scoped
+        GROUP BY cell_id, speaker_pattern_bundle
+      ),
+      bundle_stats AS (
+        SELECT
+          speaker_pattern_bundle,
+          SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) AS active_completed,
+          SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed
+        FROM scoped
+        GROUP BY speaker_pattern_bundle
       )
-      SELECT ?, ?, c.cell_id, ?, ?, ?
+      INSERT INTO counterbalance_allocations (
+        id, session_id, cell_id, speaker_pattern_bundle,
+        allocation_strategy_version, allocation_cohort,
+        status, assigned_at, updated_at
+      )
+      SELECT ?, ?, c.cell_id, b.speaker_pattern_bundle, ?, ?, ?, ?, ?
       FROM counterbalance_cells c
+      CROSS JOIN speaker_pattern_bundles b
+      LEFT JOIN cell_stats cs ON cs.cell_id = c.cell_id
+      LEFT JOIN combination_stats cbs
+        ON cbs.cell_id = c.cell_id
+       AND cbs.speaker_pattern_bundle = b.speaker_pattern_bundle
+      LEFT JOIN bundle_stats bs
+        ON bs.speaker_pattern_bundle = b.speaker_pattern_bundle
+      WHERE b.allocation_strategy_version = ?
       ORDER BY
-        (
-          SELECT COUNT(*)
-          FROM counterbalance_allocations ca
-          WHERE ca.cell_id = c.cell_id
-            AND ca.status IN (?, ?)
-        ) ASC,
-        (
-          SELECT COUNT(*)
-          FROM counterbalance_allocations ca
-          WHERE ca.cell_id = c.cell_id
-            AND ca.status = ?
-        ) ASC,
-        (
-          SELECT COUNT(*)
-          FROM counterbalance_allocations ca
-          WHERE ca.cell_id = c.cell_id
-            AND ${scopedAllocations}
-        ) ASC,
-        ((c.cell_id + ?) % ${COUNTERBALANCE_CELLS.length}) ASC,
-        c.cell_id ASC
+        COALESCE(cs.active_completed, 0) ASC,
+        COALESCE(cs.completed, 0) ASC,
+        COALESCE(cbs.active_completed, 0) ASC,
+        COALESCE(cbs.completed, 0) ASC,
+        COALESCE(bs.active_completed, 0) ASC,
+        COALESCE(bs.completed, 0) ASC,
+        COALESCE(cs.historical, 0) ASC,
+        COALESCE(cbs.historical, 0) ASC,
+        ((((c.cell_id - 1) * ${SPEAKER_PATTERN_COUNT}) +
+          (b.speaker_pattern_bundle - 1) + ?) % ${candidateCount}) ASC,
+        c.cell_id ASC,
+        b.speaker_pattern_bundle ASC
       LIMIT 1`,
     )
     .bind(
+      allocationCohort,
+      allocationStrategyVersion,
+      startedStatus,
+      completedStatus,
+      completedStatus,
+      startedStatus,
+      completedStatus,
+      completedStatus,
+      startedStatus,
+      completedStatus,
+      completedStatus,
       allocationId,
       sessionId,
+      allocationStrategyVersion,
+      allocationCohort,
       startedStatus,
       assignedAt,
       assignedAt,
-      startedStatus,
-      completedStatus,
-      completedStatus,
+      allocationStrategyVersion,
       tieBreakerOffset,
-    )
-    .run();
+    );
 
-  const row = await db
+  const allocationSelect = db
     .prepare(
       `SELECT
         ca.id AS allocation_id,
         c.cell_id,
         c.list_comb,
-        c.pronunciation_style
+        c.pronunciation_style,
+        ca.speaker_pattern_bundle,
+        ca.allocation_strategy_version,
+        ca.allocation_cohort,
+        b.block_1_pattern,
+        b.block_2_pattern,
+        b.block_3_pattern,
+        b.block_4_pattern
        FROM counterbalance_allocations ca
        JOIN counterbalance_cells c ON c.cell_id = ca.cell_id
+       JOIN speaker_pattern_bundles b
+         ON b.allocation_strategy_version = ca.allocation_strategy_version
+        AND b.speaker_pattern_bundle = ca.speaker_pattern_bundle
        WHERE ca.id = ?`,
     )
-    .bind(allocationId)
-    .first();
+    .bind(allocationId);
+  const [, selectionResult] = await db.batch([allocationInsert, allocationSelect]);
+  const row = selectionResult?.results?.[0];
 
   if (!row) {
     throw new Error("Could not allocate a counterbalance cell.");
@@ -773,7 +916,46 @@ export async function allocateCounterbalance(db, sessionId, assignedAt, options 
     cell_id: Number(row.cell_id),
     list_comb: row.list_comb,
     pronunciation_style: row.pronunciation_style,
+    speaker_pattern_bundle: Number(row.speaker_pattern_bundle),
+    allocation_strategy_version: row.allocation_strategy_version,
+    allocation_cohort: row.allocation_cohort,
+    speaker_pattern_indexes: [
+      Number(row.block_1_pattern),
+      Number(row.block_2_pattern),
+      Number(row.block_3_pattern),
+      Number(row.block_4_pattern),
+    ],
   };
+}
+
+function assertBundledAssignmentInvariants(assignment, cell) {
+  const bundle = SPEAKER_PATTERN_BUNDLE_BY_ID.get(Number(cell.speaker_pattern_bundle));
+  if (!bundle) return;
+  if (assignment.length !== 100) {
+    throw new Error(`Bundled counterbalance assignment must contain 100 main trials; got ${assignment.length}.`);
+  }
+
+  for (let blockIndex = 1; blockIndex <= 4; blockIndex += 1) {
+    const block = assignment.filter((item) => Number(item.block_index) === blockIndex);
+    const patterns = new Set(block.map((item) => Number(item.speaker_pattern_index)));
+    if (block.length !== 25 || patterns.size !== 1 || !patterns.has(bundle.patterns[blockIndex - 1])) {
+      throw new Error(`Speaker-pattern bundle invariant failed for block ${blockIndex}.`);
+    }
+  }
+
+  for (const l1 of ["JPN", "CHN"]) {
+    for (let speakerIndex = 1; speakerIndex <= SPEAKER_PATTERN_SPEAKER_COUNT[l1]; speakerIndex += 1) {
+      const label = `${l1}${speakerIndex}`;
+      const trials = assignment.filter(
+        (item) => item.l1_condition === l1 && item.speaker_pattern_speaker === label,
+      );
+      const natural = trials.filter((item) => item.pronunciation_condition === "natural").length;
+      const accented = trials.filter((item) => item.pronunciation_condition === "accented").length;
+      if (trials.length !== 4 || natural !== 2 || accented !== 2) {
+        throw new Error(`${label} must have exactly two natural and two accented trials.`);
+      }
+    }
+  }
 }
 
 export function buildCounterbalancedAssignment(materials, cell, seedText) {
@@ -844,10 +1026,12 @@ export function buildCounterbalancedAssignment(materials, cell, seedText) {
     throw new Error(`Missing counterbalance materials: ${missing.slice(0, 12).join(", ")}${missing.length > 12 ? ", ..." : ""}`);
   }
 
-  return blocks.flat().map((item, index) => ({
+  const assignment = blocks.flat().map((item, index) => ({
     ...item,
     trial_index: index + 1,
   }));
+  assertBundledAssignmentInvariants(assignment, cell);
+  return assignment;
 }
 
 export function counterbalancePayload(cell) {
@@ -857,6 +1041,12 @@ export function counterbalancePayload(cell) {
     counterbalance_cell: cell.cell_id,
     list_comb: cell.list_comb,
     pronunciation_style: cell.pronunciation_style,
+    speaker_pattern_bundle: cell.speaker_pattern_bundle || null,
+    allocation_strategy_version: nullableText(cell.allocation_strategy_version),
+    allocation_cohort: nullableText(cell.allocation_cohort),
+    speaker_pattern_indexes: Array.isArray(cell.speaker_pattern_indexes)
+      ? cell.speaker_pattern_indexes.map(Number)
+      : null,
   };
 }
 

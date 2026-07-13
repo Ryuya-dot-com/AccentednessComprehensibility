@@ -12,6 +12,9 @@ const REQUIRED_COLUMNS = {
     ["counterbalance_cell", "INTEGER"],
     ["list_comb", "TEXT"],
     ["pronunciation_style", "TEXT"],
+    ["speaker_pattern_bundle", "INTEGER"],
+    ["allocation_strategy_version", "TEXT"],
+    ["allocation_cohort", "TEXT"],
     ["session_token_hash", "TEXT"],
     ["turnstile_verified", "INTEGER NOT NULL DEFAULT 0"],
     ["completion_url_issued_at", "TEXT"],
@@ -46,6 +49,9 @@ const REQUIRED_COLUMNS = {
     ["block_list", "TEXT"],
     ["within_block_index", "INTEGER"],
     ["block_trial_count", "INTEGER"],
+    ["speaker_pattern_bundle", "INTEGER"],
+    ["allocation_strategy_version", "TEXT"],
+    ["allocation_cohort", "TEXT"],
     ["speaker_pattern_index", "INTEGER"],
     ["speaker_pattern_speaker", "TEXT"],
   ],
@@ -83,8 +89,16 @@ const REQUIRED_COLUMNS = {
     ["rating_submit_rt_ms", "REAL"],
     ["dictation_audio_duration_s", "REAL"],
     ["rating_audio_duration_s", "REAL"],
+    ["speaker_pattern_bundle", "INTEGER"],
+    ["allocation_strategy_version", "TEXT"],
+    ["allocation_cohort", "TEXT"],
     ["speaker_pattern_index", "INTEGER"],
     ["speaker_pattern_speaker", "TEXT"],
+  ],
+  counterbalance_allocations: [
+    ["speaker_pattern_bundle", "INTEGER"],
+    ["allocation_strategy_version", "TEXT"],
+    ["allocation_cohort", "TEXT"],
   ],
 };
 
@@ -99,11 +113,23 @@ const REQUIRED_SETUP_SQL = [
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL UNIQUE,
   cell_id INTEGER NOT NULL,
+  speaker_pattern_bundle INTEGER,
+  allocation_strategy_version TEXT,
+  allocation_cohort TEXT,
   status TEXT NOT NULL DEFAULT 'started',
   assigned_at TEXT NOT NULL,
   completed_at TEXT,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(cell_id) REFERENCES counterbalance_cells(cell_id)
+)`,
+  `CREATE TABLE IF NOT EXISTS speaker_pattern_bundles (
+  allocation_strategy_version TEXT NOT NULL,
+  speaker_pattern_bundle INTEGER NOT NULL CHECK(speaker_pattern_bundle BETWEEN 1 AND 10),
+  block_1_pattern INTEGER NOT NULL CHECK(block_1_pattern BETWEEN 1 AND 10),
+  block_2_pattern INTEGER NOT NULL CHECK(block_2_pattern BETWEEN 1 AND 10),
+  block_3_pattern INTEGER NOT NULL CHECK(block_3_pattern BETWEEN 1 AND 10),
+  block_4_pattern INTEGER NOT NULL CHECK(block_4_pattern BETWEEN 1 AND 10),
+  PRIMARY KEY(allocation_strategy_version, speaker_pattern_bundle)
 )`,
   `INSERT OR IGNORE INTO counterbalance_cells (cell_id, list_comb, pronunciation_style) VALUES
   (1, 'ABCD', 'a'),
@@ -126,6 +152,20 @@ const REQUIRED_SETUP_SQL = [
   (18, 'HIJA', 'b'),
   (19, 'IJAB', 'b'),
   (20, 'JABC', 'b')`,
+  `INSERT OR IGNORE INTO speaker_pattern_bundles (
+  allocation_strategy_version, speaker_pattern_bundle,
+  block_1_pattern, block_2_pattern, block_3_pattern, block_4_pattern
+) VALUES
+  ('speaker_bundle_latin_v1', 1, 10, 8, 5, 9),
+  ('speaker_bundle_latin_v1', 2, 6, 1, 9, 10),
+  ('speaker_bundle_latin_v1', 3, 1, 6, 4, 3),
+  ('speaker_bundle_latin_v1', 4, 8, 10, 3, 7),
+  ('speaker_bundle_latin_v1', 5, 3, 5, 6, 2),
+  ('speaker_bundle_latin_v1', 6, 9, 4, 8, 1),
+  ('speaker_bundle_latin_v1', 7, 2, 9, 7, 6),
+  ('speaker_bundle_latin_v1', 8, 4, 7, 10, 5),
+  ('speaker_bundle_latin_v1', 9, 5, 2, 1, 8),
+  ('speaker_bundle_latin_v1', 10, 7, 3, 2, 4)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_status_last_seen_ms
   ON sessions(status, last_seen_at_ms)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance
@@ -150,6 +190,12 @@ const REQUIRED_SETUP_SQL = [
   ON counterbalance_allocations(cell_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_updated
   ON counterbalance_allocations(status, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance_bundle
+  ON sessions(allocation_cohort, allocation_strategy_version, counterbalance_cell, speaker_pattern_bundle, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_bundle
+  ON counterbalance_allocations(
+    allocation_cohort, allocation_strategy_version, cell_id, speaker_pattern_bundle, status
+  )`,
   `CREATE TABLE IF NOT EXISTS word_familiarity_responses (
   session_id TEXT NOT NULL,
   word_number INTEGER NOT NULL CHECK(word_number BETWEEN 1 AND 50),
@@ -164,7 +210,7 @@ const REQUIRED_SETUP_SQL = [
   ON word_familiarity_responses(target_word, word_known)`,
 ];
 
-const REQUIRED_SETUP_TABLES = ["word_familiarity_responses"];
+const REQUIRED_SETUP_TABLES = ["word_familiarity_responses", "speaker_pattern_bundles"];
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);

@@ -214,7 +214,8 @@ export async function onRequestPost(context) {
           counterbalance_cell, list_comb, pronunciation_style, stimulus_list,
           l1_condition, pronunciation_condition, block_index, block_list,
           within_block_index, block_trial_count,
-          speaker_pattern_index, speaker_pattern_speaker,
+          speaker_pattern_bundle, allocation_strategy_version,
+          allocation_cohort, speaker_pattern_index, speaker_pattern_speaker,
           trial_index, trial_total, completed_at, played_at,
           source_path, audio_url, file_name, participant_id, native_language,
           accent_condition, condition, talker, pass_number, word_number,
@@ -239,6 +240,7 @@ export async function onRequestPost(context) {
           client_saved_at, server_received_at, raw_json
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -270,6 +272,9 @@ export async function onRequestPost(context) {
         nullableText(assignment.block_list),
         nullableInt(assignment.within_block_index),
         nullableInt(assignment.block_trial_count),
+        nullableInt(assignment.speaker_pattern_bundle),
+        nullableText(assignment.allocation_strategy_version),
+        nullableText(assignment.allocation_cohort),
         nullableInt(assignment.speaker_pattern_index),
         nullableText(assignment.speaker_pattern_speaker),
         trialIndex,

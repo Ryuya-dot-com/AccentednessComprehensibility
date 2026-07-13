@@ -1,5 +1,6 @@
 import {
   COUNTERBALANCE_CELLS,
+  CURRENT_ALLOCATION_STRATEGY_VERSION,
   buildCounterbalancedAssignment,
 } from "../functions/api/_counterbalance.js";
 
@@ -8,6 +9,7 @@ const DROPOUT_RATES = [0, 0.1, 0.2, 0.35];
 const WAVE_SIZES = [100, 250, 400];
 const ROLLING_COMPLETED_TARGETS = [100, 200, 250];
 const CORRELATED_DROPOUT_CELLS = new Set([1, 7, 14]);
+const SPEAKER_PATTERN_BUNDLE_IDS = Array.from({ length: 10 }, (_, index) => index + 1);
 
 function hashString(value) {
   let h = 2166136261;
@@ -104,7 +106,13 @@ function auditCells(materials) {
   const participantSummaries = [];
 
   for (const cell of COUNTERBALANCE_CELLS) {
-    const assignment = buildCounterbalancedAssignment(materials, cell, `audit-cell-${cell.cell_id}`);
+    const speakerPatternBundle = ((cell.cell_id - 1) % SPEAKER_PATTERN_BUNDLE_IDS.length) + 1;
+    const bundledCell = {
+      ...cell,
+      speaker_pattern_bundle: speakerPatternBundle,
+      allocation_strategy_version: CURRENT_ALLOCATION_STRATEGY_VERSION,
+    };
+    const assignment = buildCounterbalancedAssignment(materials, bundledCell, `audit-cell-${cell.cell_id}`);
     if (assignment.length !== 100) {
       throw new Error(`Cell ${cell.cell_id} has ${assignment.length} trials, expected 100.`);
     }
@@ -150,6 +158,7 @@ function auditCells(materials) {
       cell_id: cell.cell_id,
       list_comb: cell.list_comb,
       pronunciation_style: cell.pronunciation_style,
+      speaker_pattern_bundle: speakerPatternBundle,
       totals: participantSummary,
     });
   }
@@ -161,34 +170,88 @@ function auditCells(materials) {
   };
 }
 
-function selectAllocationCell(counts) {
-  return COUNTERBALANCE_CELLS
+function activeOrCompleted(row) {
+  return row.assigned - row.incomplete;
+}
+
+function globalBundleCounts(counts, bundleId) {
+  const rows = [...counts.values()].map((cell) => cell.bundles.get(bundleId));
+  return {
+    active_completed: rows.reduce((sum, row) => sum + activeOrCompleted(row), 0),
+    completed: rows.reduce((sum, row) => sum + row.completed, 0),
+    assigned: rows.reduce((sum, row) => sum + row.assigned, 0),
+  };
+}
+
+function selectAllocation(counts) {
+  const cell = COUNTERBALANCE_CELLS
     .slice()
     .sort((a, b) => {
       const aCounts = counts.get(a.cell_id);
       const bCounts = counts.get(b.cell_id);
       return (
+        activeOrCompleted(aCounts) - activeOrCompleted(bCounts) ||
         aCounts.completed - bCounts.completed ||
-        aCounts.assigned - bCounts.assigned ||
         a.cell_id - b.cell_id
       );
     })[0];
+  const bundle = [...counts.get(cell.cell_id).bundles.values()]
+    .sort((a, b) => {
+      const aGlobal = globalBundleCounts(counts, a.bundle_id);
+      const bGlobal = globalBundleCounts(counts, b.bundle_id);
+      return (
+        activeOrCompleted(a) - activeOrCompleted(b) ||
+        a.completed - b.completed ||
+        aGlobal.active_completed - bGlobal.active_completed ||
+        aGlobal.completed - bGlobal.completed ||
+        a.assigned - b.assigned ||
+        a.bundle_id - b.bundle_id
+      );
+    })[0];
+  return { cell_id: cell.cell_id, bundle_id: bundle.bundle_id };
 }
 
 function emptyAllocationCounts() {
   return new Map(
     COUNTERBALANCE_CELLS.map((cell) => [
       cell.cell_id,
-      { assigned: 0, completed: 0, incomplete: 0 },
+      {
+        assigned: 0,
+        completed: 0,
+        incomplete: 0,
+        bundles: new Map(
+          SPEAKER_PATTERN_BUNDLE_IDS.map((bundleId) => [
+            bundleId,
+            { bundle_id: bundleId, assigned: 0, completed: 0, incomplete: 0 },
+          ]),
+        ),
+      },
     ]),
   );
 }
 
-function recordAllocation(counts, cellId, completed) {
-  const cellCounts = counts.get(cellId);
+function recordStarted(counts, allocation) {
+  const cellCounts = counts.get(allocation.cell_id);
+  const bundleCounts = cellCounts.bundles.get(allocation.bundle_id);
   cellCounts.assigned += 1;
-  if (completed) cellCounts.completed += 1;
-  else cellCounts.incomplete += 1;
+  bundleCounts.assigned += 1;
+}
+
+function recordOutcome(counts, allocation, completed) {
+  const cellCounts = counts.get(allocation.cell_id);
+  const bundleCounts = cellCounts.bundles.get(allocation.bundle_id);
+  if (completed) {
+    cellCounts.completed += 1;
+    bundleCounts.completed += 1;
+  } else {
+    cellCounts.incomplete += 1;
+    bundleCounts.incomplete += 1;
+  }
+}
+
+function recordAllocation(counts, allocation, completed) {
+  recordStarted(counts, allocation);
+  recordOutcome(counts, allocation, completed);
 }
 
 function totalCompleted(counts) {
@@ -203,6 +266,14 @@ function summarizeCounts(counts, extra) {
   const completed = [...counts.values()].map((row) => row.completed);
   const assigned = [...counts.values()].map((row) => row.assigned);
   const incomplete = [...counts.values()].map((row) => row.incomplete);
+  const bundleRows = [...counts.values()].flatMap((row) => [...row.bundles.values()]);
+  const bundleCompleted = bundleRows.map((row) => row.completed);
+  const bundleAssigned = bundleRows.map((row) => row.assigned);
+  const globalBundles = SPEAKER_PATTERN_BUNDLE_IDS.map((bundleId) =>
+    globalBundleCounts(counts, bundleId)
+  );
+  const globalBundleCompleted = globalBundles.map((row) => row.completed);
+  const globalBundleAssigned = globalBundles.map((row) => row.assigned);
   return {
     ...extra,
     assigned_total: assigned.reduce((sum, value) => sum + value, 0),
@@ -214,6 +285,19 @@ function summarizeCounts(counts, extra) {
     completed_min: Math.min(...completed),
     completed_max: Math.max(...completed),
     completed_spread: Math.max(...completed) - Math.min(...completed),
+    microcell_count: bundleRows.length,
+    microcell_assigned_min: Math.min(...bundleAssigned),
+    microcell_assigned_max: Math.max(...bundleAssigned),
+    microcell_assigned_spread: Math.max(...bundleAssigned) - Math.min(...bundleAssigned),
+    microcell_completed_min: Math.min(...bundleCompleted),
+    microcell_completed_max: Math.max(...bundleCompleted),
+    microcell_completed_spread: Math.max(...bundleCompleted) - Math.min(...bundleCompleted),
+    bundle_assigned_min: Math.min(...globalBundleAssigned),
+    bundle_assigned_max: Math.max(...globalBundleAssigned),
+    bundle_assigned_spread: Math.max(...globalBundleAssigned) - Math.min(...globalBundleAssigned),
+    bundle_completed_min: Math.min(...globalBundleCompleted),
+    bundle_completed_max: Math.max(...globalBundleCompleted),
+    bundle_completed_spread: Math.max(...globalBundleCompleted) - Math.min(...globalBundleCompleted),
   };
 }
 
@@ -231,8 +315,8 @@ function simulateRollingKnownDropoutFixedStarts(participantCount, dropoutRate, s
   const counts = emptyAllocationCounts();
 
   for (let index = 0; index < participantCount; index += 1) {
-    const cell = selectAllocationCell(counts);
-    recordAllocation(counts, cell.cell_id, randomCompleted(rng, dropoutRate));
+    const allocation = selectAllocation(counts);
+    recordAllocation(counts, allocation, randomCompleted(rng, dropoutRate));
   }
 
   return summarizeCounts(counts, {
@@ -248,15 +332,13 @@ function simulateSingleBatchFixedStarts(participantCount, dropoutRate, seedText)
   const allocations = [];
 
   for (let index = 0; index < participantCount; index += 1) {
-    const cell = selectAllocationCell(counts);
-    counts.get(cell.cell_id).assigned += 1;
-    allocations.push(cell.cell_id);
+    const allocation = selectAllocation(counts);
+    recordStarted(counts, allocation);
+    allocations.push(allocation);
   }
 
-  for (const cellId of allocations) {
-    const cellCounts = counts.get(cellId);
-    if (randomCompleted(rng, dropoutRate)) cellCounts.completed += 1;
-    else cellCounts.incomplete += 1;
+  for (const allocation of allocations) {
+    recordOutcome(counts, allocation, randomCompleted(rng, dropoutRate));
   }
 
   return summarizeCounts(counts, {
@@ -272,8 +354,8 @@ function simulateRollingToCompletedTarget(completedTarget, dropoutRate, seedText
   const maxStarts = completedTarget * 4;
 
   while (totalCompleted(counts) < completedTarget && totalAssigned(counts) < maxStarts) {
-    const cell = selectAllocationCell(counts);
-    recordAllocation(counts, cell.cell_id, randomCompleted(rng, dropoutRate));
+    const allocation = selectAllocation(counts);
+    recordAllocation(counts, allocation, randomCompleted(rng, dropoutRate));
   }
 
   return summarizeCounts(counts, {
@@ -290,15 +372,13 @@ function simulateCellCorrelatedSingleBatch(participantCount, seedText) {
   const allocations = [];
 
   for (let index = 0; index < participantCount; index += 1) {
-    const cell = selectAllocationCell(counts);
-    counts.get(cell.cell_id).assigned += 1;
-    allocations.push(cell.cell_id);
+    const allocation = selectAllocation(counts);
+    recordStarted(counts, allocation);
+    allocations.push(allocation);
   }
 
-  for (const cellId of allocations) {
-    const cellCounts = counts.get(cellId);
-    if (correlatedCompleted(rng, cellId)) cellCounts.completed += 1;
-    else cellCounts.incomplete += 1;
+  for (const allocation of allocations) {
+    recordOutcome(counts, allocation, correlatedCompleted(rng, allocation.cell_id));
   }
 
   return summarizeCounts(counts, {
@@ -316,8 +396,8 @@ function simulateCellCorrelatedRollingTarget(completedTarget, seedText) {
   const maxStarts = completedTarget * 6;
 
   while (totalCompleted(counts) < completedTarget && totalAssigned(counts) < maxStarts) {
-    const cell = selectAllocationCell(counts);
-    recordAllocation(counts, cell.cell_id, correlatedCompleted(rng, cell.cell_id));
+    const allocation = selectAllocation(counts);
+    recordAllocation(counts, allocation, correlatedCompleted(rng, allocation.cell_id));
   }
 
   return summarizeCounts(counts, {
@@ -331,9 +411,23 @@ function simulateCellCorrelatedRollingTarget(completedTarget, seedText) {
 }
 
 function assertRollingTargetBalance(rows) {
-  const failures = rows.filter((row) => !row.hit_max_starts && row.completed_spread > 1);
-  if (failures.length) {
-    throw new Error(`Rolling completed-target balance failed: ${JSON.stringify(failures)}`);
+  const failures = rows.filter((row) =>
+    !row.hit_max_starts &&
+    (row.completed_spread > 1 || row.microcell_completed_spread > 1)
+  );
+  const fullCycleFailures = rows.filter((row) =>
+    !row.hit_max_starts &&
+    row.completed_target % 200 === 0 &&
+    (
+      row.completed_spread !== 0 ||
+      row.microcell_completed_spread !== 0 ||
+      row.bundle_completed_spread !== 0
+    )
+  );
+  if (failures.length || fullCycleFailures.length) {
+    throw new Error(
+      `Rolling completed-target balance failed: ${JSON.stringify({ failures, fullCycleFailures })}`,
+    );
   }
 }
 

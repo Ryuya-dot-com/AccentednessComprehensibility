@@ -10,8 +10,13 @@ database_id = "replace-with-cloudflare-d1-database-id"
 # Set the real value with:
 #   wrangler pages secret put ADMIN_TOKEN
 #   wrangler pages secret put PROLIFIC_COMPLETION_URL
+#   wrangler pages secret put COUNTERBALANCE_COHORTS_JSON
 # or:
 #   wrangler pages secret put PROLIFIC_COMPLETION_CODE
 # Optional, when the authoritative stimulus manifest should not be committed:
 #   wrangler pages secret put COUNTERBALANCE_MANIFEST_URL
+# COUNTERBALANCE_COHORTS_JSON is required in production and is a server-side
+# allowlist from canonical Prolific STUDY_ID to an analysis cohort, for example:
+#   {"replace-with-study-id":"pilot_2026_07_bundle_v1"}
+# Never accept an allocation cohort from a participant URL or request body.
 # Do not put secret values in this file.

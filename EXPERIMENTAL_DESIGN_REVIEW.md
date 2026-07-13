@@ -154,10 +154,38 @@ The randomizer enforces:
 - No 3 or more consecutive trials from the same L1 group.
 - Fixed block size of 25.
 - Fixed per-block counts for all five analytic cells.
-- One deterministic Sheet2 speaker pattern per 25-trial block.
-- Stable assignment from participant/session seed.
+- One versioned Sheet2 speaker pattern per 25-trial block.
+- A fixed four-block pattern bundle selected by the server-side allocation, independent of the participant/session seed.
 
 Each block's Sheet2 pattern index is saved as `speaker_pattern_index`. The expected speaker for each pre-shuffle word position is saved as `speaker_pattern_speaker`; the concrete selected stimulus still carries `participant_id` and `talker`.
+
+## Versioned Speaker-Pattern Bundles
+
+The current strategy is `speaker_bundle_latin_v1`. Each of the 20 list/style cells is crossed with 10 speaker-pattern bundles, creating 200 allocation microcells. The four numbers below are the Sheet2 pattern indexes for Blocks 1–4:
+
+| Bundle | Block 1 | Block 2 | Block 3 | Block 4 |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 10 | 8 | 5 | 9 |
+| 2 | 6 | 1 | 9 | 10 |
+| 3 | 1 | 6 | 4 | 3 |
+| 4 | 8 | 10 | 3 | 7 |
+| 5 | 3 | 5 | 6 | 2 |
+| 6 | 9 | 4 | 8 | 1 |
+| 7 | 2 | 9 | 7 | 6 |
+| 8 | 4 | 7 | 10 | 5 |
+| 9 | 5 | 2 | 1 | 8 |
+| 10 | 7 | 3 | 2 | 4 |
+
+This table guarantees for every individual participant:
+
+- Four different speaker patterns across the four blocks.
+- Two odd and two even patterns.
+- Every `JPN` and `CHN` speaker occurs four times: exactly two `natural` and two `accented` trials.
+- Every active `ENG` reference speaker occurs four times, always `natural`.
+
+Across one complete 200-participant cycle, every list/style cell × speaker bundle is completed once. Consequently, every word × analytic condition receives 80 ratings; every `JPN`/`CHN` word × speaker × pronunciation token receives 8 ratings; and every active `ENG` word × speaker token receives 16 ratings. These full-cycle guarantees require 200 completed participants, not merely 200 starts. Stale/dropout sessions must be finalized and replaced through rolling recruitment.
+
+The bundle, strategy version, and server-authorized allocation cohort are saved on the session, allocation, assignment, and trial records. Production starts fail closed if the Prolific `STUDY_ID` is not present in the server-side cohort allowlist. Legacy sessions retain `NULL` for these fields and resume their already stored assignments; they are never silently backfilled or reassigned.
 
 This is a reviewer-facing advantage over unconstrained randomization: it prevents accidental stretches such as several `JPN` or several `CHN` items in a row, which could encourage short-term adaptation or response anchoring.
 
@@ -417,6 +445,7 @@ node --check functions/api/_counterbalance.js
 node --check scripts/verify_counterbalance.mjs
 node --check scripts/simulate_counterbalance_design.mjs
 node scripts/verify_counterbalance.mjs
+node scripts/verify_speaker_pattern_bundles.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest.csv --audio-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
@@ -427,7 +456,7 @@ node scripts/preflight_production.mjs
 node scripts/check_live_deployment.mjs --allow-turnstile-off
 ```
 
-The production manifest validator confirms that the real manifest satisfies the same slot, balance, lexical item ID, and Sheet2 speaker-pattern requirements. The concurrency stress script verifies the SQL-level allocation invariant under a same-timestamp start wave; the current 200-participant local result is exactly 10 assignments per cell. The lexical, acoustic, and duration scripts write tables under `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`; the current reports are `LEXICAL_BALANCE_REPORT_20260703.md`, `AUDIO_QC_REPORT_20260703.md`, `DURATION_ESTIMATE_REPORT_20260703.md`, and `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
+The production manifest validator confirms that the real manifest satisfies the same slot, balance, lexical item ID, and Sheet2 speaker-pattern requirements. The bundle verifier exhaustively generates all 20 × 10 assignments and checks the participant-level 2/2 speaker guarantee and the full-cycle token counts. The concurrency stress script verifies the SQL-level 200-microcell allocation invariant under a same-timestamp start wave. The lexical, acoustic, and duration scripts write tables under `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/`; the current reports are `LEXICAL_BALANCE_REPORT_20260703.md`, `AUDIO_QC_REPORT_20260703.md`, `DURATION_ESTIMATE_REPORT_20260703.md`, and `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
 
 The live deployment check writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the same metadata directory. Use `--allow-turnstile-off` only for pilot phases where Turnstile is intentionally disabled; omit it for the final production check if Turnstile is required.
 

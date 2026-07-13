@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   counterbalance_cell INTEGER,
   list_comb TEXT,
   pronunciation_style TEXT,
+  speaker_pattern_bundle INTEGER,
+  allocation_strategy_version TEXT,
+  allocation_cohort TEXT,
   screen_json TEXT,
   started_at TEXT NOT NULL,
   started_at_ms INTEGER NOT NULL DEFAULT 0,
@@ -86,6 +89,9 @@ CREATE TABLE IF NOT EXISTS rating_assignments (
   block_list TEXT,
   within_block_index INTEGER,
   block_trial_count INTEGER,
+  speaker_pattern_bundle INTEGER,
+  allocation_strategy_version TEXT,
+  allocation_cohort TEXT,
   speaker_pattern_index INTEGER,
   speaker_pattern_speaker TEXT,
   expert_comprehensibility_1_9 INTEGER,
@@ -119,6 +125,9 @@ CREATE TABLE IF NOT EXISTS rating_trials (
   block_list TEXT,
   within_block_index INTEGER,
   block_trial_count INTEGER,
+  speaker_pattern_bundle INTEGER,
+  allocation_strategy_version TEXT,
+  allocation_cohort TEXT,
   speaker_pattern_index INTEGER,
   speaker_pattern_speaker TEXT,
   trial_index INTEGER NOT NULL,
@@ -220,10 +229,23 @@ CREATE TABLE IF NOT EXISTS counterbalance_cells (
   UNIQUE(list_comb, pronunciation_style)
 );
 
+CREATE TABLE IF NOT EXISTS speaker_pattern_bundles (
+  allocation_strategy_version TEXT NOT NULL,
+  speaker_pattern_bundle INTEGER NOT NULL CHECK(speaker_pattern_bundle BETWEEN 1 AND 10),
+  block_1_pattern INTEGER NOT NULL CHECK(block_1_pattern BETWEEN 1 AND 10),
+  block_2_pattern INTEGER NOT NULL CHECK(block_2_pattern BETWEEN 1 AND 10),
+  block_3_pattern INTEGER NOT NULL CHECK(block_3_pattern BETWEEN 1 AND 10),
+  block_4_pattern INTEGER NOT NULL CHECK(block_4_pattern BETWEEN 1 AND 10),
+  PRIMARY KEY(allocation_strategy_version, speaker_pattern_bundle)
+);
+
 CREATE TABLE IF NOT EXISTS counterbalance_allocations (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL UNIQUE,
   cell_id INTEGER NOT NULL,
+  speaker_pattern_bundle INTEGER,
+  allocation_strategy_version TEXT,
+  allocation_cohort TEXT,
   status TEXT NOT NULL DEFAULT 'started',
   assigned_at TEXT NOT NULL,
   completed_at TEXT,
@@ -253,10 +275,27 @@ INSERT OR IGNORE INTO counterbalance_cells (cell_id, list_comb, pronunciation_st
   (19, 'IJAB', 'b'),
   (20, 'JABC', 'b');
 
+INSERT OR IGNORE INTO speaker_pattern_bundles (
+  allocation_strategy_version, speaker_pattern_bundle,
+  block_1_pattern, block_2_pattern, block_3_pattern, block_4_pattern
+) VALUES
+  ('speaker_bundle_latin_v1', 1, 10, 8, 5, 9),
+  ('speaker_bundle_latin_v1', 2, 6, 1, 9, 10),
+  ('speaker_bundle_latin_v1', 3, 1, 6, 4, 3),
+  ('speaker_bundle_latin_v1', 4, 8, 10, 3, 7),
+  ('speaker_bundle_latin_v1', 5, 3, 5, 6, 2),
+  ('speaker_bundle_latin_v1', 6, 9, 4, 8, 1),
+  ('speaker_bundle_latin_v1', 7, 2, 9, 7, 6),
+  ('speaker_bundle_latin_v1', 8, 4, 7, 10, 5),
+  ('speaker_bundle_latin_v1', 9, 5, 2, 1, 8),
+  ('speaker_bundle_latin_v1', 10, 7, 3, 2, 4);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_rater ON sessions(rater_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 CREATE INDEX IF NOT EXISTS idx_sessions_status_last_seen_ms ON sessions(status, last_seen_at_ms);
 CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance ON sessions(counterbalance_cell, status);
+CREATE INDEX IF NOT EXISTS idx_sessions_counterbalance_bundle
+  ON sessions(allocation_cohort, allocation_strategy_version, counterbalance_cell, speaker_pattern_bundle, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_key_unique
   ON sessions(participant_key)
   WHERE participant_key IS NOT NULL AND participant_key != ''
@@ -278,3 +317,7 @@ CREATE INDEX IF NOT EXISTS idx_word_familiarity_target
 CREATE INDEX IF NOT EXISTS idx_events_session ON event_logs(session_id, event_at);
 CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_cell ON counterbalance_allocations(cell_id, status);
 CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_updated ON counterbalance_allocations(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_counterbalance_allocations_bundle
+  ON counterbalance_allocations(
+    allocation_cohort, allocation_strategy_version, cell_id, speaker_pattern_bundle, status
+  );

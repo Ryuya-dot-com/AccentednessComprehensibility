@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
+const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -241,8 +242,8 @@ function checkRequiredAudioLifecycleSnippets(helperText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="audio-lifecycle.js?v=0.8.1"',
-    'src="app.js?v=0.8.1"',
+    'src="audio-lifecycle.js?v=0.9.0"',
+    'src="app.js?v=0.9.0"',
     'id="word-familiarity-panel"',
     'id="word-familiarity-grid"',
     "Review all 50 words",
@@ -367,6 +368,7 @@ async function liveApiDryRunStartCheck(baseUrl) {
   const assignment = Array.isArray(result.data.main_assignment)
     ? result.data.main_assignment
     : [];
+  const assignedCounterbalance = result.data.counterbalance || {};
   const savedPractice = [];
   let savedMain = null;
   if (result.response.status === 200 && result.data.ok === true && result.data.session_token) {
@@ -420,6 +422,24 @@ async function liveApiDryRunStartCheck(baseUrl) {
     ...(result.data.ok === true ? [] : [`/api/session/start response was not ok: ${result.data.error || result.text.slice(0, 160)}`]),
     ...(assignment.length === 100 ? [] : [`expected 100 main assignments, got ${assignment.length}`]),
     ...(Number(result.data.trial_count) === 104 ? [] : [`expected trial_count 104, got ${result.data.trial_count}`]),
+    ...(Number(assignedCounterbalance.counterbalance_cell) >= 1 &&
+      Number(assignedCounterbalance.counterbalance_cell) <= 20
+      ? []
+      : ["counterbalance response is missing a valid cell 1-20"]),
+    ...(Number(assignedCounterbalance.speaker_pattern_bundle) >= 1 &&
+      Number(assignedCounterbalance.speaker_pattern_bundle) <= 10
+      ? []
+      : ["counterbalance response is missing a valid speaker bundle 1-10"]),
+    ...(assignedCounterbalance.allocation_strategy_version === ALLOCATION_STRATEGY_VERSION
+      ? []
+      : ["counterbalance response has the wrong allocation strategy version"]),
+    ...(assignedCounterbalance.allocation_cohort === "dry_run:speaker_bundle_latin_v1"
+      ? []
+      : ["counterbalance response has the wrong dry-run allocation cohort"]),
+    ...(Array.isArray(assignedCounterbalance.speaker_pattern_indexes) &&
+      assignedCounterbalance.speaker_pattern_indexes.length === 4
+      ? []
+      : ["counterbalance response is missing the four speaker pattern indexes"]),
     ...savedPractice.flatMap((save, index) =>
       save.response.status === 200 && save.data.ok === true
         ? []
@@ -442,6 +462,9 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicate.data.existing_session === true ? [] : ["duplicate start did not report existing_session: true"]),
           ...(duplicate.data.session_id === result.data.session_id ? [] : ["duplicate start did not return the same session_id"]),
           ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
+          ...(JSON.stringify(duplicate.data.counterbalance) === JSON.stringify(assignedCounterbalance)
+            ? []
+            : ["duplicate start did not preserve the complete counterbalance allocation"]),
           ...(Array.isArray(duplicate.data.saved_trials) ? [] : ["duplicate start did not return saved_trials"]),
           ...(Array.isArray(duplicate.data.distractor_completed_trial_indexes) ? [] : ["duplicate start did not return distractor_completed_trial_indexes"]),
           ...(duplicateResume.practice_replay_required === true ? [] : ["duplicate start did not require all practice items to replay"]),
@@ -489,7 +512,11 @@ async function liveApiDryRunStartCheck(baseUrl) {
       dry_run: result.data.dry_run === true,
       trial_count: result.data.trial_count,
       main_assignment: assignment.length,
-      counterbalance_cell: result.data.counterbalance?.cell_id || "",
+      counterbalance_cell: assignedCounterbalance.counterbalance_cell || "",
+      speaker_pattern_bundle: assignedCounterbalance.speaker_pattern_bundle || "",
+      allocation_strategy_version: assignedCounterbalance.allocation_strategy_version || "",
+      allocation_cohort: assignedCounterbalance.allocation_cohort || "",
+      speaker_pattern_indexes: assignedCounterbalance.speaker_pattern_indexes || [],
       placeholder_rows: placeholderRows.length,
       non_https_rows: nonHttpsRows.length,
       duplicate_existing_session: duplicate?.data?.existing_session === true,

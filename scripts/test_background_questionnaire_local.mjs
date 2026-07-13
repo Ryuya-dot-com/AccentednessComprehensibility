@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { TARGET_WORDS } from "../functions/api/_word-familiarity.js";
 
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -229,8 +229,8 @@ async function main() {
   assert(indexPage.text.includes('id="word-familiarity-panel"'), "Participant page is missing the checklist panel.");
   assert(indexPage.text.includes("Review all 50 words"), "Participant page is missing the 50-word instruction.");
   assert(indexPage.text.includes("If you were unfamiliar with it"), "Participant page has the wrong checklist instruction.");
-  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.8.1"'), "Participant page does not load the audio lifecycle guard.");
-  assert(indexPage.text.includes('src="app.js?v=0.8.1"'), "Participant page does not cache-bust app.js v0.8.1.");
+  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.9.0"'), "Participant page does not load the audio lifecycle guard.");
+  assert(indexPage.text.includes('src="app.js?v=0.9.0"'), "Participant page does not cache-bust app.js v0.9.0.");
   assert(indexPage.text.includes('id="practice-feedback-replay-btn"'), "Practice feedback replay control is missing.");
   assert(
     indexPage.text.includes("You may replay the audio while reviewing this practice feedback."),

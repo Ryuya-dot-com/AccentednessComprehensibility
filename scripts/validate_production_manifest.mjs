@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   COUNTERBALANCE_CELLS,
+  CURRENT_ALLOCATION_STRATEGY_VERSION,
   buildCounterbalancedAssignment,
 } from "../functions/api/_counterbalance.js";
 
@@ -194,38 +195,46 @@ function assertSpeakerPattern(block, label) {
 
 function validateAssignments(materials) {
   for (const cell of COUNTERBALANCE_CELLS) {
-    const assignment = buildCounterbalancedAssignment(
-      materials,
-      cell,
-      `production-validator:${cell.cell_id}`,
-    );
-    assert(
-      assignment.length === 100,
-      `cell ${cell.cell_id}: expected 100 trials, got ${assignment.length}`,
-    );
-    const blocks = new Map();
-    assignment.forEach((item) => {
-      const key = String(item.block_index);
-      if (!blocks.has(key)) blocks.set(key, []);
-      blocks.get(key).push(item);
-    });
-    assert(blocks.size === 4, `cell ${cell.cell_id}: expected 4 blocks, got ${blocks.size}`);
-    for (let blockIndex = 1; blockIndex <= 4; blockIndex += 1) {
-      const block = blocks.get(String(blockIndex)) || [];
-      assert(
-        block.length === 25,
-        `cell ${cell.cell_id} block ${blockIndex}: expected 25 trials, got ${block.length}`,
+    for (let speakerPatternBundle = 1; speakerPatternBundle <= 10; speakerPatternBundle += 1) {
+      const bundledCell = {
+        ...cell,
+        speaker_pattern_bundle: speakerPatternBundle,
+        allocation_strategy_version: CURRENT_ALLOCATION_STRATEGY_VERSION,
+      };
+      const assignment = buildCounterbalancedAssignment(
+        materials,
+        bundledCell,
+        `production-validator:${cell.cell_id}:bundle:${speakerPatternBundle}`,
       );
-      assertNoLongL1Run(block, `cell ${cell.cell_id} block ${blockIndex}`);
-      assertSpeakerPattern(block, `cell ${cell.cell_id} block ${blockIndex}`);
-      const counts = block.reduce((acc, item) => {
-        acc[item.l1_condition] = (acc[item.l1_condition] || 0) + 1;
-        return acc;
-      }, {});
       assert(
-        counts.ENG === 5 && counts.JPN === 10 && counts.CHN === 10,
-        `cell ${cell.cell_id} block ${blockIndex}: wrong L1 counts ${JSON.stringify(counts)}`,
+        assignment.length === 100,
+        `cell ${cell.cell_id} bundle ${speakerPatternBundle}: expected 100 trials, got ${assignment.length}`,
       );
+      const blocks = new Map();
+      assignment.forEach((item) => {
+        const key = String(item.block_index);
+        if (!blocks.has(key)) blocks.set(key, []);
+        blocks.get(key).push(item);
+      });
+      assert(
+        blocks.size === 4,
+        `cell ${cell.cell_id} bundle ${speakerPatternBundle}: expected 4 blocks, got ${blocks.size}`,
+      );
+      for (let blockIndex = 1; blockIndex <= 4; blockIndex += 1) {
+        const block = blocks.get(String(blockIndex)) || [];
+        const label = `cell ${cell.cell_id} bundle ${speakerPatternBundle} block ${blockIndex}`;
+        assert(block.length === 25, `${label}: expected 25 trials, got ${block.length}`);
+        assertNoLongL1Run(block, label);
+        assertSpeakerPattern(block, label);
+        const counts = block.reduce((acc, item) => {
+          acc[item.l1_condition] = (acc[item.l1_condition] || 0) + 1;
+          return acc;
+        }, {});
+        assert(
+          counts.ENG === 5 && counts.JPN === 10 && counts.CHN === 10,
+          `${label}: wrong L1 counts ${JSON.stringify(counts)}`,
+        );
+      }
     }
   }
 }
@@ -249,4 +258,6 @@ validateAssignments(rows.map(materialFromRow));
 console.log(`manifest: ${path.resolve(manifest)}`);
 console.log(`rows: ${rows.length}`);
 console.log(`cells_validated: ${COUNTERBALANCE_CELLS.length}`);
+console.log(`speaker_pattern_bundles_validated: 10`);
+console.log(`cell_bundle_allocations_validated: ${COUNTERBALANCE_CELLS.length * 10}`);
 console.log("production manifest validation ok");

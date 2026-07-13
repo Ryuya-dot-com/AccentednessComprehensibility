@@ -50,7 +50,7 @@ http://127.0.0.1:8765/?manual=1&local=1
 
 Use `remote_manifest.csv` when stimulus recordings are already uploaded to GitHub, GitHub Pages, Cloudflare Pages, R2, or another static host. The bundled `remote_manifest.csv` is a small demo manifest, not a production counterbalance manifest. For production, replace it with the final counterbalance-ready manifest or set `COUNTERBALANCE_MANIFEST_URL`. A custom manifest URL is available through the `Use a custom stimulus manifest` option for local/manual preview workflows.
 
-For the Cloudflare/Prolific version, server-side counterbalancing is enabled by default. The server reads the authoritative stimulus pool from `remote_manifest.csv`, or from the `COUNTERBALANCE_MANIFEST_URL` Pages secret when that secret is set, and assigns each participant to one of 20 counterbalance cells. External manifest URLs must use HTTPS, and `COUNTERBALANCE_ALLOWED_HOSTS` can restrict manifest/audio hosts. The browser does not provide the main stimulus pool to `/api/session/start`. Participant write APIs require a per-session token issued by `/api/session/start`; the token hash is stored in D1 and the raw token is kept only in browser memory. In production, `/api/session/start` requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`; D1 enforces one `participant_key` per `STUDY_ID + PROLIFIC_PID`. Use `?manual=1` only for the older manual participant-selection workflow.
+For the Cloudflare/Prolific version, server-side counterbalancing is enabled by default. The server reads the authoritative stimulus pool from `remote_manifest.csv`, or from the `COUNTERBALANCE_MANIFEST_URL` Pages secret when that secret is set, and assigns each participant to one of 20 list/style cells × 10 speaker-pattern bundles. External manifest URLs must use HTTPS, and `COUNTERBALANCE_ALLOWED_HOSTS` can restrict manifest/audio hosts. The browser does not provide the main stimulus pool to `/api/session/start`. Participant write APIs require a per-session token issued by `/api/session/start`; the token hash is stored in D1 and the raw token is kept only in browser memory. In production, `/api/session/start` requires `PROLIFIC_PID`, `STUDY_ID`, and `SESSION_ID`; D1 enforces one `participant_key` per `STUDY_ID + PROLIFIC_PID`. New production starts also require the `STUDY_ID` to be mapped to a server-authorized cohort in `COUNTERBALANCE_COHORTS_JSON`. Use `?manual=1` only for the older manual participant-selection workflow.
 
 Configure Prolific with the stable Pages project URL, `https://accentednesscomprehensibility.pages.dev/`, plus Prolific's participant parameters. Never use a deployment-specific URL such as `https://<deployment-id>.accentednesscomprehensibility.pages.dev/`; it permanently targets that historical deployment and can continue serving an obsolete practice set after `main` is updated.
 
@@ -132,7 +132,7 @@ See `manifest_template.csv`.
 
 ## Server-side Counterbalancing
 
-The Cloudflare version assigns each participant to one of 20 cells:
+The Cloudflare version assigns each participant to one of 200 versioned microcells: 20 list/style cells crossed with 10 speaker-pattern bundles.
 
 - 10 list combinations: `ABCD`, `BCDE`, `CDEF`, `DEFG`, `EFGH`, `FGHI`, `GHIJ`, `HIJA`, `IJAB`, `JABC`
 - 2 pronunciation styles: `a` and `b`
@@ -145,7 +145,8 @@ Each participant receives 100 main trials in four stimulus-list blocks:
 - `ENG` items are native-speaker natural reference items.
 - For `JPN` and `CHN`, each block has exactly 5 `natural` and 5 `accented` items.
 - Style `a` assigns the 1st, 3rd, 5th, 7th, and 9th selected `JPN`/`CHN` items in that list to `natural`; style `b` reverses this assignment.
-- Each 25-trial block also receives one Sheet2 speaker pattern, indexed 1-10. The pattern maps the five `ENG` positions to `eng_s01`-`eng_s05`, the ten `JPN` positions to `jpn_s01`-`jpn_s10`, and the ten `CHN` positions to `chn_s01`-`chn_s10`.
+- Each 25-trial block also receives one Sheet2 speaker pattern, indexed 1-10. The fixed four-block bundle is selected by `speaker_bundle_latin_v1`; it is not independently hashed per block. The pattern maps the five `ENG` positions to `eng_s01`-`eng_s05`, the ten `JPN` positions to `jpn_s01`-`jpn_s10`, and the ten `CHN` positions to `chn_s01`-`chn_s10`.
+- Every bundle has two odd and two even patterns. Therefore every participant hears every `JPN` and `CHN` speaker exactly four times: two `natural` and two `accented`.
 
 The selected list combination is also the block order. For example, cell `ABCD` presents:
 
@@ -163,9 +164,9 @@ Main trials are randomized within each 25-trial block. The 100 main trials are n
 
 The block-level randomizer rejects within-block orders where the same L1 group (`ENG`, `JPN`, or `CHN`) occurs 3 or more times consecutively.
 
-The server balances cells at session start by active-or-completed sessions first, then completed sessions, then total assigned sessions. Ties use a session-derived offset instead of fixed `cell_id` order, so same-timestamp starts do not all prefer the first cell if they momentarily see the same counts. Incomplete or dropped sessions are not counted as completed after finalization.
+The server balances both the 20 cells and 200 cell×bundle microcells at session start. Counts are isolated by server-authorized `allocation_cohort` and `allocation_strategy_version`. The priority uses active-or-completed and completed counts before historical starts; ties use a session-derived offset over all 200 candidates. Incomplete or dropped sessions are not counted as completed after finalization.
 
-This works best as rolling recruitment: continue recruiting until the target number of completed sessions is reached, then finalize stale sessions and check the completed count per cell. If a fixed batch of participants is launched all at once and recruitment stops before replacing dropouts, the assigned counts can be balanced while completed counts are still uneven. The counterbalance algorithm can compensate only when later participants are allowed to enter after dropouts are known or finalized.
+This works as rolling recruitment to 200 completed sessions: finalize stale/dropout sessions, then continue recruiting until every cell×bundle microcell has one completion. At that full cycle, every word × analytic condition has 80 ratings, every non-ENG word × speaker × pronunciation token has 8 ratings, and every active ENG word × speaker token has 16 ratings. A fixed batch of 200 starts does not provide these completion guarantees when dropouts occur.
 
 If a participant reloads or reopens the stable Prolific URL while the session is still `started`, the server issues a fresh session token for the same session. The browser deliberately presents all four practice items again, then continues at the first unsaved main trial, pending block distractor, final checklist, or completion state. Replayed practice does not overwrite an already saved practice response. Trial rows continue to use the familiarity and background values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
 
@@ -175,6 +176,7 @@ Counterbalance reference files:
 - `counterbalance_list_specs.csv`: the A-J word-number ranges.
 - `remote_manifest_template.csv`: recommended stimulus manifest columns.
 - `scripts/verify_counterbalance.mjs`: local verification for 100-trial generation and no-3-consecutive same-L1 ordering.
+- `scripts/verify_speaker_pattern_bundles.mjs`: exhaustive 20×10 assignment and token-count verification.
 - `scripts/simulate_counterbalance_design.mjs`: placeholder-material audit for cell balance, list position balance, and dropout allocation behavior.
 - `EXPERIMENTAL_DESIGN_REVIEW.md`: reviewer-facing design specification, risk register, and final-stimulus checklist.
 
@@ -414,6 +416,14 @@ wrangler d1 execute <DB_NAME> --file=./db/migrations/0014_archived_session_locks
 
 This preserves the full Prolific identifiers on `start_failed`/archived test rows while allowing one replacement active session. Active and completed sessions remain strictly unique.
 
+Before deploying v0.9, add the versioned speaker-pattern bundle, strategy, and cohort fields and seed the adopted 10-bundle table:
+
+```sh
+wrangler d1 execute <DB_NAME> --file=./db/migrations/0015_speaker_pattern_bundles.sql
+```
+
+Existing rows intentionally retain `NULL` bundle/version/cohort values and resume their stored legacy assignments. Do not infer or backfill a bundle for them.
+
 Run the archived-session lock regression test after changing these indexes:
 
 ```sh
@@ -444,6 +454,15 @@ If only a completion code is available, store the code instead:
 ```sh
 wrangler pages secret put PROLIFIC_COMPLETION_CODE
 ```
+
+Authorize the production Prolific study and isolate its allocation counts with a server-side JSON map. Production does not accept the development-only `COUNTERBALANCE_COHORT_ID` fallback:
+
+```sh
+wrangler pages secret put COUNTERBALANCE_COHORTS_JSON
+# Enter: {"replace-with-prolific-study-id":"pilot_2026_07_bundle_v1"}
+```
+
+Keep the same cohort if soft-launch completions will be retained in the final 200; use a new cohort only when intentionally starting a separate analysis/recruitment cycle.
 
 If the production manifest should not be committed as `remote_manifest.csv`, set an authoritative manifest URL as a Pages secret:
 
@@ -497,7 +516,8 @@ Available CSV exports:
 - `word-familiarity.csv`: restricted long-format export with 50 explicit word-number/word-known rows for each submitted checklist and full Prolific identifiers.
 - `assignments.csv`: trial order shown to each participant, including counterbalance list/L1/pronunciation fields.
 - `events.csv`: session start, trial display, audio playback, first key, save, pause, and completion logs.
-- `counterbalance.csv`: cell allocation logs and completion status.
+- `counterbalance.csv`: scoped cell×bundle allocation logs, four-block patterns, and completion status.
+- `speaker_pattern_bundles.csv`: the versioned 10-row bundle definition.
 
 For local export smoke testing without Cloudflare, generate a 200-participant D1-like dataset and CSV exports:
 
@@ -542,15 +562,17 @@ To stress-test simultaneous counterbalance starts locally with SQLite-compatible
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
 ```
 
-The script writes `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. The current local result for 200 simultaneous starts is exactly 10 assignments per cell, with duplicate participant-key insertion rejected.
+The script writes `COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. At 200 simultaneous starts it requires every one of the 20 cells × 10 speaker-pattern bundles exactly once, verifies the persisted `speaker_bundle_latin_v1` strategy/cohort/bundle metadata, and rejects duplicate participant-key insertion. Smaller local waves require cell and bundle spreads of at most 1 but do not claim complete microcell coverage.
 
 After the live Pages API dry-run passes, stress-test the deployed D1-backed start endpoint with dry-run sessions:
 
 ```sh
-node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
+node scripts/stress_live_counterbalance_concurrency.mjs --starts 40
 ```
 
-This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, checks one simultaneous wave across the 20 cells, and fails if the assignment spread is greater than 1.
+This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, verifies response-level cell, bundle, strategy, cohort, four-block pattern, and per-speaker 2-natural/2-accented metadata, and confirms D1 persistence through duplicate-session resume. Smaller waves require both cell and bundle spreads of at most 1; their microcell count is descriptive only.
+
+For the full launch gate, run `--starts 200` before any smaller v0.9 dry-run waves, or against a fresh deployment/D1 allocation scope. This requires all 200 cell×bundle microcells exactly once in that wave. Prior allocations in the shared dry-run cohort intentionally influence later balancing, so a polluted cohort is not a valid exact-wave test. To cross-check every stress row against the restricted D1 counterbalance export, set `LIVE_STRESS_ADMIN_TOKEN` (or `ADMIN_TOKEN`) in the process environment; the token is sent only in the `x-admin-token` header and is never printed.
 
 For acoustic QC of the OSF package, run:
 

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   COUNTERBALANCE_CELLS,
+  CURRENT_ALLOCATION_STRATEGY_VERSION,
   buildCounterbalancedAssignment,
 } from "../functions/api/_counterbalance.js";
 
@@ -181,6 +182,7 @@ function reportText(summaryRows, options) {
     `- Manifest: \`${options.manifest}\`.`,
     `- Audio QC table: \`${options.audioQc}\`.`,
     `- Seeds per cell: ${options.seedsPerCell}.`,
+    "- Speaker-pattern bundles 1-10 cycle across the seed index within every cell.",
     `- Required plays per main trial: ${options.mainPlaysPerTrial}.`,
     `- Required plays per practice trial: ${options.practicePlaysPerTrial}.`,
     "",
@@ -228,7 +230,13 @@ const missingDurations = new Set();
 for (const cell of COUNTERBALANCE_CELLS) {
   for (let seedIndex = 1; seedIndex <= seedsPerCell; seedIndex += 1) {
     const seed = `duration-estimate:${cell.cell_id}:${seedIndex}`;
-    const assignment = buildCounterbalancedAssignment(materials, cell, seed);
+    const speakerPatternBundle = ((seedIndex - 1) % 10) + 1;
+    const bundledCell = {
+      ...cell,
+      speaker_pattern_bundle: speakerPatternBundle,
+      allocation_strategy_version: CURRENT_ALLOCATION_STRATEGY_VERSION,
+    };
+    const assignment = buildCounterbalancedAssignment(materials, bundledCell, seed);
     const { total, missing } = assignmentAudioDuration(assignment, durations);
     for (const key of missing) missingDurations.add(key);
     const mainRequired = total * mainPlaysPerTrial;
@@ -238,6 +246,7 @@ for (const cell of COUNTERBALANCE_CELLS) {
       counterbalance_cell: String(cell.cell_id),
       list_comb: cell.list_comb,
       pronunciation_style: cell.pronunciation_style,
+      speaker_pattern_bundle: String(speakerPatternBundle),
       seed_index: String(seedIndex),
       main_trial_count: String(assignment.length),
       practice_trial_count: "4",
@@ -260,6 +269,7 @@ const detailColumns = [
   "counterbalance_cell",
   "list_comb",
   "pronunciation_style",
+  "speaker_pattern_bundle",
   "seed_index",
   "main_trial_count",
   "practice_trial_count",

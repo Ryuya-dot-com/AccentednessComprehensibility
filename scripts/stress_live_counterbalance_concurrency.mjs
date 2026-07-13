@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -24,6 +24,10 @@ const DEFAULT_OUT = path.join(
   "LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md",
 );
 const CELL_COUNT = 20;
+const BUNDLE_COUNT = 10;
+const MICROCELL_COUNT = CELL_COUNT * BUNDLE_COUNT;
+const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
+const DRY_RUN_ALLOCATION_COHORT = "dry_run:speaker_bundle_latin_v1";
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -51,6 +55,19 @@ function positiveInt(name, fallback) {
   const value = Number.parseInt(argValue(name, String(fallback)), 10);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
+}
+
+function startsValue() {
+  const starts = argValue("--starts", "");
+  const legacyParticipants = argValue("--participants", "");
+  if (starts && legacyParticipants && starts !== legacyParticipants) {
+    throw new Error("--starts and legacy --participants disagree; pass only --starts.");
+  }
+  const value = Number.parseInt(starts || legacyParticipants || "40", 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error("--starts must be a positive integer.");
   }
   return value;
 }
@@ -175,14 +192,129 @@ function summarizeMainAssignment(result) {
   };
 }
 
-function cellCounts(results) {
-  const counts = new Map(Array.from({ length: CELL_COUNT }, (_, index) => [index + 1, 0]));
+function allocationMetadata(result) {
+  const counterbalance = result.data?.counterbalance || {};
+  return {
+    session_id: String(result.data?.session_id || ""),
+    cell_id: Number(counterbalance.counterbalance_cell || 0),
+    speaker_pattern_bundle: Number(counterbalance.speaker_pattern_bundle || 0),
+    allocation_strategy_version: String(counterbalance.allocation_strategy_version || ""),
+    allocation_cohort: String(counterbalance.allocation_cohort || ""),
+    speaker_pattern_indexes: Array.isArray(counterbalance.speaker_pattern_indexes)
+      ? counterbalance.speaker_pattern_indexes.map(Number)
+      : [],
+  };
+}
+
+function initializedCounts(size) {
+  return new Map(Array.from({ length: size }, (_, index) => [index + 1, 0]));
+}
+
+function allocationCounts(results) {
+  const cells = initializedCounts(CELL_COUNT);
+  const bundles = initializedCounts(BUNDLE_COUNT);
+  const microcells = new Map();
+  for (let cell = 1; cell <= CELL_COUNT; cell += 1) {
+    for (let bundle = 1; bundle <= BUNDLE_COUNT; bundle += 1) {
+      microcells.set(`${cell}:${bundle}`, 0);
+    }
+  }
   for (const result of results) {
     if (!result.ok) continue;
-    const cell = Number(result.data?.counterbalance?.cell_id || 0);
-    if (counts.has(cell)) counts.set(cell, counts.get(cell) + 1);
+    const metadata = allocationMetadata(result);
+    if (cells.has(metadata.cell_id)) cells.set(metadata.cell_id, cells.get(metadata.cell_id) + 1);
+    if (bundles.has(metadata.speaker_pattern_bundle)) {
+      bundles.set(
+        metadata.speaker_pattern_bundle,
+        bundles.get(metadata.speaker_pattern_bundle) + 1,
+      );
+    }
+    const key = `${metadata.cell_id}:${metadata.speaker_pattern_bundle}`;
+    if (microcells.has(key)) microcells.set(key, microcells.get(key) + 1);
   }
-  return [...counts.entries()];
+  return {
+    cells: [...cells.entries()],
+    bundles: [...bundles.entries()],
+    microcells: [...microcells.entries()].map(([key, count]) => {
+      const [cell, bundle] = key.split(":").map(Number);
+      return [cell, bundle, count];
+    }),
+  };
+}
+
+function validateResponseMetadata(result, index) {
+  const problems = [];
+  const metadata = allocationMetadata(result);
+  const assignment = Array.isArray(result.data?.main_assignment)
+    ? result.data.main_assignment
+    : [];
+  if (!Number.isInteger(metadata.cell_id) || metadata.cell_id < 1 || metadata.cell_id > CELL_COUNT) {
+    problems.push(`request ${index + 1}: invalid counterbalance_cell ${metadata.cell_id || "missing"}`);
+  }
+  if (
+    !Number.isInteger(metadata.speaker_pattern_bundle) ||
+    metadata.speaker_pattern_bundle < 1 ||
+    metadata.speaker_pattern_bundle > BUNDLE_COUNT
+  ) {
+    problems.push(
+      `request ${index + 1}: invalid speaker_pattern_bundle ${metadata.speaker_pattern_bundle || "missing"}`,
+    );
+  }
+  if (metadata.allocation_strategy_version !== ALLOCATION_STRATEGY_VERSION) {
+    problems.push(
+      `request ${index + 1}: expected strategy ${ALLOCATION_STRATEGY_VERSION}, got ${metadata.allocation_strategy_version || "missing"}`,
+    );
+  }
+  if (metadata.allocation_cohort !== DRY_RUN_ALLOCATION_COHORT) {
+    problems.push(
+      `request ${index + 1}: expected dry-run cohort ${DRY_RUN_ALLOCATION_COHORT}, got ${metadata.allocation_cohort || "missing"}`,
+    );
+  }
+  if (
+    metadata.speaker_pattern_indexes.length !== 4 ||
+    metadata.speaker_pattern_indexes.some((value) => !Number.isInteger(value) || value < 1 || value > 10)
+  ) {
+    problems.push(`request ${index + 1}: invalid four-block speaker_pattern_indexes`);
+  }
+
+  for (const row of assignment) {
+    if (
+      Number(row.counterbalance_cell) !== metadata.cell_id ||
+      Number(row.speaker_pattern_bundle) !== metadata.speaker_pattern_bundle ||
+      String(row.allocation_strategy_version || "") !== metadata.allocation_strategy_version ||
+      String(row.allocation_cohort || "") !== metadata.allocation_cohort
+    ) {
+      problems.push(`request ${index + 1}: assignment allocation metadata does not match response`);
+      break;
+    }
+  }
+  for (let block = 1; block <= 4; block += 1) {
+    const blockPatterns = new Set(
+      assignment
+        .filter((row) => Number(row.block_index) === block)
+        .map((row) => Number(row.speaker_pattern_index)),
+    );
+    const expectedPattern = metadata.speaker_pattern_indexes[block - 1];
+    if (blockPatterns.size !== 1 || !blockPatterns.has(expectedPattern)) {
+      problems.push(`request ${index + 1}: block ${block} does not match its bundled pattern`);
+    }
+  }
+  for (const l1 of ["JPN", "CHN"]) {
+    for (let speaker = 1; speaker <= 10; speaker += 1) {
+      const label = `${l1}${speaker}`;
+      const rows = assignment.filter(
+        (row) => row.l1_condition === l1 && row.speaker_pattern_speaker === label,
+      );
+      const natural = rows.filter((row) => row.pronunciation_condition === "natural").length;
+      const accented = rows.filter((row) => row.pronunciation_condition === "accented").length;
+      if (rows.length !== 4 || natural !== 2 || accented !== 2) {
+        problems.push(
+          `request ${index + 1}: ${label} expected 4 trials (2 natural/2 accented), got ${rows.length} (${natural}/${accented})`,
+        );
+      }
+    }
+  }
+  return problems;
 }
 
 async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnstileToken) {
@@ -211,6 +343,20 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
       return actual.target_word === expected.target_word &&
         actual.audio_url === `${PRACTICE_AUDIO_ROOT}/${expected.audio_file}`;
     });
+  const firstMetadata = allocationMetadata(first);
+  const secondMetadata = allocationMetadata(second);
+  const persistedMetadataMatches = [
+    "session_id",
+    "cell_id",
+    "speaker_pattern_bundle",
+    "allocation_strategy_version",
+    "allocation_cohort",
+  ].every((key) => firstMetadata[key] === secondMetadata[key]) &&
+    JSON.stringify(firstMetadata.speaker_pattern_indexes) ===
+      JSON.stringify(secondMetadata.speaker_pattern_indexes) &&
+    firstMetadata.speaker_pattern_indexes.length === 4 &&
+    firstMetadata.allocation_strategy_version === ALLOCATION_STRATEGY_VERSION &&
+    firstMetadata.allocation_cohort === DRY_RUN_ALLOCATION_COHORT;
   return {
     ok:
       bothOk &&
@@ -219,7 +365,8 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
       resume.practice_replay_required === true &&
       resume.next_phase === "main" &&
       Number(resume.next_trial_index) === 1 &&
-      practiceMatches,
+      practiceMatches &&
+      persistedMetadataMatches,
     first,
     second,
     same_session: Boolean(sameSession),
@@ -228,24 +375,165 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
     resume_trial_index: resume.next_trial_index || "",
     practice_assignment_count: resumedPractice.length,
     practice_matches: practiceMatches,
+    persisted_metadata_matches: persistedMetadataMatches,
   };
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (quoted) {
+      if (character === '"' && next === '"') {
+        cell += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        cell += character;
+      }
+    } else if (character === '"') {
+      quoted = true;
+    } else if (character === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (character === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (character !== "\r") {
+      cell += character;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => value)) rows.push(row);
+  if (!rows.length) return [];
+  const headers = rows[0].map((value) => String(value || "").trim());
+  return rows
+    .slice(1)
+    .filter((values) => values.some((value) => String(value || "").trim()))
+    .map((values) =>
+      Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])),
+    );
+}
+
+async function persistedD1MetadataCheck(baseUrl, batchLabel, results, adminToken, timeoutMs) {
+  if (!adminToken) {
+    return {
+      ok: true,
+      skipped: true,
+      row_count: 0,
+      problems: [],
+    };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const url = new URL("/api/admin/export/counterbalance.csv", baseUrl);
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      cache: "no-store",
+      headers: {
+        origin: url.origin,
+        "x-admin-token": adminToken,
+      },
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        row_count: 0,
+        problems: [`D1 counterbalance export returned HTTP ${response.status}`],
+      };
+    }
+    const expectedBySession = new Map(
+      results
+        .filter((result) => result.ok)
+        .map((result) => {
+          const metadata = allocationMetadata(result);
+          return [metadata.session_id, metadata];
+        }),
+    );
+    const rows = parseCsv(text).filter((row) =>
+      String(row.prolific_pid || "").startsWith(`LIVE_STRESS_${batchLabel}_`),
+    );
+    const problems = [];
+    if (rows.length !== expectedBySession.size) {
+      problems.push(
+        `D1 export expected ${expectedBySession.size} batch rows, got ${rows.length}`,
+      );
+    }
+    const seen = new Set();
+    for (const row of rows) {
+      const expected = expectedBySession.get(String(row.session_id || ""));
+      if (!expected) {
+        problems.push(`D1 export contains unexpected batch session ${row.session_id || "missing"}`);
+        continue;
+      }
+      seen.add(expected.session_id);
+      const persistedPatterns = [1, 2, 3, 4].map((block) =>
+        Number(row[`block_${block}_pattern`] || 0),
+      );
+      if (
+        Number(row.cell_id) !== expected.cell_id ||
+        Number(row.speaker_pattern_bundle) !== expected.speaker_pattern_bundle ||
+        String(row.allocation_strategy_version || "") !== expected.allocation_strategy_version ||
+        String(row.allocation_cohort || "") !== expected.allocation_cohort ||
+        String(row.status || "") !== "dry_run_started" ||
+        JSON.stringify(persistedPatterns) !== JSON.stringify(expected.speaker_pattern_indexes)
+      ) {
+        problems.push(`D1 metadata mismatch for session ${expected.session_id}`);
+      }
+    }
+    for (const sessionId of expectedBySession.keys()) {
+      if (!seen.has(sessionId)) problems.push(`D1 export is missing session ${sessionId}`);
+    }
+    return {
+      ok: problems.length === 0,
+      skipped: false,
+      row_count: rows.length,
+      problems,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: false,
+      row_count: 0,
+      problems: [`D1 metadata verification failed: ${error?.message || error}`],
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function markdown(context) {
   const {
     generatedAt,
     baseUrl,
-    participants,
+    starts,
     concurrency,
     timeoutMs,
     batchLabel,
     results,
-    counts,
+    allocationCounts: counts,
     duplicate,
+    persistedD1,
     problems,
   } = context;
   const successful = results.filter((result) => result.ok);
-  const values = counts.map(([, count]) => count);
+  const cellValues = counts.cells.map(([, count]) => count);
+  const bundleValues = counts.bundles.map(([, count]) => count);
+  const populatedMicrocells = counts.microcells.filter(([, , count]) => count > 0).length;
+  const duplicateMicrocells = counts.microcells.filter(([, , count]) => count > 1).length;
   const lines = [
     "# Live Counterbalance Concurrency Stress Test",
     "",
@@ -254,7 +542,7 @@ function markdown(context) {
     "## Scenario",
     "",
     `- Base URL: ${baseUrl}`,
-    `- Dry-run participants: ${participants}`,
+    `- Dry-run starts: ${starts}`,
     `- Concurrent workers: ${concurrency}`,
     `- Timeout: ${timeoutMs} ms`,
     `- Batch label: \`${batchLabel}\``,
@@ -263,21 +551,53 @@ function markdown(context) {
     "## Result",
     "",
     `- Result: ${problems.length ? "FAIL" : "PASS"}`,
-    `- Successful starts: ${successful.length} / ${participants}`,
-    `- assigned_min: ${values.length ? Math.min(...values) : 0}`,
-    `- assigned_max: ${values.length ? Math.max(...values) : 0}`,
-    `- assigned_spread: ${values.length ? Math.max(...values) - Math.min(...values) : 0}`,
+    `- Successful starts: ${successful.length} / ${starts}`,
+    `- cell_min: ${cellValues.length ? Math.min(...cellValues) : 0}`,
+    `- cell_max: ${cellValues.length ? Math.max(...cellValues) : 0}`,
+    `- cell_spread: ${cellValues.length ? Math.max(...cellValues) - Math.min(...cellValues) : 0}`,
+    `- bundle_min: ${bundleValues.length ? Math.min(...bundleValues) : 0}`,
+    `- bundle_max: ${bundleValues.length ? Math.max(...bundleValues) : 0}`,
+    `- bundle_spread: ${bundleValues.length ? Math.max(...bundleValues) - Math.min(...bundleValues) : 0}`,
+    `- populated_microcells: ${populatedMicrocells} / ${MICROCELL_COUNT}`,
+    `- duplicate_microcells_in_wave: ${duplicateMicrocells}`,
+    `- exact_200_microcell_gate: ${starts === MICROCELL_COUNT ? (problems.length ? "FAIL" : "PASS") : "NOT APPLICABLE"}`,
     `- duplicate_participant_check: ${duplicate ? (duplicate.ok ? "PASS" : "FAIL") : "SKIPPED"}`,
+    `- duplicate_resume_D1_metadata: ${duplicate ? duplicate.persisted_metadata_matches : "SKIPPED"}`,
     `- duplicate_resume_practice_required: ${duplicate ? duplicate.resume_practice_required : "SKIPPED"}`,
     `- duplicate_resume_target: ${duplicate ? `${duplicate.resume_phase}:${duplicate.resume_trial_index}` : "SKIPPED"}`,
     `- duplicate_resume_practice_items: ${duplicate ? duplicate.practice_assignment_count : "SKIPPED"}`,
+    `- full_D1_export_metadata_check: ${persistedD1.skipped ? "SKIPPED (set LIVE_STRESS_ADMIN_TOKEN or ADMIN_TOKEN)" : persistedD1.ok ? `PASS (${persistedD1.row_count} rows)` : "FAIL"}`,
     "",
     "## Cell Counts",
     "",
     "| cell_id | dry_run_started_count |",
     "| ---: | ---: |",
   ];
-  for (const [cell, count] of counts) lines.push(`| ${cell} | ${count} |`);
+  for (const [cell, count] of counts.cells) lines.push(`| ${cell} | ${count} |`);
+
+  lines.push(
+    "",
+    "## Speaker-pattern Bundle Counts",
+    "",
+    "| speaker_pattern_bundle | dry_run_started_count |",
+    "| ---: | ---: |",
+  );
+  for (const [bundle, count] of counts.bundles) lines.push(`| ${bundle} | ${count} |`);
+
+  if (starts === MICROCELL_COUNT) {
+    lines.push(
+      "",
+      "## Exact Microcell Coverage",
+      "",
+      "The 200-start launch gate requires every one of the 20 cells × 10 speaker-pattern bundles exactly once in this wave.",
+      "",
+      "| cell_id | speaker_pattern_bundle | count |",
+      "| ---: | ---: | ---: |",
+    );
+    for (const [cell, bundle, count] of counts.microcells) {
+      lines.push(`| ${cell} | ${bundle} | ${count} |`);
+    }
+  }
 
   if (problems.length) {
     lines.push("", "## Problems", "");
@@ -301,44 +621,50 @@ function markdown(context) {
     "",
     "## Interpretation",
     "",
-    "A spread of 0 or 1 is expected when all dry-run starts are accepted in one wave. Dry-run allocation statuses are excluded from production completed-cell counts, but they remain visible in restricted raw audit exports.",
+    starts === MICROCELL_COUNT
+      ? "For the 200-start gate, each response must include the current strategy, dry-run cohort, bundle, and four block patterns, and every cell×bundle microcell must occur exactly once. Run this gate before smaller v0.9 dry-run waves, or against a fresh deployment/D1 scope, because prior allocations in the shared dry-run cohort intentionally influence later balancing."
+      : "For a smaller wave, cell and bundle spreads of 0 or 1 are required. Microcell coverage is reported descriptively and is not claimed to be complete. Dry-run statuses are isolated from production allocation counts.",
+    persistedD1.skipped
+      ? "The duplicate-resume check verifies that one allocation's metadata was persisted and reloaded from D1. Set LIVE_STRESS_ADMIN_TOKEN or ADMIN_TOKEN to cross-check every batch row through the restricted counterbalance CSV export."
+      : "Every batch allocation was cross-checked against the restricted D1 counterbalance CSV export.",
     "",
   );
   return `${lines.join("\n")}\n`;
 }
 
 const baseUrl = argValue("--base-url", DEFAULT_BASE_URL).replace(/\/+$/, "/");
-const participants = positiveInt("--participants", 40);
-const concurrency = positiveInt("--concurrency", participants);
+const starts = startsValue();
+const concurrency = positiveInt("--concurrency", starts);
 const timeoutMs = positiveInt("--timeout-ms", 30000);
 const out = path.resolve(argValue("--out", DEFAULT_OUT));
 const turnstileToken = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
+const adminToken = String(
+  process.env.LIVE_STRESS_ADMIN_TOKEN || process.env.ADMIN_TOKEN || "",
+).trim();
 const skipDuplicateCheck = hasFlag("--skip-duplicate-check");
 const allowPlaceholder = hasFlag("--allow-placeholder");
 const allowNonHttps = hasFlag("--allow-non-https");
 
-if (participants < CELL_COUNT) {
-  throw new Error(`--participants must be at least ${CELL_COUNT}.`);
-}
-if (concurrency < participants) {
-  throw new Error("--concurrency must be at least --participants for a single simultaneous-start wave.");
+if (concurrency < starts) {
+  throw new Error("--concurrency must be at least --starts for a single simultaneous-start wave.");
 }
 
 const batchLabel = `stress_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const payloads = Array.from({ length: participants }, (_, index) =>
+const payloads = Array.from({ length: starts }, (_, index) =>
   basePayload(batchLabel, index + 1, turnstileToken)
 );
 const startedAt = Date.now();
 const results = await runPool(payloads, concurrency, (payload) =>
   postJson(baseUrl, "/api/session/start", payload, timeoutMs)
 );
-const counts = cellCounts(results);
-const values = counts.map(([, count]) => count);
+const counts = allocationCounts(results);
+const cellValues = counts.cells.map(([, count]) => count);
+const bundleValues = counts.bundles.map(([, count]) => count);
 const successful = results.filter((result) => result.ok);
 const problems = [];
 
-if (successful.length !== participants) {
-  problems.push(`expected ${participants} successful starts, got ${successful.length}`);
+if (successful.length !== starts) {
+  problems.push(`expected ${starts} successful starts, got ${successful.length}`);
 }
 for (const [index, result] of results.entries()) {
   const summary = summarizeMainAssignment(result);
@@ -354,11 +680,24 @@ for (const [index, result] of results.entries()) {
   if (result.ok && !allowNonHttps && summary.non_https_rows) {
     problems.push(`request ${index + 1}: ${summary.non_https_rows} non-HTTPS audio rows`);
   }
+  if (result.ok) problems.push(...validateResponseMetadata(result, index));
 }
-if (successful.length === participants) {
-  const spread = Math.max(...values) - Math.min(...values);
-  if (spread > 1) {
-    problems.push(`allocation spread is too large: ${spread}`);
+if (successful.length === starts) {
+  const cellSpread = Math.max(...cellValues) - Math.min(...cellValues);
+  const bundleSpread = Math.max(...bundleValues) - Math.min(...bundleValues);
+  if (cellSpread > 1) {
+    problems.push(`cell allocation spread is too large: ${cellSpread}`);
+  }
+  if (bundleSpread > 1) {
+    problems.push(`speaker-pattern bundle spread is too large: ${bundleSpread}`);
+  }
+  if (starts === MICROCELL_COUNT) {
+    const invalidMicrocells = counts.microcells.filter(([, , count]) => count !== 1);
+    if (invalidMicrocells.length) {
+      problems.push(
+        `exact 200-start gate failed: ${invalidMicrocells.length} of ${MICROCELL_COUNT} cell×bundle microcells were not assigned exactly once`,
+      );
+    }
   }
 }
 
@@ -367,33 +706,59 @@ const duplicate = skipDuplicateCheck
   : await duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnstileToken);
 if (duplicate && !duplicate.ok) {
   problems.push(
-    "duplicate participant start did not resume the same session with four-item practice replay before main trial 1",
+    "duplicate participant start did not resume the same D1 session with matching bundle metadata and four-item practice replay before main trial 1",
   );
 }
+
+const persistedD1 = await persistedD1MetadataCheck(
+  baseUrl,
+  batchLabel,
+  results,
+  adminToken,
+  timeoutMs,
+);
+if (!persistedD1.ok) problems.push(...persistedD1.problems);
 
 const report = markdown({
   generatedAt: new Date().toISOString(),
   baseUrl,
-  participants,
+  starts,
   concurrency,
   timeoutMs,
   batchLabel,
   elapsedMs: Date.now() - startedAt,
   results,
-  counts,
+  allocationCounts: counts,
   duplicate,
+  persistedD1,
   problems,
 });
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, report, "utf8");
 
-console.log(`live dry-run starts: ${participants}`);
+console.log(`live dry-run starts: ${starts}`);
 console.log(`successful starts: ${successful.length}`);
-console.log(`assigned_min: ${Math.min(...values)}`);
-console.log(`assigned_max: ${Math.max(...values)}`);
-console.log(`assigned_spread: ${Math.max(...values) - Math.min(...values)}`);
-console.log("cell_counts:", counts.map(([cell, count]) => `${cell}:${count}`).join(" "));
+console.log(`cell_min: ${Math.min(...cellValues)}`);
+console.log(`cell_max: ${Math.max(...cellValues)}`);
+console.log(`cell_spread: ${Math.max(...cellValues) - Math.min(...cellValues)}`);
+console.log(`bundle_min: ${Math.min(...bundleValues)}`);
+console.log(`bundle_max: ${Math.max(...bundleValues)}`);
+console.log(`bundle_spread: ${Math.max(...bundleValues) - Math.min(...bundleValues)}`);
+console.log(
+  `populated_microcells: ${counts.microcells.filter(([, , count]) => count > 0).length}/${MICROCELL_COUNT}`,
+);
+console.log("cell_counts:", counts.cells.map(([cell, count]) => `${cell}:${count}`).join(" "));
+console.log(
+  "bundle_counts:",
+  counts.bundles.map(([bundle, count]) => `${bundle}:${count}`).join(" "),
+);
+console.log(
+  `exact_200_microcell_gate: ${starts === MICROCELL_COUNT ? (counts.microcells.every(([, , count]) => count === 1) ? "passed" : "failed") : "not_applicable"}`,
+);
 console.log(`duplicate_participant_check: ${duplicate ? (duplicate.ok ? "passed" : "failed") : "skipped"}`);
+console.log(
+  `full_D1_export_metadata_check: ${persistedD1.skipped ? "skipped" : persistedD1.ok ? "passed" : "failed"}`,
+);
 console.log(`report: ${out}`);
 
 if (problems.length) {

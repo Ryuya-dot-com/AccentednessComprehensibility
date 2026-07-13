@@ -1,5 +1,6 @@
 import {
   COUNTERBALANCE_CELLS,
+  CURRENT_ALLOCATION_STRATEGY_VERSION,
   buildCounterbalancedAssignment,
 } from "../functions/api/_counterbalance.js";
 
@@ -66,7 +67,13 @@ function assertNoLongConstrainedRun(assignment, label) {
 }
 
 for (const cell of COUNTERBALANCE_CELLS) {
-  const assignment = buildCounterbalancedAssignment(materials, cell, "verify-seed");
+  const speakerPatternBundle = ((cell.cell_id - 1) % 10) + 1;
+  const bundledCell = {
+    ...cell,
+    speaker_pattern_bundle: speakerPatternBundle,
+    allocation_strategy_version: CURRENT_ALLOCATION_STRATEGY_VERSION,
+  };
+  const assignment = buildCounterbalancedAssignment(materials, bundledCell, "verify-seed");
   if (assignment.length !== 100) {
     throw new Error(`Cell ${cell.cell_id} generated ${assignment.length} trials, expected 100.`);
   }
@@ -149,7 +156,7 @@ for (const cell of COUNTERBALANCE_CELLS) {
     return acc;
   }, {});
   console.log(
-    `cell ${cell.cell_id}: ${assignment.length} trials in 4 blocks, ` +
+    `cell ${cell.cell_id}, bundle ${speakerPatternBundle}: ${assignment.length} trials in 4 blocks, ` +
       `ENG=${counts.ENG || 0}, JPN=${counts.JPN || 0}, CHN=${counts.CHN || 0}`,
   );
 }

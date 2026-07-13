@@ -8,7 +8,7 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
-const PLATFORM_VERSION = "pronunciation_rating_v0.8.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
@@ -499,8 +499,8 @@ function checkProlificFlowSourceGuards(options) {
   forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
   forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
-  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.8.1"');
-  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.8.1"');
+  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.9.0"');
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.9.0"');
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-btn"');
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-status"');
   requireSnippet(problems, "index.html", index, "You may replay the audio while reviewing this practice feedback.");
@@ -588,7 +588,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.8.1_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.9.0_smoke");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "session_resume_practice_required");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "practice_feedback_replay_start");
@@ -598,11 +598,27 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_tts_tingting");
   requireSnippet(problems, "_counterbalance.js", counterbalance, 'spoken_form: "披萨"');
   requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_say_tingting_tts_wav");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "SELECT COUNT(*)");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status IN (?, ?)");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status = ?");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "ca.status NOT LIKE 'dry_run_%'");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, 'CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1"');
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "CROSS JOIN speaker_pattern_bundles");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "WHERE allocation_cohort = ?");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "AND allocation_strategy_version = ?");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "db.batch([allocationInsert, allocationSelect])");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "Stored speaker-pattern bundles do not match");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "tieBreakerOffset");
+  requireSnippet(problems, "session/start.js", start, "trustedAllocationCohort");
+  requireSnippet(problems, "session/start.js", start, "COUNTERBALANCE_COHORTS_JSON");
+  requireSnippet(problems, "session/start.js", start, "db.batch([sessionInsert, ...statements])");
+  requireBefore(
+    problems,
+    "session/start.js",
+    start,
+    "const existing = await findExistingProlificSession",
+    "const allocationCohort = counterbalanceEnabled",
+  );
+  requireSnippet(problems, "session/complete.js", complete, "await db.batch(completionStatements)");
+  requireSnippet(problems, "trial.js", trial, "allocation_strategy_version");
+  requireSnippet(problems, "db/schema.sql", schema, "CREATE TABLE IF NOT EXISTS speaker_pattern_bundles");
+  requireSnippet(problems, "db/schema.sql", schema, "speaker_pattern_bundle INTEGER");
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "incomplete_dropout");
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "abandoned");
   requireSnippet(problems, "admin/finalize-stale.js", finalizeStale, "orphan_allocation_finalized_total");

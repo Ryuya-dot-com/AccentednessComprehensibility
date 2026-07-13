@@ -26,6 +26,34 @@ async function insertNonCriticalEvent(db, event) {
   }
 }
 
+function allocationStatusForSession(status, dryRun) {
+  const completed = cleanText(status) === "completed";
+  if (dryRun) return completed ? "dry_run_completed" : "dry_run_incomplete";
+  return completed ? "completed" : "incomplete";
+}
+
+async function reconcileClosedAllocation(db, session, dryRun) {
+  if (!session.counterbalance_allocation_id || cleanText(session.status) === "started") return;
+  const allocationStatus = allocationStatusForSession(session.status, dryRun);
+  await db
+    .prepare(
+      `UPDATE counterbalance_allocations
+       SET status = ?,
+           completed_at = ?,
+           updated_at = COALESCE(?, updated_at)
+       WHERE id = ?
+         AND status != ?`,
+    )
+    .bind(
+      allocationStatus,
+      cleanText(session.status) === "completed" ? session.completed_at : null,
+      session.completed_at,
+      session.counterbalance_allocation_id,
+      allocationStatus,
+    )
+    .run();
+}
+
 export async function onRequestPost(context) {
   try {
     requireSameOrigin(context.request);
@@ -38,6 +66,7 @@ export async function onRequestPost(context) {
       .prepare(
         `SELECT id, rater_id, trial_count, counterbalance_allocation_id,
            session_token_hash, started_at, started_at_ms, status,
+           completed_at, completed_at_ms,
            completed_trial_count, completion_url_issued_count,
            word_familiarity_required,
            prolific_pid, prolific_study_id, prolific_session_id, participant_key
@@ -49,6 +78,7 @@ export async function onRequestPost(context) {
     await requireSessionToken(context.request, body, session);
     const dryRun = isDryRunSession(session);
     if (cleanText(session.status) !== "started") {
+      await reconcileClosedAllocation(db, session, dryRun);
       const priorCompletion = cleanText(session.status) === "completed"
         ? dryRun
           ? { code: "DRY-RUN", url: "" }
@@ -214,7 +244,9 @@ export async function onRequestPost(context) {
       status = "completed_no_completion_config";
     }
 
-    await db
+    const allocationId = cleanText(session.counterbalance_allocation_id);
+    const allocationStatus = allocationStatusForSession(status, dryRun);
+    const sessionUpdate = db
       .prepare(
         `UPDATE sessions
          SET status = ?, completed_at = ?, last_seen_at = ?,
@@ -224,7 +256,13 @@ export async function onRequestPost(context) {
              completion_url_issued_at = CASE WHEN ? != '' THEN ? ELSE completion_url_issued_at END,
              completion_url_issued_at_ms = CASE WHEN ? != '' THEN ? ELSE completion_url_issued_at_ms END,
              completion_url_issued_count = completion_url_issued_count + ?
-         WHERE id = ?`,
+         WHERE id = ? AND status = 'started'
+           AND (
+             ? IS NULL OR EXISTS (
+               SELECT 1 FROM counterbalance_allocations
+               WHERE id = ? AND session_id = ? AND status = ? AND updated_at = ?
+             )
+           )`,
       )
       .bind(
         status,
@@ -240,30 +278,65 @@ export async function onRequestPost(context) {
         completedAtMs,
         completion.url ? 1 : 0,
         sessionId,
-      )
-      .run();
+        allocationId || null,
+        allocationId || null,
+        sessionId,
+        allocationStatus,
+        completedAt,
+      );
 
-    if (session.counterbalance_allocation_id) {
-      const allocationStatus = dryRun
-        ? status === "completed"
-          ? "dry_run_completed"
-          : "dry_run_incomplete"
-        : status === "completed"
-          ? "completed"
-          : "incomplete";
-      await db
+    const completionStatements = [];
+    if (allocationId) {
+      completionStatements.push(
+        db
         .prepare(
           `UPDATE counterbalance_allocations
            SET status = ?, completed_at = ?, updated_at = ?
-           WHERE id = ?`,
+           WHERE id = ? AND session_id = ?
+             AND EXISTS (
+               SELECT 1 FROM sessions
+               WHERE id = ? AND status = 'started'
+             )`,
         )
         .bind(
           allocationStatus,
           status === "completed" ? completedAt : null,
           completedAt,
-          session.counterbalance_allocation_id,
-        )
-        .run();
+          allocationId,
+          sessionId,
+          sessionId,
+        ),
+      );
+    }
+    completionStatements.push(sessionUpdate);
+    await db.batch(completionStatements);
+
+    const savedSession = await db
+      .prepare(
+        `SELECT status, completed_at, completed_at_ms, completed_trial_count
+         FROM sessions WHERE id = ?`,
+      )
+      .bind(sessionId)
+      .first();
+    if (cleanText(savedSession?.status) !== status || Number(savedSession?.completed_at_ms) !== completedAtMs) {
+      const savedStatus = cleanText(savedSession?.status);
+      const priorCompletion = savedStatus === "completed"
+        ? dryRun
+          ? { code: "DRY-RUN", url: "" }
+          : prolificCompletionConfig(context.env)
+        : { code: "", url: "" };
+      return jsonResponse({
+        ok: true,
+        existing_completion: savedStatus !== "started",
+        retryable: savedStatus === "started",
+        session_id: sessionId,
+        status: savedStatus,
+        trial_count: Number(session.trial_count || 0),
+        completed_trial_count: Number(savedSession?.completed_trial_count || 0),
+        completion_code: priorCompletion.code,
+        completion_url: priorCompletion.url,
+        redirect_after_ms: priorCompletion.url ? 1200 : 0,
+      }, savedStatus === "started" ? 409 : 200);
     }
 
     await insertNonCriticalEvent(db, {
