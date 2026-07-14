@@ -34,7 +34,7 @@ http://127.0.0.1:8765/?manual=1&local=1
 4. Optionally upload a local manifest CSV with metadata.
 5. In the server-backed study, the task mode is fixed to `Combined`, shown as separate word-identification and rating pages for each trial.
 6. Click `Prepare counterbalanced session` for server-backed stimulus-pool audio, or `Prepare trials` for local manual audio.
-7. Click `Start practice`.
+7. Read the `Practice Session` introduction, which explains that the four samples familiarize participants with the procedure and calibrate Accentedness ratings against expert reference ranges, then click `Start practice`.
 8. Complete the practice session:
    - 4 researcher-selected practice WAV trials, ordered from the lowest to the highest documented Accentedness band: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
    - Each trial first asks for the typed English word, then shows a separate rating page.
@@ -254,6 +254,8 @@ The legacy script no longer overwrites top-level `practice_manifest.csv`. The re
 ## Built-in Practice Session
 
 The server-backed task automatically starts with a practice session before main ratings.
+
+Immediately before practice, the participant sees a dedicated `Practice Session` introduction. It states that four sample words will be transcribed and rated, explains that practice is intended both to familiarize the participant with the procedure and to calibrate Accentedness ratings against expert reference ranges, and makes clear that each sample can be replayed without limit only after its response has been submitted and the feedback screen is visible.
 
 Current practice audio uses four researcher-selected WAV files hosted in production R2:
 
@@ -492,6 +494,8 @@ Admin APIs fail closed when `ADMIN_TOKEN` is missing.
 For production, protect `/admin/*` and `/api/admin/*` with Cloudflare Access and set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`; `ADMIN_TOKEN` remains as a second layer.
 
 Rater responses are saved trial-by-trial to D1. The final checklist is saved as 50 normalized rows before completion. The local ZIP download remains as a backup and includes `*_word_familiarity.csv`. The Prolific return URL is issued only by `/api/session/complete` after all trials and any version-required checklist rows are present and the session token is valid.
+
+For main trials, the collected scores are the selected integer values on the two 1–9 ordinal scales; collection does not transform or average them. Intelligibility is preflagged by comparing lowercased, letter-only versions of the typed response and target, while non-exact responses remain available for manual review and an explicit unidentified response remains a separate category. Response times are measured from the successful playback start of the relevant page: `dictation_submit_rt_ms` and `first_key_rt_ms` use the word-identification playback, while `rating_submit_rt_ms` and the first/last Accentedness and Comprehensibility selection RTs use the rating-page playback. Selection counts and interaction order preserve rating changes. These timing/process fields are recorded for quality control and analysis; they do not alter the 1–9 score at collection.
 
 Each saved trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Audio replay starts are also logged in `events.csv` with replay status and relative play time.
 

@@ -13,7 +13,7 @@ import {
 } from "../functions/api/_counterbalance.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
 const ALLOWED_STUDY = "STUDY_ALLOWED";
 const ALLOCATION_COHORT = "pilot_bundle_v1";
 const TEST_ORIGIN = "https://bundle-test.invalid";

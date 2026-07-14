@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
 const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
@@ -242,8 +242,12 @@ function checkRequiredAudioLifecycleSnippets(helperText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="audio-lifecycle.js?v=0.9.0"',
-    'src="app.js?v=0.9.0"',
+    'src="audio-lifecycle.js?v=0.9.1"',
+    'src="app.js?v=0.9.1"',
+    "In this practice session, you will transcribe and rate four sample words.",
+    "familiarize you with the task procedure; and",
+    "help you calibrate your Accentedness ratings by comparing them with expert reference ranges.",
+    "listen to the sample again as many times as you like.",
     'id="word-familiarity-panel"',
     'id="word-familiarity-grid"',
     "Review all 50 words",

@@ -311,6 +311,7 @@ Practice trials use four researcher-selected calibration WAVs in ascending docum
 
 These are reference ranges rather than exact scalar ratings. No scalar expert Comprehensibility value has been established for these items. Before production launch:
 
+- Present a pre-practice explanation stating that the four samples familiarize participants with the task procedure and calibrate Accentedness ratings against expert reference ranges.
 - Confirm the selected practice audio by collaborator listening review.
 - The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in exports and reporting.
 - Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
@@ -359,6 +360,15 @@ Scale direction must be reported:
 
 - Accentedness: 1 = no accent, 9 = extremely strong accent.
 - Comprehensibility: 1 = easy to understand, 9 = extremely difficult to understand.
+
+Main-trial scoring and response-time rules must also be reported explicitly:
+
+- Store the participant's selected Accentedness and Comprehensibility values as untransformed integers from 1 to 9. Treat them as ordinal outcomes in the primary analysis; do not use response time to modify either score.
+- Preflag intelligibility by exact equality after lowercasing and removing non-letter characters. Retain non-exact typed responses for manual review, and retain an explicit unidentified response as a distinct response state.
+- Measure `dictation_submit_rt_ms` and `first_key_rt_ms` from the successful word-identification playback start.
+- Measure `rating_submit_rt_ms`, each scale's first and last selection RT, and the first-rating RT from the successful rating-page playback start.
+- Preserve selection counts, rating interaction sequence, and first-interaction order so that changed answers and response order can be audited.
+- Exclude practice rows from confirmatory outcome analyses. Practice feedback replays are audit events and must not be folded into main-trial response-time or replay measures.
 
 ## Analysis Plan
 

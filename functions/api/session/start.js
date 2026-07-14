@@ -42,7 +42,7 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.9.0";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
 
 const ASSIGNMENT_SELECT = `
   SELECT
