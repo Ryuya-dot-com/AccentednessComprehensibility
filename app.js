@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.9.0";
+  const VERSION = "pronunciation_rating_v0.9.1";
   const AUDIO_LIFECYCLE = window.AudioLifecycle;
   if (!AUDIO_LIFECYCLE?.createFeedbackReplayLifecycle || !AUDIO_LIFECYCLE?.isPlaybackCurrent) {
     throw new Error("Audio lifecycle helper is unavailable.");

@@ -258,6 +258,8 @@ npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migr
 
 Legacy rows intentionally keep `NULL` bundle/version/cohort values and resume their stored assignments; do not backfill them.
 
+The v0.9.1 pre-practice explanation does not add a D1 column or migration. The explanation is presentation-only, while new sessions and trial rows identify the deployed contract through `platform_version=pronunciation_rating_v0.9.1`. Confirm that the existing v0.9 `0015_speaker_pattern_bundles.sql` migration is already present before deploying v0.9.1; do not create a separate field for the instruction text. Main-trial scores and response-time/process fields continue to be saved under the existing schema.
+
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
 ```sh
