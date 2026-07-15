@@ -187,7 +187,7 @@ function summarizeMainAssignment(result) {
   return {
     assignment_count: assignment.length,
     trial_count: Number(result.data?.trial_count || 0),
-    practice_recording_required: result.data?.practice_recording_required === true,
+    practice_recording_required: result.data?.practice_recording_required,
     placeholder_rows: assignment.filter((row) => row.source_format === "dry_run_placeholder").length,
     non_https_rows: assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || "")).length,
   };
@@ -625,7 +625,7 @@ function markdown(context) {
     "## Interpretation",
     "",
     starts === MICROCELL_COUNT
-      ? "For the 200-start gate, each response must include the current strategy, dry-run cohort, bundle, and four block patterns, and every cell×bundle microcell must occur exactly once. Run this gate before smaller v0.9 dry-run waves, or against a fresh deployment/D1 scope, because prior allocations in the shared dry-run cohort intentionally influence later balancing."
+      ? "For the 200-start gate, each response must include the current strategy, dry-run cohort, bundle, and four block patterns, and every cell×bundle microcell must occur exactly once. Run this gate before smaller v0.10 dry-run waves, or against a fresh deployment/D1 scope, because prior allocations in the shared dry-run cohort intentionally influence later balancing."
       : "For a smaller wave, cell and bundle spreads of 0 or 1 are required. Microcell coverage is reported descriptively and is not claimed to be complete. Dry-run statuses are isolated from production allocation counts.",
     persistedD1.skipped
       ? "The duplicate-resume check verifies that one allocation's metadata was persisted and reloaded from D1. Set LIVE_STRESS_ADMIN_TOKEN or ADMIN_TOKEN to cross-check every batch row through the restricted counterbalance CSV export."
@@ -677,8 +677,10 @@ for (const [index, result] of results.entries()) {
   if (result.ok && summary.trial_count !== 100) {
     problems.push(`request ${index + 1}: expected trial_count 100, got ${summary.trial_count}`);
   }
-  if (result.ok && summary.practice_recording_required) {
-    problems.push(`request ${index + 1}: new session unexpectedly requires practice recording`);
+  if (result.ok && summary.practice_recording_required !== false) {
+    problems.push(
+      `request ${index + 1}: expected practice_recording_required=false, got ${JSON.stringify(summary.practice_recording_required)}`,
+    );
   }
   if (result.ok && !allowPlaceholder && summary.placeholder_rows) {
     problems.push(`request ${index + 1}: ${summary.placeholder_rows} dry_run_placeholder rows`);
