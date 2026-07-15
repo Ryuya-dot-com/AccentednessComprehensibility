@@ -512,7 +512,9 @@ Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
 ```
 
-Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that all saved background choices and the word-checklist requirement are returned by a questionnaire-free `resume_only` lookup. A passing local check is not evidence that v0.10 has been deployed; record deployment only after the live check succeeds against the stable hostname.
+Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that all saved background choices and the word-checklist requirement are returned by a questionnaire-free `resume_only` lookup. A passing local check is not evidence that a candidate has been deployed; record deployment only after the live check succeeds against the stable hostname.
+
+Deployment record: PR #8 was merged as `d58a81a` and Cloudflare Pages deployed it to the stable hostname on 2026-07-15. The live check passed with `--allow-turnstile-off --allow-demo-static-manifest --api-dry-run-start`: it observed v0.10, `trial_count=100`, 100 main assignments, four canonical browser practice items, `practice_recording_required=false`, and successful demographic/background round-trip. A direct read of the synthetic dry-run session in remote D1 confirmed 100 main assignments, zero practice assignments/trials/events, and all 11 background values on `sessions`. Turnstile was intentionally off for this verification, so the separate final production security and live-stress gates below still apply before recruitment.
 
 After Wrangler authentication is available, run the aggregate readiness audit:
 
