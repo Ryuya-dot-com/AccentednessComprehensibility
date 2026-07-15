@@ -1,6 +1,6 @@
 # Project TODO
 
-Updated: 2026-07-14 JST
+Updated: 2026-07-15 JST
 
 This list tracks the remaining work before using
 `https://accentednesscomprehensibility.pages.dev/` for Prolific data collection.
@@ -66,14 +66,13 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
 
-- [ ] Deploy the v0.10 candidate and verify the stable Cloudflare URL before recruitment.
-  - Do not mark v0.10 as deployed based on local source/preflight results.
-  - Confirm `platform_version=pronunciation_rating_v0.10.0`, `sessions.trial_count=100`, exactly 100 main assignments, and zero new practice assignments, trials, events, and local rating CSV rows.
-  - Confirm all background fields round-trip from the `sessions` row and are not duplicated in main trial rows.
-  - Confirm all four practice items, feedback, and unlimited feedback-stage replay remain available in the browser.
-  - Confirm seeded pre-v0.10 practice rows remain readable/resumable and nullable historical questionnaire values do not block resume.
-  - Run the preflight, live deployment check, and live stress commands above only after the v0.10 Pages deployment is visible at the stable hostname.
-  - Completion: the new live report records a passing v0.10 deployment and the Prolific study still uses the stable hostname.
+- [x] Deploy the v0.10 candidate and verify the stable Cloudflare URL.
+  - PR #8 was merged as `d58a81a`; the Cloudflare Pages production check completed successfully on 2026-07-15.
+  - The stable-host live check passed with `--allow-turnstile-off --allow-demo-static-manifest --api-dry-run-start` and observed `platform_version=pronunciation_rating_v0.10.0`, `sessions.trial_count=100`, exactly 100 main assignments, four canonical browser practice items, and `practice_recording_required=false`.
+  - A direct remote-D1 read of the synthetic session confirmed 100 main assignments, zero practice assignments/trials/events, and all 11 background values on `sessions`.
+  - Local integration fixtures confirm seeded pre-v0.10 practice rows remain readable/resumable and nullable historical questionnaire values do not block resume.
+  - The served app retains all four practice items, feedback, and unlimited feedback-stage replay while omitting practice from the local rating CSV.
+  - Turnstile was intentionally disabled for this deployment check. Complete the separate security review, full live-stress gate, and end-to-end pilot below before recruitment.
 
 - [x] Verify ENG/native English production stimulus coverage.
   - Source folder: `/Users/tohokusla/Dropbox/Accentedness/Stimuli/ENG`.
@@ -251,12 +250,12 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Confirm session start, four-item browser-only practice, four main blocks, distractors, main-trial save calls, completion, and admin exports.
   - Production preflight script: `scripts/preflight_production.mjs`.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
-  - Current preflight report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
-  - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - The previously recorded preflight result was PASS with the production R2 manifest and `--using-external-manifest-secret`; rerun it for v0.10 before making a deployment claim.
+  - Standard persistent preflight report path: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
+  - Standard persistent live report path: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
+  - The v0.10 preflight and stable-host live API deployment check passed on 2026-07-15 with the external production manifest assumptions documented above.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
   - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four browser-only practice items repeat without creating v0.10 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
-  - The last recorded stable deployment evidence predates v0.10. The 2026-07-13 live API gate and its persisted practice metadata are historical compatibility evidence, not proof that the new contract is deployed.
+  - The current stable application contract is v0.10; its application changes were introduced by merge commit `d58a81a`. The 2026-07-13 live API gate and its persisted practice metadata remain historical compatibility evidence.
   - Completion: a v0.10 dry run produces valid exports with 100 main assignments, zero current-version practice rows/events/local rating CSV rows, session-level background fields, and readable historical practice rows.
 
 - [ ] Review production secrets and access controls.
