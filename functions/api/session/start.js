@@ -42,7 +42,7 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
 
 const ASSIGNMENT_SELECT = `
   SELECT
@@ -353,7 +353,14 @@ async function existingSessionResponse(db, session, sessionToken) {
       .bind(session.id)
       .all(),
   ]);
-  const practiceRows = practiceAssignment.results || [];
+  const savedPracticeRows = practiceAssignment.results || [];
+  const practiceRecordingRequired = savedPracticeRows.length > 0;
+  const practiceRows = practiceRecordingRequired
+    ? savedPracticeRows
+    : CANONICAL_PRACTICE_ASSIGNMENT.map((item) => ({
+        ...item,
+        source_path: item.audio_url,
+      }));
   const mainRows = mainAssignment.results || [];
   const savedTrials = (completedTrials.results || []).map((row) => ({
     phase: cleanText(row.phase),
@@ -425,6 +432,7 @@ async function existingSessionResponse(db, session, sessionToken) {
     linguistics_knowledge_details: cleanText(session.linguistics_knowledge_details),
     session_token: sessionToken,
     counterbalance: counterbalancePayload(counterbalanceFromSession(session)),
+    practice_recording_required: practiceRecordingRequired,
     practice_assignment: practiceRows,
     main_assignment: mainRows,
     saved_trials: savedTrials,
@@ -677,7 +685,15 @@ export async function onRequestPost(context) {
           throw fallbackError;
         }
       }
-      assignment = [...practiceAssignment, ...mainAssignment];
+      assignment = mainAssignment;
+    } else {
+      practiceAssignment = assignment.filter(
+        (item) => cleanText(item?.phase) === "practice",
+      );
+      mainAssignment = assignment.filter(
+        (item) => cleanText(item?.phase) !== "practice",
+      );
+      assignment = mainAssignment;
     }
 
     if (!assignment.length) return errorResponse("assignment must contain trials.");
@@ -835,6 +851,7 @@ export async function onRequestPost(context) {
         platform_version: platformVersion,
         participant_key: key,
         trial_count: assignment.length,
+        practice_persisted: false,
         started_at_ms: startedAtMs,
         seed: cleanText(body.seed),
         japanese_familiarity_1_6: japaneseFamiliarity,
@@ -853,6 +870,7 @@ export async function onRequestPost(context) {
       trial_count: assignment.length,
       dry_run: dryRun,
       word_familiarity_required: wordFamiliarityRequired,
+      practice_recording_required: false,
       counterbalance: counterbalancePayload(counterbalance),
       practice_assignment: practiceAssignment,
       main_assignment: mainAssignment,

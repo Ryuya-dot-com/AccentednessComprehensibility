@@ -44,7 +44,7 @@ http://127.0.0.1:8765/?manual=1&local=1
 9. For each main-task sample, play the audio once on the word-identification page, type the word, continue, play the same audio once on the rating page, then rate accentedness followed by comprehensibility as displayed from top to bottom. Main-task feedback and replay are not provided.
 10. In the server-backed counterbalanced task, complete a short calculation distractor task between main stimulus-list blocks.
 11. After the final rating, review the 50-word familiarity checklist. Check words known before the study and leave unfamiliar words blank; all 50 explicit 0/1 responses are saved.
-12. The participant is returned to Prolific only after all trials and the required checklist are saved and the server marks the session as completed. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved data remain in D1, but no Prolific completion URL is issued.
+12. The participant is returned to Prolific only after all 100 server-assigned main trials and the required checklist are saved and the server marks the session as completed. The four practice items are a browser-only calibration step and do not count toward server progress or completion. If saving needs review, the participant is told to contact the researcher. If the participant leaves mid-task, saved main-task data remain in D1, but no Prolific completion URL is issued.
 
 ## GitHub Audio Workflow
 
@@ -54,7 +54,7 @@ For the Cloudflare/Prolific version, server-side counterbalancing is enabled by 
 
 Configure Prolific with the stable Pages project URL, `https://accentednesscomprehensibility.pages.dev/`, plus Prolific's participant parameters. Never use a deployment-specific URL such as `https://<deployment-id>.accentednesscomprehensibility.pages.dev/`; it permanently targets that historical deployment and can continue serving an obsolete practice set after `main` is updated.
 
-Before practice, participants complete the required background questionnaire: age; first-language English variety; gender; familiarity with Japanese-accented and Chinese-accented English; English-teaching experience; and relevant linguistics knowledge. `Other`/`Yes` detail fields are conditionally required. The server accepts only whole-number ages from 1–120, exact enumerated choices, familiarity ratings from 1–6, and bounded free text. Responses are stored once on the `sessions` row rather than copied into every trial. A `resume_only` lookup restores an open Prolific session and its saved background responses without asking the participant to answer the questionnaire again.
+Before practice, participants complete the required background questionnaire: age; first-language English variety; gender; familiarity with Japanese-accented and Chinese-accented English; English-teaching experience; and relevant linguistics knowledge. `Other`/`Yes` detail fields are conditionally required. The server accepts only whole-number ages from 1–120, exact enumerated choices, familiarity ratings from 1–6, and bounded free text. All background responses remain stored once on the `sessions` row rather than being copied into assignment, trial, event, or local rating CSV rows. The nine questionnaire columns added by `0012_background_questionnaire.sql` remain nullable so sessions created before that questionnaire can still be read and resumed; new sessions must submit the required fields. A `resume_only` lookup restores an open Prolific session and its saved background responses without asking the participant to answer the questionnaire again.
 
 The final checklist contains the canonical 50 English target words in CounterBalance workbook number order. Meanings/translations are not shown because they would reveal the lexical knowledge being measured. A normalized `word_familiarity_responses` table stores one `word_known` value per session and word number. `analysis.csv` joins the appropriate 0/1 value to each main-trial row, so trials such as `capelin` can be filtered without inferring unfamiliarity from the dictation response. Sessions started by v0.6 and earlier remain compatible and export a blank checklist value rather than an incorrect zero.
 
@@ -168,7 +168,7 @@ The server balances both the 20 cells and 200 cell×bundle microcells at session
 
 This works as rolling recruitment to 200 completed sessions: finalize stale/dropout sessions, then continue recruiting until every cell×bundle microcell has one completion. At that full cycle, every word × analytic condition has 80 ratings, every non-ENG word × speaker × pronunciation token has 8 ratings, and every active ENG word × speaker token has 16 ratings. A fixed batch of 200 starts does not provide these completion guarantees when dropouts occur.
 
-If a participant reloads or reopens the stable Prolific URL while the session is still `started`, the server issues a fresh session token for the same session. The browser deliberately presents all four practice items again, then continues at the first unsaved main trial, pending block distractor, final checklist, or completion state. Replayed practice does not overwrite an already saved practice response. Trial rows continue to use the familiarity and background values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved trial rows remain available in `ratings.csv` and planned assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
+If a participant reloads or reopens the stable Prolific URL while the session is still `started`, the server issues a fresh session token for the same session. The browser deliberately presents all four practice items again, then continues at the first unsaved main trial, pending block distractor, final checklist, or completion state. For sessions created by v0.10 or later, replayed practice remains browser-only and creates no `rating_assignments`, `rating_trials`, `event_logs`, or local rating CSV rows. Historical practice rows from earlier versions remain readable and resumable and are never deleted or silently rewritten. Main-trial rows continue to use the familiarity and background values stored when the session first started. If a participant closes the page or stops responding, the session remains `started` until a researcher finalizes stale sessions from `/admin/`. Finalization uses `last_seen_at_ms` and marks stale partial sessions as `incomplete_dropout` and stale zero-response sessions as `abandoned`. It also marks stale orphan counterbalance allocations without a matching session as incomplete. Saved main-trial rows remain available in `ratings.csv` and planned main assignments remain available in `assignments.csv`, but `analysis.csv` continues to include completed sessions only.
 
 Counterbalance reference files:
 
@@ -194,7 +194,7 @@ For production, `participant_id` must use the standardized speaker IDs from the 
 
 `stimulus_list` is optional in the code, but including it is recommended. If several rows share the same `L1 x word_number x pronunciation_condition`, the server first applies the Sheet2 speaker-pattern target for that block and then selects the matching row. The final order is randomized within each stimulus-list block with the no-3-consecutive same-L1 constraint.
 
-Block metadata is saved in `rating_assignments`, `rating_trials`, local backup CSVs, and admin CSV exports:
+Main-trial block metadata is saved in `rating_assignments`, `rating_trials`, local backup CSVs, and admin CSV exports:
 
 - `block_index`: 1-4.
 - `block_list`: A-J.
@@ -254,6 +254,8 @@ The legacy script no longer overwrites top-level `practice_manifest.csv`. The re
 ## Built-in Practice Session
 
 The server-backed task automatically starts with a practice session before main ratings.
+
+Beginning with v0.10, this remains a four-item UI calibration but is not part of the server data contract. New sessions persist exactly 100 main assignments, set `sessions.trial_count=100`, and use those 100 main trials for progress and completion. Practice responses, feedback, and replay activity are not written to `rating_assignments`, `rating_trials`, `event_logs`, or the local rating CSV. The existing practice-capable schema is retained so historical sessions and exports remain readable and resumable.
 
 Immediately before practice, the participant sees a dedicated `Practice Session` introduction. It states that four sample words will be transcribed and rated, explains that practice is intended both to familiarize the participant with the procedure and to calibrate Accentedness ratings against expert reference ranges, and makes clear that each sample can be replayed without limit only after its response has been submitted and the feedback screen is visible.
 
@@ -426,6 +428,8 @@ wrangler d1 execute <DB_NAME> --file=./db/migrations/0015_speaker_pattern_bundle
 
 Existing rows intentionally retain `NULL` bundle/version/cohort values and resume their stored legacy assignments. Do not infer or backfill a bundle for them.
 
+The v0.10 client-only practice contract does not require a new D1 migration. Keep the existing nullable questionnaire and practice-capable columns for legacy compatibility; enforce the 100-main-trial and no-new-practice-row rules in the versioned application contract.
+
 Run the archived-session lock regression test after changing these indexes:
 
 ```sh
@@ -493,13 +497,13 @@ This preserves the package manifest rows and fills `audio_url` from `audio_file`
 Admin APIs fail closed when `ADMIN_TOKEN` is missing.
 For production, protect `/admin/*` and `/api/admin/*` with Cloudflare Access and set `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and `CF_ACCESS_ALLOWED_EMAILS`; `ADMIN_TOKEN` remains as a second layer.
 
-Rater responses are saved trial-by-trial to D1. The final checklist is saved as 50 normalized rows before completion. The local ZIP download remains as a backup and includes `*_word_familiarity.csv`. The Prolific return URL is issued only by `/api/session/complete` after all trials and any version-required checklist rows are present and the session token is valid.
+Main-task responses are saved trial-by-trial to D1. The final checklist is saved as 50 normalized rows before completion. The local ZIP download remains as a backup and includes `*_word_familiarity.csv`, but new v0.10 sessions do not add practice responses to the local rating CSV. The Prolific return URL is issued only by `/api/session/complete` after all 100 main trials and any version-required checklist rows are present and the session token is valid.
 
 For main trials, the collected scores are the selected integer values on the two 1–9 ordinal scales; collection does not transform or average them. Intelligibility is preflagged by comparing lowercased, letter-only versions of the typed response and target, while non-exact responses remain available for manual review and an explicit unidentified response remains a separate category. Response times are measured from the successful playback start of the relevant page: `dictation_submit_rt_ms` and `first_key_rt_ms` use the word-identification playback, while `rating_submit_rt_ms` and the first/last Accentedness and Comprehensibility selection RTs use the rating-page playback. Selection counts and interaction order preserve rating changes. These timing/process fields are recorded for quality control and analysis; they do not alter the 1–9 score at collection.
 
-Each saved trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Audio replay starts are also logged in `events.csv` with replay status and relative play time.
+Each saved main trial includes process fields for order and fatigue analyses: `trial_index`, `block_index`, `within_block_index`, `speaker_pattern_index`, `speaker_pattern_speaker`, `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, `response_order`, `first_response_field`, `first_response_rt_ms`, `rating_order`, `rating_interaction_sequence`, first/last RTs for each rating scale, rating selection counts, `submit_rt_ms`, `first_key_rt_ms`, and `replay_count`. Main-task audio events are also logged in `events.csv`; practice display, response, and feedback-replay events are not logged for new v0.10 sessions.
 
-Mid-task reloads first repeat the complete four-item practice session, then resume at the first unsaved main trial or later saved-session state. Mid-task dropouts keep their partial rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
+Mid-task reloads first repeat the complete four-item browser-only practice session, then resume at the first unsaved main trial or later saved-session state. Mid-task dropouts keep their partial main rows in D1. On `/admin/`, use `Finalize stale sessions` after the configured inactivity window, typically 240 minutes or longer during live collection. This marks stale `started` sessions as `incomplete_dropout` or `abandoned` and keeps them out of `analysis.csv`; inspect them through `quality.csv` and raw exports.
 
 The researcher export page is:
 
@@ -515,11 +519,11 @@ Available CSV exports:
 
 - `analysis.csv`: analysis-ready main-trial responses from completed sessions only. Prolific IDs are excluded; rows retain `analysis_participant_id`, add a stable `session_id` join key, and include the structured background covariates plus the trial word's `word_known` value.
 - `quality.csv`: anonymized one-row-per-session quality export with completion status, missing-trial/checklist counts, known-word count, active elapsed time, replay summaries, distractor accuracy/RT summaries, timing summaries, unidentified-word counts, manual-review counts, and response-quality flags.
-- `ratings.csv`: restricted raw export with all practice and main responses, response times, response-order fields, rating interaction fields, intelligibility fields, 9-point rating values, practice feedback/reasons, familiarity ratings, and audio metadata.
+- `ratings.csv`: restricted raw export with main responses, response times, response-order fields, rating interaction fields, intelligibility fields, 9-point rating values, familiarity ratings, and audio metadata. Historical pre-v0.10 practice rows remain available when present, but new sessions add no practice rows.
 - `sessions.csv`: restricted participant/session/prolific metadata with the full Prolific ID, `participant_key`, all background answers, checklist coverage/known count, completion code, counterbalance cell, millisecond audit fields, duplicate-start counts, and completion status.
 - `word-familiarity.csv`: restricted long-format export with 50 explicit word-number/word-known rows for each submitted checklist and full Prolific identifiers.
-- `assignments.csv`: trial order shown to each participant, including counterbalance list/L1/pronunciation fields.
-- `events.csv`: session start, trial display, audio playback, first key, save, pause, and completion logs.
+- `assignments.csv`: the 100 persisted main-trial assignments for each new session, including counterbalance list/L1/pronunciation fields; historical practice assignments remain readable.
+- `events.csv`: session, main-trial, distractor, checklist, and completion logs. Historical practice events remain readable, but new v0.10 sessions add no practice events.
 - `counterbalance.csv`: scoped cell×bundle allocation logs, four-block patterns, and completion status.
 - `speaker_pattern_bundles.csv`: the versioned 10-row bundle definition.
 
@@ -548,7 +552,7 @@ node scripts/test_background_questionnaire_local.mjs \
   --admin-token local-admin-test
 ```
 
-The integration test rejects malformed ages and checklist payloads, verifies exact three-part Prolific resume identity, confirms that a missing `resume_only` lookup does not write, accepts a 50-word all-unfamiliar response, tests v0.6 compatibility, verifies CSV formula neutralization and the unmasked Prolific ID, and checks sessions, word-familiarity, quality, and analysis exports.
+The integration test rejects malformed ages and checklist payloads, verifies exact three-part Prolific resume identity, confirms that a missing `resume_only` lookup does not write, accepts a 50-word all-unfamiliar response, checks all background fields on the `sessions` row, verifies the v0.10 100-main-assignment/zero-practice-row contract, tests legacy compatibility, verifies CSV formula neutralization and the unmasked Prolific ID, and checks sessions, word-familiarity, quality, and analysis exports.
 
 The generated SQLite database and CSV files are written to `exports/smoke_test_200/`.
 
@@ -574,9 +578,9 @@ After the live Pages API dry-run passes, stress-test the deployed D1-backed star
 node scripts/stress_live_counterbalance_concurrency.mjs --starts 40
 ```
 
-This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, verifies response-level cell, bundle, strategy, cohort, four-block pattern, and per-speaker 2-natural/2-accented metadata, and confirms D1 persistence through duplicate-session resume. Smaller waves require both cell and bundle spreads of at most 1; their microcell count is descriptive only.
+This writes `LIVE_COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md` to the OSF metadata directory. It uses `STUDY_ID=DRY_RUN`, verifies response-level cell, bundle, strategy, cohort, four-block pattern, per-speaker 2-natural/2-accented metadata, and the v0.10 `trial_count=100` main-only assignment contract, and confirms D1 persistence through duplicate-session resume. Smaller waves require both cell and bundle spreads of at most 1; their microcell count is descriptive only.
 
-For the full launch gate, run `--starts 200` before any smaller v0.9 dry-run waves, or against a fresh deployment/D1 allocation scope. This requires all 200 cell×bundle microcells exactly once in that wave. Prior allocations in the shared dry-run cohort intentionally influence later balancing, so a polluted cohort is not a valid exact-wave test. To cross-check every stress row against the restricted D1 counterbalance export, set `LIVE_STRESS_ADMIN_TOKEN` (or `ADMIN_TOKEN`) in the process environment; the token is sent only in the `x-admin-token` header and is never printed.
+For the full launch gate, run `--starts 200` before any smaller v0.10 dry-run waves, or against a fresh deployment/D1 allocation scope. This requires all 200 cell×bundle microcells exactly once in that wave. Prior allocations in the shared dry-run cohort intentionally influence later balancing, so a polluted cohort is not a valid exact-wave test. To cross-check every stress row against the restricted D1 counterbalance export, set `LIVE_STRESS_ADMIN_TOKEN` (or `ADMIN_TOKEN`) in the process environment; the token is sent only in the `x-admin-token` header and is never printed.
 
 For acoustic QC of the OSF package, run:
 
@@ -625,7 +629,7 @@ node scripts/preflight_production.mjs \
   --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 ```
 
-The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, per-trial server saving, duplicate-start/resume handling, counterbalance allocation, and stale-session dropout finalization. With the production R2 manifest and external manifest secret configured, the current expected result is `PASS`.
+The script writes `PREFLIGHT_REPORT_20260703.md` to the OSF metadata directory and exits nonzero while launch blockers remain. It also checks source-level guards for Prolific completion redirect, the 100-main-trial/zero-new-practice-row contract, session-level background storage, per-trial server saving, duplicate-start/resume handling, legacy compatibility, counterbalance allocation, and stale-session dropout finalization. With the production R2 manifest and external manifest secret configured, the current expected result is `PASS`.
 
 After each Cloudflare deployment, run the live deployment check against the public URL:
 
@@ -633,9 +637,9 @@ After each Cloudflare deployment, run the live deployment check against the publ
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 ```
 
-Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, and duplicate-start resume metadata by calling `/api/session/start`. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
+Use the `--allow-turnstile-off` flag only for pilot phases where Turnstile is intentionally disabled. For production, omit that flag if `REQUIRE_TURNSTILE=1` is expected. The `--api-dry-run-start` flag creates one dry-run session and verifies the live Pages Function, D1 schema, counterbalance allocation, server-side manifest path, all background values, `trial_count=100`, 100 main assignments, zero new practice assignments/trials/events, and duplicate-start resume metadata. If production uses `COUNTERBALANCE_MANIFEST_URL` and the public static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` for the server manifest check.
 
-The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, the four R2 practice/calibration WAVs, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`. The stable host has served v0.8 since the 2026-07-13 deployment of merge commit `99f3872`; both the static and live API gates passed. Update the Prolific study link to the stable hostname separately.
+The script writes `LIVE_DEPLOYMENT_CHECK_20260703.md` to the OSF metadata directory and verifies that the public site is serving the current app bundle, the four R2 practice/calibration WAVs, protected admin dry-run route, production config, non-demo manifest state, and optionally the live API dry-run start. When `COUNTERBALANCE_MANIFEST_URL` points to the production R2 manifest and the repository static manifest intentionally remains demo-only, run with `--allow-demo-static-manifest`. Do not treat the v0.10 contract as deployed until this check passes against the stable hostname; update the Prolific study link separately.
 
 After `npx wrangler login`, run the aggregate Cloudflare readiness audit:
 

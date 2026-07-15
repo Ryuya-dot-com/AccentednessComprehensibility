@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
 const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
@@ -195,6 +195,7 @@ function checkRequiredAppSnippets(appText) {
     "serverCompletedDistractorIndexes",
     "resumeAfterPractice",
     "replayingPractice",
+    "practiceRecordingRequired",
     "practice_replay_required",
     "continueAfterPractice",
     "replayedSavedPractice",
@@ -242,8 +243,8 @@ function checkRequiredAudioLifecycleSnippets(helperText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="audio-lifecycle.js?v=0.9.1"',
-    'src="app.js?v=0.9.1"',
+    'src="audio-lifecycle.js?v=0.10.0"',
+    'src="app.js?v=0.10.0"',
     "In this practice session, you will transcribe and rate four sample words.",
     "familiarize you with the task procedure; and",
     "help you calibrate your Accentedness ratings by comparing them with expert reference ranges.",
@@ -344,14 +345,14 @@ async function liveApiDryRunStartCheck(baseUrl) {
     prolific_study_id: "DRY_RUN",
     prolific_session_id: `LIVE_CHECK_SESSION_${nonce}`,
     participant_age_years: 30,
-    english_variety: "american",
-    english_variety_other: "",
-    gender: "no_answer",
-    gender_other: "",
-    english_teaching_experience: "no",
-    english_teaching_experience_details: "",
-    linguistics_knowledge: "no",
-    linguistics_knowledge_details: "",
+    english_variety: "other",
+    english_variety_other: "live check variety",
+    gender: "other",
+    gender_other: "live check gender",
+    english_teaching_experience: "yes",
+    english_teaching_experience_details: "live check teaching details",
+    linguistics_knowledge: "yes",
+    linguistics_knowledge_details: "live check linguistics details",
     japanese_familiarity_1_6: 3,
     chinese_familiarity_1_6: 3,
     counterbalance: { enabled: true },
@@ -400,7 +401,7 @@ async function liveApiDryRunStartCheck(baseUrl) {
   const duplicatePracticeRows = Array.isArray(duplicate?.data?.practice_assignment)
     ? duplicate.data.practice_assignment
     : [];
-  const duplicatePracticeSave = duplicate?.data?.session_token && duplicatePracticeRows[0]
+  const resumedPracticeSave = duplicate?.data?.session_token && duplicatePracticeRows[0]
     ? await postJson(
         baseUrl,
         "/api/trial",
@@ -425,7 +426,10 @@ async function liveApiDryRunStartCheck(baseUrl) {
     ...(result.response.status === 200 ? [] : [`/api/session/start returned ${result.response.status}`]),
     ...(result.data.ok === true ? [] : [`/api/session/start response was not ok: ${result.data.error || result.text.slice(0, 160)}`]),
     ...(assignment.length === 100 ? [] : [`expected 100 main assignments, got ${assignment.length}`]),
-    ...(Number(result.data.trial_count) === 104 ? [] : [`expected trial_count 104, got ${result.data.trial_count}`]),
+    ...(Number(result.data.trial_count) === 100 ? [] : [`expected trial_count 100, got ${result.data.trial_count}`]),
+    ...(result.data.practice_recording_required === false
+      ? []
+      : ["new session did not disable practice recording"]),
     ...(Number(assignedCounterbalance.counterbalance_cell) >= 1 &&
       Number(assignedCounterbalance.counterbalance_cell) <= 20
       ? []
@@ -445,9 +449,12 @@ async function liveApiDryRunStartCheck(baseUrl) {
       ? []
       : ["counterbalance response is missing the four speaker pattern indexes"]),
     ...savedPractice.flatMap((save, index) =>
-      save.response.status === 200 && save.data.ok === true
+      save.response.status === 200 &&
+      save.data.ok === true &&
+      save.data.ignored === true &&
+      save.data.reason === "practice_not_recorded"
         ? []
-        : [`practice ${index + 1} save failed: ${save.response.status} ${save.data.error || save.text.slice(0, 120)}`],
+        : [`practice ${index + 1} was not explicitly ignored: ${save.response.status} ${save.data.error || save.text.slice(0, 120)}`],
     ),
     ...(savedMain && savedMain.response.status === 200 && savedMain.data.ok === true
       ? []
@@ -464,6 +471,9 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicate.response.status === 200 ? [] : [`duplicate start returned ${duplicate.response.status}`]),
           ...(duplicate.data.ok === true ? [] : [`duplicate start response was not ok: ${duplicate.data.error || duplicate.text.slice(0, 160)}`]),
           ...(duplicate.data.existing_session === true ? [] : ["duplicate start did not report existing_session: true"]),
+          ...(duplicate.data.practice_recording_required === false
+            ? []
+            : ["duplicate start did not preserve the no-practice-recording contract"]),
           ...(duplicate.data.session_id === result.data.session_id ? [] : ["duplicate start did not return the same session_id"]),
           ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
           ...(JSON.stringify(duplicate.data.counterbalance) === JSON.stringify(assignedCounterbalance)
@@ -488,25 +498,30 @@ async function liveApiDryRunStartCheck(baseUrl) {
               ? []
               : [`practice assignment ${index + 1} does not match authoritative metadata for ${expected.target_word}`];
           }),
-          ...(Array.isArray(duplicate.data.saved_trials) && duplicate.data.saved_trials.length === 5
+          ...(Array.isArray(duplicate.data.saved_trials) && duplicate.data.saved_trials.length === 1
             ? []
-            : [`duplicate start should report 5 saved rows, got ${duplicate.data.saved_trials?.length ?? "(missing)"}`]),
+            : [`duplicate start should report 1 saved main row, got ${duplicate.data.saved_trials?.length ?? "(missing)"}`]),
           ...(duplicate.data.word_familiarity_required === true ? [] : ["duplicate start did not preserve word_familiarity_required"]),
           ...(Array.isArray(duplicate.data.word_familiarity) ? [] : ["duplicate start did not return word_familiarity"]),
           ...(Number(duplicate.data.japanese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original japanese_familiarity_1_6"]),
           ...(Number(duplicate.data.chinese_familiarity_1_6) === 3 ? [] : ["duplicate start did not return original chinese_familiarity_1_6"]),
           ...(Number(duplicate.data.participant_age_years) === 30 ? [] : ["duplicate start did not return original participant_age_years"]),
-          ...(duplicate.data.english_variety === "american" ? [] : ["duplicate start did not return original english_variety"]),
-          ...(duplicate.data.gender === "no_answer" ? [] : ["duplicate start did not return original gender"]),
-          ...(duplicate.data.english_teaching_experience === "no" ? [] : ["duplicate start did not return original english_teaching_experience"]),
-          ...(duplicate.data.linguistics_knowledge === "no" ? [] : ["duplicate start did not return original linguistics_knowledge"]),
+          ...(duplicate.data.english_variety === "other" ? [] : ["duplicate start did not return original english_variety"]),
+          ...(duplicate.data.english_variety_other === "live check variety" ? [] : ["duplicate start did not return original english_variety_other"]),
+          ...(duplicate.data.gender === "other" ? [] : ["duplicate start did not return original gender"]),
+          ...(duplicate.data.gender_other === "live check gender" ? [] : ["duplicate start did not return original gender_other"]),
+          ...(duplicate.data.english_teaching_experience === "yes" ? [] : ["duplicate start did not return original english_teaching_experience"]),
+          ...(duplicate.data.english_teaching_experience_details === "live check teaching details" ? [] : ["duplicate start did not return original english_teaching_experience_details"]),
+          ...(duplicate.data.linguistics_knowledge === "yes" ? [] : ["duplicate start did not return original linguistics_knowledge"]),
+          ...(duplicate.data.linguistics_knowledge_details === "live check linguistics details" ? [] : ["duplicate start did not return original linguistics_knowledge_details"]),
         ]
       : []),
-    ...(duplicatePracticeSave?.response.status === 200 &&
-      duplicatePracticeSave.data.ok === true &&
-      duplicatePracticeSave.data.duplicate === true
+    ...(resumedPracticeSave?.response.status === 200 &&
+      resumedPracticeSave.data.ok === true &&
+      resumedPracticeSave.data.ignored === true &&
+      resumedPracticeSave.data.reason === "practice_not_recorded"
       ? []
-      : ["replayed saved practice was not handled as a non-overwriting duplicate"]),
+      : ["replayed practice was not ignored by the no-recording contract"]),
   ];
   return {
     problems,
@@ -528,7 +543,8 @@ async function liveApiDryRunStartCheck(baseUrl) {
       duplicate_resume_trial_index: duplicateResume.next_trial_index || "",
       practice_replay_required: duplicateResume.practice_replay_required === true,
       practice_assignment: duplicatePracticeRows.length,
-      duplicate_practice_save: duplicatePracticeSave?.data?.duplicate === true,
+      practice_recording_required: duplicate?.data?.practice_recording_required === true,
+      resumed_practice_save_ignored: resumedPracticeSave?.data?.ignored === true,
     }),
   };
 }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
@@ -187,6 +187,7 @@ function summarizeMainAssignment(result) {
   return {
     assignment_count: assignment.length,
     trial_count: Number(result.data?.trial_count || 0),
+    practice_recording_required: result.data?.practice_recording_required === true,
     placeholder_rows: assignment.filter((row) => row.source_format === "dry_run_placeholder").length,
     non_https_rows: assignment.filter((row) => !/^https:\/\//i.test(row.audio_url || "")).length,
   };
@@ -365,6 +366,7 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
       resume.practice_replay_required === true &&
       resume.next_phase === "main" &&
       Number(resume.next_trial_index) === 1 &&
+      resumed.data?.practice_recording_required === false &&
       practiceMatches &&
       persistedMetadataMatches,
     first,
@@ -373,6 +375,7 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
     resume_practice_required: resume.practice_replay_required === true,
     resume_phase: resume.next_phase || "",
     resume_trial_index: resume.next_trial_index || "",
+    practice_recording_required: resumed?.data?.practice_recording_required === true,
     practice_assignment_count: resumedPractice.length,
     practice_matches: practiceMatches,
     persisted_metadata_matches: persistedMetadataMatches,
@@ -671,8 +674,11 @@ for (const [index, result] of results.entries()) {
   if (result.ok && summary.assignment_count !== 100) {
     problems.push(`request ${index + 1}: expected 100 main assignments, got ${summary.assignment_count}`);
   }
-  if (result.ok && summary.trial_count !== 104) {
-    problems.push(`request ${index + 1}: expected trial_count 104, got ${summary.trial_count}`);
+  if (result.ok && summary.trial_count !== 100) {
+    problems.push(`request ${index + 1}: expected trial_count 100, got ${summary.trial_count}`);
+  }
+  if (result.ok && summary.practice_recording_required) {
+    problems.push(`request ${index + 1}: new session unexpectedly requires practice recording`);
   }
   if (result.ok && !allowPlaceholder && summary.placeholder_rows) {
     problems.push(`request ${index + 1}: ${summary.placeholder_rows} dry_run_placeholder rows`);

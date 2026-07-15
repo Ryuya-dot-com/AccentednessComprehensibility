@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { onRequestPost as startSession } from "../functions/api/session/start.js";
 import { onRequestPost as saveTrial } from "../functions/api/trial.js";
+import { onRequestPost as saveEvent } from "../functions/api/event.js";
 import { onRequestPost as completeSession } from "../functions/api/session/complete.js";
 import {
   CANONICAL_PRACTICE_ASSIGNMENT,
@@ -13,7 +14,7 @@ import {
 } from "../functions/api/_counterbalance.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
 const ALLOWED_STUDY = "STUDY_ALLOWED";
 const ALLOCATION_COHORT = "pilot_bundle_v1";
 const TEST_ORIGIN = "https://bundle-test.invalid";
@@ -350,6 +351,21 @@ function assertParticipantSpeakerBalance(mainAssignment) {
   }
 }
 
+function assertCanonicalPracticeResponse(practiceAssignment) {
+  assert(
+    Array.isArray(practiceAssignment) &&
+      practiceAssignment.length === CANONICAL_PRACTICE_ASSIGNMENT.length,
+    `expected ${CANONICAL_PRACTICE_ASSIGNMENT.length} canonical practice rows; got ${practiceAssignment?.length}`,
+  );
+  CANONICAL_PRACTICE_ASSIGNMENT.forEach((expected, index) => {
+    const actual = practiceAssignment[index];
+    assert(actual.phase === expected.phase, `practice ${index + 1} phase mismatch`);
+    assert(actual.trial_index === expected.trial_index, `practice ${index + 1} trial index mismatch`);
+    assert(actual.target_word === expected.target_word, `practice ${index + 1} target word mismatch`);
+    assert(actual.audio_url === expected.audio_url, `practice ${index + 1} audio URL mismatch`);
+  });
+}
+
 async function testLegacyResumeBeforeCohortEnforcement(database) {
   const env = productionEnv(database.d1, { [ALLOWED_STUDY.toLowerCase()]: ALLOCATION_COHORT });
   const payload = startPayload("LEGACY", "STUDY_LEGACY");
@@ -383,34 +399,61 @@ async function testAllowlistAndNewSession(database) {
   assert(started.status === 200 && started.body.ok === true, `allowed start failed: ${started.status} ${JSON.stringify(started.body)}`);
   assert(started.body.counterbalance.allocation_cohort === ALLOCATION_COHORT, "response cohort mismatch");
   assert(started.body.counterbalance.allocation_strategy_version === CURRENT_ALLOCATION_STRATEGY_VERSION, "response strategy mismatch");
+  assert(started.body.trial_count === 100, `response trial_count is ${started.body.trial_count}, not 100`);
+  assert(started.body.practice_recording_required === false, "new sessions must not require practice recording");
   assertBundleAndPatterns(started.body.counterbalance);
+  assertCanonicalPracticeResponse(started.body.practice_assignment);
   assertParticipantSpeakerBalance(started.body.main_assignment);
 
   const session = database.sqlite.prepare(
     `SELECT counterbalance_allocation_id, counterbalance_cell, speaker_pattern_bundle,
-            allocation_strategy_version, allocation_cohort, trial_count
+            allocation_strategy_version, allocation_cohort, platform_version, trial_count,
+            participant_age_years, english_variety, english_variety_other,
+            gender, gender_other,
+            english_teaching_experience, english_teaching_experience_details,
+            linguistics_knowledge, linguistics_knowledge_details,
+            japanese_familiarity_1_6, chinese_familiarity_1_6
      FROM sessions WHERE id = ?`,
   ).get(started.body.session_id);
-  assert(session.trial_count === 104, `session trial_count is ${session.trial_count}, not 104`);
+  assert(session.platform_version === PLATFORM_VERSION, `session platform version is ${session.platform_version}`);
+  assert(session.trial_count === 100, `session trial_count is ${session.trial_count}, not 100`);
   assert(session.speaker_pattern_bundle === started.body.counterbalance.speaker_pattern_bundle, "session bundle mismatch");
   assert(session.allocation_strategy_version === CURRENT_ALLOCATION_STRATEGY_VERSION, "session strategy not saved");
   assert(session.allocation_cohort === ALLOCATION_COHORT, "session cohort not saved");
+  assert(session.participant_age_years === 30, "participant age was not saved");
+  assert(session.english_variety === "american", "English variety was not saved");
+  assert(session.english_variety_other === null, "unused English variety detail must be NULL");
+  assert(session.gender === "no_answer", "gender was not saved");
+  assert(session.gender_other === null, "unused gender detail must be NULL");
+  assert(session.english_teaching_experience === "no", "English teaching experience was not saved");
+  assert(
+    session.english_teaching_experience_details === null,
+    "unused English teaching detail must be NULL",
+  );
+  assert(session.linguistics_knowledge === "no", "linguistics knowledge was not saved");
+  assert(session.linguistics_knowledge_details === null, "unused linguistics detail must be NULL");
+  assert(session.japanese_familiarity_1_6 === 3, "Japanese familiarity was not saved");
+  assert(session.chinese_familiarity_1_6 === 3, "Chinese familiarity was not saved");
   const assignmentMeta = database.sqlite.prepare(
     `SELECT COUNT(*) AS count,
             SUM(CASE WHEN speaker_pattern_bundle IS NOT NULL
                        AND allocation_strategy_version IS NOT NULL
                        AND allocation_cohort IS NOT NULL
                      THEN 1 ELSE 0 END) AS complete_metadata_count,
+            SUM(CASE WHEN phase = 'main' THEN 1 ELSE 0 END) AS main_count,
+            SUM(CASE WHEN phase = 'practice' THEN 1 ELSE 0 END) AS practice_count,
             COUNT(DISTINCT speaker_pattern_bundle) AS bundles,
             COUNT(DISTINCT allocation_strategy_version) AS strategies,
             COUNT(DISTINCT allocation_cohort) AS cohorts
      FROM rating_assignments WHERE session_id = ?`,
   ).get(started.body.session_id);
-  assert(assignmentMeta.count === 104, `expected 104 persisted assignments; got ${assignmentMeta.count}`);
+  assert(assignmentMeta.count === 100, `expected 100 persisted assignments; got ${assignmentMeta.count}`);
   assert(
-    assignmentMeta.complete_metadata_count === 104,
-    `expected bundle/version/cohort on all 104 assignments; got ${assignmentMeta.complete_metadata_count}`,
+    assignmentMeta.complete_metadata_count === 100,
+    `expected bundle/version/cohort on all 100 assignments; got ${assignmentMeta.complete_metadata_count}`,
   );
+  assert(assignmentMeta.main_count === 100, `expected 100 persisted main assignments; got ${assignmentMeta.main_count}`);
+  assert(assignmentMeta.practice_count === 0, `expected 0 persisted practice assignments; got ${assignmentMeta.practice_count}`);
   assert(assignmentMeta.bundles === 1 && assignmentMeta.strategies === 1 && assignmentMeta.cohorts === 1, "assignment bundle metadata is incomplete");
   return { env, started };
 }
@@ -427,8 +470,72 @@ function assertBundleAndPatterns(counterbalance) {
 }
 
 async function saveAllTrialsAndComplete(database, env, started) {
-  const rows = [...started.body.practice_assignment, ...started.body.main_assignment];
-  for (const assignment of rows) {
+  const practice = started.body.practice_assignment[0];
+  const ignoredPractice = await invoke(
+    saveTrial,
+    env,
+    "/api/trial",
+    {
+      session_id: started.body.session_id,
+      row: {
+        phase: practice.phase,
+        trial_index: practice.trial_index,
+        trial_total: 100,
+        completed_at: new Date().toISOString(),
+        typed_response: practice.target_word,
+        intelligibility_response_status: "typed",
+        comprehensibility_1_9: 4,
+        accentedness_1_9: 5,
+        response_flow: "staged_dictation_then_ratings",
+        replay_count: 1,
+      },
+    },
+    started.body.session_token,
+  );
+  assert(
+    ignoredPractice.status === 200 &&
+      ignoredPractice.body.ok === true &&
+      ignoredPractice.body.ignored === true &&
+      ignoredPractice.body.reason === "practice_not_recorded",
+    `practice save was not ignored: ${ignoredPractice.status} ${JSON.stringify(ignoredPractice.body)}`,
+  );
+  const ignoredPracticeEvent = await invoke(
+    saveEvent,
+    env,
+    "/api/event",
+    {
+      session_id: started.body.session_id,
+      event_type: "audio_play_start",
+      trial_index: practice.trial_index,
+      payload: { phase: "practice", file_name: practice.file_name },
+    },
+    started.body.session_token,
+  );
+  assert(
+    ignoredPracticeEvent.status === 200 &&
+      ignoredPracticeEvent.body.ok === true &&
+      ignoredPracticeEvent.body.ignored === true &&
+      ignoredPracticeEvent.body.reason === "practice_not_recorded",
+    `practice event was not ignored: ${ignoredPracticeEvent.status} ${JSON.stringify(ignoredPracticeEvent.body)}`,
+  );
+  const ignoredPracticeState = database.sqlite.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM rating_trials WHERE session_id = ?) AS trial_count,
+       (SELECT completed_trial_count FROM sessions WHERE id = ?) AS completed_trial_count,
+       (SELECT COUNT(*) FROM event_logs WHERE session_id = ? AND event_type = 'trial_saved') AS trial_saved_event_count,
+       (SELECT COUNT(*) FROM event_logs WHERE session_id = ? AND event_type = 'audio_play_start') AS practice_event_count`,
+  ).get(
+    started.body.session_id,
+    started.body.session_id,
+    started.body.session_id,
+    started.body.session_id,
+  );
+  assert(ignoredPracticeState.trial_count === 0, "ignored practice save created a rating trial");
+  assert(ignoredPracticeState.completed_trial_count === 0, "ignored practice save changed completed_trial_count");
+  assert(ignoredPracticeState.trial_saved_event_count === 0, "ignored practice save created a trial_saved event");
+  assert(ignoredPracticeState.practice_event_count === 0, "ignored practice event was persisted");
+
+  for (const assignment of started.body.main_assignment) {
     const result = await invoke(
       saveTrial,
       env,
@@ -438,7 +545,7 @@ async function saveAllTrialsAndComplete(database, env, started) {
         row: {
           phase: assignment.phase,
           trial_index: assignment.trial_index,
-          trial_total: 104,
+          trial_total: 100,
           completed_at: new Date().toISOString(),
           typed_response: assignment.target_word || "heard",
           intelligibility_response_status: "typed",
@@ -465,21 +572,22 @@ async function saveAllTrialsAndComplete(database, env, started) {
             SUM(CASE WHEN speaker_pattern_bundle IS NOT NULL
                        AND allocation_strategy_version IS NOT NULL
                        AND allocation_cohort IS NOT NULL
-                     THEN 1 ELSE 0 END) AS complete_metadata_count
+                     THEN 1 ELSE 0 END) AS complete_metadata_count,
+            SUM(CASE WHEN phase = 'main' THEN 1 ELSE 0 END) AS main_count,
+            SUM(CASE WHEN phase = 'practice' THEN 1 ELSE 0 END) AS practice_count
      FROM rating_trials WHERE session_id = ?`,
   ).get(started.body.session_id);
-  assert(trialMetadata.count === 104, `expected 104 persisted trials; got ${trialMetadata.count}`);
+  assert(trialMetadata.count === 100, `expected 100 persisted trials; got ${trialMetadata.count}`);
   assert(
-    trialMetadata.complete_metadata_count === 104,
-    `expected bundle/version/cohort on all 104 trials; got ${trialMetadata.complete_metadata_count}`,
+    trialMetadata.complete_metadata_count === 100,
+    `expected bundle/version/cohort on all 100 trials; got ${trialMetadata.complete_metadata_count}`,
   );
-  const practiceMetadata = database.sqlite.prepare(
-    `SELECT speaker_pattern_bundle, allocation_strategy_version, allocation_cohort
-     FROM rating_trials WHERE session_id = ? AND phase = 'practice' AND trial_index = 1`,
+  assert(trialMetadata.main_count === 100, `expected 100 persisted main trials; got ${trialMetadata.main_count}`);
+  assert(trialMetadata.practice_count === 0, `expected 0 persisted practice trials; got ${trialMetadata.practice_count}`);
+  const savedSession = database.sqlite.prepare(
+    "SELECT completed_trial_count FROM sessions WHERE id = ?",
   ).get(started.body.session_id);
-  assert(practiceMetadata.speaker_pattern_bundle === started.body.counterbalance.speaker_pattern_bundle, "practice trial bundle was not propagated");
-  assert(practiceMetadata.allocation_strategy_version === CURRENT_ALLOCATION_STRATEGY_VERSION, "practice trial strategy was not propagated");
-  assert(practiceMetadata.allocation_cohort === ALLOCATION_COHORT, "practice trial cohort was not propagated");
+  assert(savedSession.completed_trial_count === 100, "session completed_trial_count is not 100");
 
   const familiarityInsert = database.sqlite.prepare(
     `INSERT INTO word_familiarity_responses (
@@ -499,6 +607,8 @@ async function saveAllTrialsAndComplete(database, env, started) {
     started.body.session_token,
   );
   assert(completed.status === 200 && completed.body.status === "completed", `completion failed: ${completed.status} ${JSON.stringify(completed.body)}`);
+  assert(completed.body.trial_count === 100, `completed trial_count is ${completed.body.trial_count}, not 100`);
+  assert(completed.body.completed_trial_count === 100, `completed_trial_count is ${completed.body.completed_trial_count}, not 100`);
   const allocation = database.sqlite.prepare(
     "SELECT status FROM counterbalance_allocations WHERE id = ?",
   ).get(started.body.counterbalance.allocation_id);
@@ -563,7 +673,7 @@ async function main() {
 
   const database = openFreshDatabase();
   try {
-    console.log("speaker bundle D1 integration: production allowlist + persisted v0.9 flow");
+    console.log("speaker bundle D1 integration: production allowlist + persisted v0.10 flow");
     const production = await testAllowlistAndNewSession(database);
     console.log("speaker bundle D1 integration: trial propagation + atomic completion reconciliation");
     await saveAllTrialsAndComplete(database, production.env, production.started);

@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "exports" / "smoke_test_200"
-VERSION = "pronunciation_rating_v0.9.1_smoke"
+VERSION = "pronunciation_rating_v0.10.0_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
 PRACTICE_AUDIO_ROOT = "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration"
@@ -79,7 +79,7 @@ PRACTICE_ITEMS = [
         "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨; expert Accentedness reference range 7–9",
     ),
 ]
-TRIAL_COUNT = len(PRACTICE_ITEMS) + 100
+TRIAL_COUNT = 100
 
 # Canonical CounterBalance.xlsx Sheet1 numbering. Keep this in sync with
 # TARGET_WORDS in app.js and functions/api/_word-familiarity.js.
@@ -170,6 +170,10 @@ SESSIONS_COLUMNS = [
     "platform_version", "prolific_pid", "prolific_study_id",
     "prolific_session_id", "participant_key", "seed",
     "japanese_familiarity_1_6", "chinese_familiarity_1_6",
+    "participant_age_years", "english_variety", "english_variety_other",
+    "gender", "gender_other", "english_teaching_experience",
+    "english_teaching_experience_details", "linguistics_knowledge",
+    "linguistics_knowledge_details",
     "completion_code", "counterbalance_allocation_id", "counterbalance_cell",
     "list_comb", "pronunciation_style", "started_at", "started_at_ms",
     "completed_at", "completed_at_ms", "last_seen_at", "last_seen_at_ms",
@@ -216,7 +220,11 @@ COUNTERBALANCE_COLUMNS = [
 ANALYSIS_COLUMNS = [
     "analysis_participant_id", "session_status", "counterbalance_cell",
     "list_comb", "pronunciation_style", "japanese_familiarity_1_6",
-    "chinese_familiarity_1_6", "trial_index", "block_index", "block_list",
+    "chinese_familiarity_1_6", "participant_age_years", "english_variety",
+    "english_variety_other", "gender", "gender_other",
+    "english_teaching_experience", "english_teaching_experience_details",
+    "linguistics_knowledge", "linguistics_knowledge_details",
+    "trial_index", "block_index", "block_list",
     "within_block_index", "block_trial_count", "speaker_pattern_index",
     "speaker_pattern_speaker", "stimulus_list",
     "l1_condition", "pronunciation_condition", "participant_id", "talker",
@@ -299,7 +307,7 @@ def dropout_indices(participant_count: int, dropout_count: int) -> set[int]:
 
 
 def dropout_saved_trial_count(participant_index: int) -> int:
-    return max(1, min(105, 6 + ((participant_index * 13) % 92)))
+    return max(1, min(TRIAL_COUNT, 6 + ((participant_index * 13) % 92)))
 
 
 def split_word_numbers(values) -> tuple[list[int], list[int]]:
@@ -376,61 +384,6 @@ def condition_rows(block_list: str, style: str) -> list[dict]:
             {"l1": "JPN", "pron": "accented", "word": jpn_acc[index]},
             {"l1": "CHN", "pron": "accented", "word": chn_acc[index]},
         ])
-    return rows
-
-
-def build_practice_assignment(session_id: str, created_at: str) -> list[dict]:
-    rows = []
-    for index, (
-        word,
-        group,
-        l1,
-        pron,
-        talker,
-        audio_path,
-        accent_min,
-        accent_max,
-        spoken_form,
-        source_format,
-        practice_note,
-    ) in enumerate(PRACTICE_ITEMS, start=1):
-        rows.append({
-            "id": f"{session_id}:practice:{index}",
-            "session_id": session_id,
-            "phase": "practice",
-            "trial_index": index,
-            "source_path": audio_path,
-            "audio_url": audio_path,
-            "file_name": Path(audio_path).name,
-            "target_word": word,
-            "participant_id": talker,
-            "native_language": l1,
-            "accent_condition": pron,
-            "condition": f"practice_{pron}",
-            "talker": talker,
-            "pass_number": "",
-            "word_number": "",
-            "trial_number": str(index),
-            "take_number": "1",
-            "spoken_form": spoken_form,
-            "practice_note": practice_note,
-            "source_format": source_format,
-            "practice_kind": "combined",
-            "practice_group": group,
-            "counterbalance_cell": "",
-            "list_comb": "",
-            "pronunciation_style": "",
-            "stimulus_list": "",
-            "l1_condition": l1,
-            "pronunciation_condition": pron,
-            "block_index": "",
-            "block_list": "",
-            "within_block_index": "",
-            "block_trial_count": "",
-            "expert_comprehensibility_1_9": None,
-            "expert_accentedness_1_9": None,
-            "created_at": created_at,
-        })
     return rows
 
 
@@ -714,8 +667,8 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             dropout_saved_trial_count(participant_index) if is_dropout else TRIAL_COUNT
         )
         saved_limit = max(0, min(TRIAL_COUNT, saved_limit))
-        saved_main_count = max(0, saved_limit - len(PRACTICE_ITEMS))
-        saved_practice_count = min(saved_limit, len(PRACTICE_ITEMS))
+        saved_main_count = saved_limit
+        saved_practice_count = 0
         if is_dropout:
             status = "incomplete_dropout" if saved_limit else "abandoned"
             finalized_ms = started_ms + 8 * 60_000 + saved_limit * 22_000
@@ -759,6 +712,10 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             completed_word_familiarity_response_total += word_familiarity_response_count
         duplicate_count = 1 if participant_index % 25 == 0 else 0
         duplicate_ms = started_ms + 6_000 if duplicate_count else None
+        english_variety = "other" if participant_index % 10 == 0 else "american"
+        gender = ("man", "woman", "no_answer", "other")[(participant_index - 1) % 4]
+        teaching_experience = "yes" if participant_index % 3 == 0 else "no"
+        linguistics_knowledge = "yes" if participant_index % 2 == 0 else "no"
         session = {
             "id": session_id,
             "role": "rater",
@@ -775,6 +732,15 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "timezone": "Asia/Tokyo",
             "japanese_familiarity_1_6": 1 + (participant_index % 6),
             "chinese_familiarity_1_6": 1 + ((participant_index + 2) % 6),
+            "participant_age_years": 18 + (participant_index % 53),
+            "english_variety": english_variety,
+            "english_variety_other": "international English" if english_variety == "other" else None,
+            "gender": gender,
+            "gender_other": "self-described" if gender == "other" else None,
+            "english_teaching_experience": teaching_experience,
+            "english_teaching_experience_details": "University English teaching" if teaching_experience == "yes" else None,
+            "linguistics_knowledge": linguistics_knowledge,
+            "linguistics_knowledge_details": "Coursework in linguistics" if linguistics_knowledge == "yes" else None,
             "word_familiarity_required": 1,
             "completion_code": completion_code,
             "session_token_hash": "smoke-token-hash",
@@ -813,17 +779,21 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "updated_at": iso(finalized_ms),
         })
 
-        assignments = [
-            *build_practice_assignment(session_id, iso(started_ms)),
-            *build_main_assignment(session_id, cell_id, list_comb, style, iso(started_ms), participant_index),
-        ]
+        assignments = build_main_assignment(
+            session_id,
+            cell_id,
+            list_comb,
+            style,
+            iso(started_ms),
+            participant_index,
+        )
         saved_trial_total += saved_limit
         main_saved_total += saved_main_count
         practice_saved_total += saved_practice_count
         for assignment_number, row in enumerate(assignments, start=1):
             insert_row(conn, "rating_assignments", row)
             if assignment_number <= saved_limit:
-                offset = row["trial_index"] * 17_000 if row["phase"] == "practice" else 180_000 + row["trial_index"] * 22_000
+                offset = 180_000 + row["trial_index"] * 22_000
                 saved_at_ms = started_ms + offset
                 trial = assignment_to_trial(row, session, participant_index, saved_at_ms)
                 insert_row(conn, "rating_trials", trial)
@@ -848,61 +818,6 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
             "trial_count": TRIAL_COUNT,
             "counterbalance_cell": cell_id,
         })
-        if duplicate_count and saved_practice_count == len(PRACTICE_ITEMS):
-            practice_resume_session_count += 1
-            resume_main_index = min(saved_main_count + 1, 100)
-            add_event(
-                conn,
-                f"{session_id}:event:resume",
-                session_id,
-                prolific_pid,
-                "session_resume_practice_required",
-                None,
-                duplicate_ms,
-                {
-                    "practice_replay_required": True,
-                    "practice_item_count": len(PRACTICE_ITEMS),
-                    "next_phase": "main" if saved_main_count < 100 else "word_familiarity",
-                    "next_trial_index": resume_main_index if saved_main_count < 100 else None,
-                },
-            )
-            for practice_index, practice_item in enumerate(PRACTICE_ITEMS, start=1):
-                add_event(
-                    conn,
-                    f"{session_id}:event:practice-replayed:{practice_index}",
-                    session_id,
-                    prolific_pid,
-                    "practice_replayed",
-                    practice_index,
-                    duplicate_ms + practice_index * 1_000,
-                    {
-                        "target_word": practice_item[0],
-                        "practice_replay_required": True,
-                    },
-                )
-                practice_replay_event_total += 1
-            # Five feedback-stage replay pairs exercise the intentionally unbounded
-            # replay contract without adding duplicate rating_trials rows.
-            for replay_number in range(1, 6):
-                replay_ms = duplicate_ms + 10_000 + replay_number * 1_000
-                for suffix, event_type, event_offset in (
-                    ("start", "practice_feedback_replay_start", 0),
-                    ("end", "practice_feedback_replay_end", 600),
-                ):
-                    add_event(
-                        conn,
-                        f"{session_id}:event:feedback-replay:{replay_number}:{suffix}",
-                        session_id,
-                        prolific_pid,
-                        event_type,
-                        1,
-                        replay_ms + event_offset,
-                        {
-                            "target_word": PRACTICE_ITEMS[0][0],
-                            "replay_number": replay_number,
-                        },
-                    )
-                practice_feedback_replay_pair_total += 1
         for block_end in (25, 50, 75):
             if saved_main_count >= block_end:
                 add_event(conn, f"{session_id}:event:distractor:{block_end}", session_id, prolific_pid, "distractor_complete", block_end, started_ms + 180_000 + block_end * 22_000 + 15_000, {
@@ -1027,6 +942,15 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           s.pronunciation_style,
           s.japanese_familiarity_1_6,
           s.chinese_familiarity_1_6,
+          s.participant_age_years,
+          s.english_variety,
+          s.english_variety_other,
+          s.gender,
+          s.gender_other,
+          s.english_teaching_experience,
+          s.english_teaching_experience_details,
+          s.linguistics_knowledge,
+          s.linguistics_knowledge_details,
           rt.trial_index,
           rt.block_index,
           rt.block_list,
@@ -1121,15 +1045,15 @@ def export_csvs(conn: sqlite3.Connection, out_dir: Path) -> dict:
           END AS missing_trial_count,
           SUM(CASE WHEN rt.phase = 'main' THEN 1 ELSE 0 END) AS main_saved_count,
           SUM(CASE WHEN rt.phase = 'practice' THEN 1 ELSE 0 END) AS practice_saved_count,
-          SUM(CASE WHEN rt.intelligibility_needs_manual_review = 1 THEN 1 ELSE 0 END) AS manual_review_count,
-          SUM(CASE WHEN rt.intelligibility_unidentified = 1 THEN 1 ELSE 0 END) AS unidentified_count,
-          SUM(CASE WHEN rt.id IS NOT NULL AND (rt.typed_response IS NULL OR rt.typed_response = '') AND COALESCE(rt.intelligibility_unidentified, 0) = 0 THEN 1 ELSE 0 END) AS blank_dictation_count,
+          SUM(CASE WHEN rt.phase = 'main' AND rt.intelligibility_needs_manual_review = 1 THEN 1 ELSE 0 END) AS manual_review_count,
+          SUM(CASE WHEN rt.phase = 'main' AND rt.intelligibility_unidentified = 1 THEN 1 ELSE 0 END) AS unidentified_count,
+          SUM(CASE WHEN rt.phase = 'main' AND rt.id IS NOT NULL AND (rt.typed_response IS NULL OR rt.typed_response = '') AND COALESCE(rt.intelligibility_unidentified, 0) = 0 THEN 1 ELSE 0 END) AS blank_dictation_count,
           SUM(CASE WHEN rt.phase = 'main' AND (rt.comprehensibility_1_9 IS NULL OR rt.accentedness_1_9 IS NULL) THEN 1 ELSE 0 END) AS missing_rating_count,
-          ROUND(AVG(rt.submit_rt_ms), 2) AS avg_submit_rt_ms,
-          MIN(rt.submit_rt_ms) AS min_submit_rt_ms,
-          MAX(rt.submit_rt_ms) AS max_submit_rt_ms,
-          ROUND(AVG(rt.replay_count), 2) AS avg_replay_count,
-          MAX(rt.replay_count) AS max_replay_count,
+          ROUND(AVG(CASE WHEN rt.phase = 'main' THEN rt.submit_rt_ms END), 2) AS avg_submit_rt_ms,
+          MIN(CASE WHEN rt.phase = 'main' THEN rt.submit_rt_ms END) AS min_submit_rt_ms,
+          MAX(CASE WHEN rt.phase = 'main' THEN rt.submit_rt_ms END) AS max_submit_rt_ms,
+          ROUND(AVG(CASE WHEN rt.phase = 'main' THEN rt.replay_count END), 2) AS avg_replay_count,
+          MAX(CASE WHEN rt.phase = 'main' THEN rt.replay_count END) AS max_replay_count,
           COALESCE(de.distractor_completed_count, 0) AS distractor_completed_count,
           COALESCE(de.distractor_correct_total, 0) AS distractor_correct_total,
           COALESCE(de.distractor_problem_total, 0) AS distractor_problem_total,
@@ -1267,6 +1191,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "main_trials": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE phase = 'main'"),
         "practice_trials": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE phase = 'practice'"),
         "assignments": scalar(conn, "SELECT COUNT(*) FROM rating_assignments"),
+        "practice_assignments": scalar(conn, "SELECT COUNT(*) FROM rating_assignments WHERE phase = 'practice'"),
         "allocations": scalar(conn, "SELECT COUNT(*) FROM counterbalance_allocations"),
         "incomplete_allocations": scalar(conn, "SELECT COUNT(*) FROM counterbalance_allocations WHERE status = 'incomplete'"),
         "eng_accented_rows": scalar(conn, "SELECT COUNT(*) FROM rating_trials WHERE l1_condition = 'ENG' AND pronunciation_condition = 'accented'"),
@@ -1325,6 +1250,27 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "capelin_known_responses": scalar(conn, "SELECT SUM(word_known) FROM word_familiarity_responses WHERE word_number = 23 AND target_word = 'capelin'"),
         "canonical_word_familiarity_mismatches": canonical_word_familiarity_mismatches,
         "practice_assignment_mismatches": practice_assignment_mismatches,
+        "invalid_demographic_sessions": scalar(conn, """
+            SELECT COUNT(*)
+            FROM sessions
+            WHERE participant_age_years IS NULL
+               OR english_variety IS NULL OR english_variety = ''
+               OR gender IS NULL OR gender = ''
+               OR english_teaching_experience IS NULL OR english_teaching_experience = ''
+               OR linguistics_knowledge IS NULL OR linguistics_knowledge = ''
+               OR japanese_familiarity_1_6 IS NULL
+               OR chinese_familiarity_1_6 IS NULL
+               OR (english_variety = 'other' AND COALESCE(english_variety_other, '') = '')
+               OR (gender = 'other' AND COALESCE(gender_other, '') = '')
+               OR (english_teaching_experience = 'yes' AND COALESCE(english_teaching_experience_details, '') = '')
+               OR (linguistics_knowledge = 'yes' AND COALESCE(linguistics_knowledge_details, '') = '')
+        """),
+        "practice_phase_events": scalar(conn, """
+            SELECT COUNT(*)
+            FROM event_logs
+            WHERE event_type LIKE 'practice_%'
+               OR json_extract(payload_json, '$.phase') = 'practice'
+        """),
         "practice_scalar_expert_values": scalar(conn, """
             SELECT COUNT(*)
             FROM rating_assignments
@@ -1393,6 +1339,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "main_trials": expected_main,
         "practice_trials": expected_practice,
         "assignments": participant_count * TRIAL_COUNT,
+        "practice_assignments": 0,
         "allocations": participant_count,
         "incomplete_allocations": dropout_count,
         "eng_accented_rows": 0,
@@ -1410,6 +1357,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "dropout_sessions_without_word_familiarity": generation["dropout_sessions_without_word_familiarity"],
         "canonical_word_familiarity_mismatches": 0,
         "practice_assignment_mismatches": 0,
+        "invalid_demographic_sessions": 0,
+        "practice_phase_events": 0,
         "practice_scalar_expert_values": 0,
         "sessions_with_more_than_four_practice_trials": 0,
         "practice_resume_events": generation["practice_resume_session_count"],

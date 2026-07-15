@@ -8,7 +8,7 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
-const PLATFORM_VERSION = "pronunciation_rating_v0.9.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
@@ -33,6 +33,7 @@ const DEFAULTS = {
   wordFamiliarityApi: path.join(REPO_ROOT, "functions", "api", "session", "word-familiarity.js"),
   completeApi: path.join(REPO_ROOT, "functions", "api", "session", "complete.js"),
   trialApi: path.join(REPO_ROOT, "functions", "api", "trial.js"),
+  eventApi: path.join(REPO_ROOT, "functions", "api", "event.js"),
   startApi: path.join(REPO_ROOT, "functions", "api", "session", "start.js"),
   counterbalanceApi: path.join(REPO_ROOT, "functions", "api", "_counterbalance.js"),
   finalizeStaleApi: path.join(REPO_ROOT, "functions", "api", "admin", "finalize-stale.js"),
@@ -41,6 +42,7 @@ const DEFAULTS = {
   adminIndex: path.join(REPO_ROOT, "admin", "index.html"),
   adminJs: path.join(REPO_ROOT, "admin", "admin.js"),
   schema: path.join(REPO_ROOT, "db", "schema.sql"),
+  backgroundQuestionnaireMigration: path.join(REPO_ROOT, "db", "migrations", "0012_background_questionnaire.sql"),
   wordFamiliarityMigration: path.join(REPO_ROOT, "db", "migrations", "0013_word_familiarity.sql"),
   archivedSessionMigration: path.join(REPO_ROOT, "db", "migrations", "0014_archived_session_locks.sql"),
   schemaUpdater: path.join(REPO_ROOT, "scripts", "apply_d1_schema_updates.mjs"),
@@ -396,6 +398,7 @@ function checkProlificFlowSourceGuards(options) {
   const wordFamiliarityApi = readTextIfExists(options.wordFamiliarityApi);
   const complete = readTextIfExists(options.completeApi);
   const trial = readTextIfExists(options.trialApi);
+  const event = readTextIfExists(options.eventApi);
   const start = readTextIfExists(options.startApi);
   const counterbalance = readTextIfExists(options.counterbalanceApi);
   const finalizeStale = readTextIfExists(options.finalizeStaleApi);
@@ -404,6 +407,7 @@ function checkProlificFlowSourceGuards(options) {
   const adminIndex = readTextIfExists(options.adminIndex);
   const adminJs = readTextIfExists(options.adminJs);
   const schema = readTextIfExists(options.schema);
+  const backgroundQuestionnaireMigration = readTextIfExists(options.backgroundQuestionnaireMigration);
   const wordFamiliarityMigration = readTextIfExists(options.wordFamiliarityMigration);
   const archivedSessionMigration = readTextIfExists(options.archivedSessionMigration);
   const schemaUpdater = readTextIfExists(options.schemaUpdater);
@@ -422,6 +426,7 @@ function checkProlificFlowSourceGuards(options) {
     ["session/word-familiarity.js", wordFamiliarityApi],
     ["session/complete.js", complete],
     ["trial.js", trial],
+    ["event.js", event],
     ["session/start.js", start],
     ["_counterbalance.js", counterbalance],
     ["admin/finalize-stale.js", finalizeStale],
@@ -430,6 +435,7 @@ function checkProlificFlowSourceGuards(options) {
     ["admin/index.html", adminIndex],
     ["admin/admin.js", adminJs],
     ["db/schema.sql", schema],
+    ["db/migrations/0012_background_questionnaire.sql", backgroundQuestionnaireMigration],
     ["db/migrations/0013_word_familiarity.sql", wordFamiliarityMigration],
     ["db/migrations/0014_archived_session_locks.sql", archivedSessionMigration],
     ["scripts/apply_d1_schema_updates.mjs", schemaUpdater],
@@ -464,6 +470,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "app.js", app, "Expert Accentedness reference range:");
   requireSnippet(problems, "app.js", app, "resumeAfterPractice");
   requireSnippet(problems, "app.js", app, "replayingPractice");
+  requireSnippet(problems, "app.js", app, "practiceRecordingRequired");
+  requireSnippet(problems, "app.js", app, "if (practiceEvent && !state.practiceRecordingRequired) return");
+  requireSnippet(problems, "app.js", app, 'const recordResponse = responsePhase !== "practice" || state.practiceRecordingRequired');
+  requireSnippet(problems, "app.js", app, "recordedTrialOrder");
+  requireSnippet(problems, "app.js", app, "return mainRows");
   requireSnippet(problems, "app.js", app, "practice_replay_required");
   requireSnippet(problems, "app.js", app, "continueAfterPractice");
   requireSnippet(problems, "app.js", app, "replayedSavedPractice");
@@ -499,8 +510,8 @@ function checkProlificFlowSourceGuards(options) {
   forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
   forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
-  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.9.1"');
-  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.9.1"');
+  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.10.0"');
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.10.0"');
   requireSnippet(problems, "index.html", index, "In this practice session, you will transcribe and rate four sample words.");
   requireSnippet(problems, "index.html", index, "familiarize you with the task procedure; and");
   requireSnippet(problems, "index.html", index, "help you calibrate your Accentedness ratings by comparing them with expert reference ranges.");
@@ -551,6 +562,9 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "trial.js", trial, "INSERT OR IGNORE INTO rating_trials");
   requireSnippet(problems, "trial.js", trial, "insertNonCriticalEvent");
   requireSnippet(problems, "trial.js", trial, "session.japanese_familiarity_1_6");
+  requireSnippet(problems, "trial.js", trial, 'reason: "practice_not_recorded"');
+  requireSnippet(problems, "event.js", event, "practice_recording_required");
+  requireSnippet(problems, "event.js", event, 'reason: "practice_not_recorded"');
   requireSnippet(problems, "session/start.js", start, "duplicateStartResponse");
   requireSnippet(problems, "session/start.js", start, "participantKey(client, raterId, sessionLabel)");
   requireSnippet(problems, "session/start.js", start, "saved_trials");
@@ -564,6 +578,9 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/start.js", start, "const nextAssignment = mainRows.find");
   requireSnippet(problems, "session/start.js", start, "resume.practice_replay_required = true");
   requireSnippet(problems, "session/start.js", start, "practiceAssignment = CANONICAL_PRACTICE_ASSIGNMENT.map");
+  requireSnippet(problems, "session/start.js", start, "assignment = mainAssignment");
+  requireSnippet(problems, "session/start.js", start, "practice_recording_required: false");
+  requireSnippet(problems, "session/start.js", start, "practice_persisted: false");
   requireSnippet(problems, "session/start.js", start, "japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6)");
   requireSnippet(problems, "session/start.js", start, 'requiredIntegerInRange(\n      "participant_age_years"');
   requireSnippet(problems, "session/start.js", start, 'optionalText(\n      "english_variety_other"');
@@ -582,20 +599,23 @@ function checkProlificFlowSourceGuards(options) {
     "const turnstileVerified = await verifyTurnstile",
   );
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "participant_age_years: 30");
-  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_variety: "american"');
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_variety: "other"');
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_variety_other: "live check variety"');
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'english_teaching_experience_details: "live check teaching details"');
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "resume_only: true");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_replay_required");
-  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "duplicatePracticeSave");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "resumedPracticeSave");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "participant_age_years: 30");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.9.1_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.10.0_smoke");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "session_resume_practice_required");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "practice_feedback_replay_start");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"practice_assignments": 0');
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"practice_phase_events": 0');
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"invalid_demographic_sessions": 0');
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, PRACTICE_AUDIO_ROOT);
   requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
@@ -640,11 +660,34 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "admin/export/[dataset].js", adminExport, "s.id AS session_id");
   requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"word-familiarity"');
   requireSnippet(problems, "admin/export/[dataset].js", adminExport, '"word_known"');
+  requireSnippet(problems, "admin/export/[dataset].js", adminExport, "AVG(CASE WHEN rt.phase = 'main' THEN rt.submit_rt_ms END)");
   requireSnippet(problems, "_utils.js", utils, "typeof value === \"string\"");
   requireSnippet(problems, "_utils.js", utils, "^\\s*[=+\\-@]");
   requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, '["participant_age_years", "INTEGER"]');
   requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, 'word_familiarity_required');
   requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, 'CREATE TABLE IF NOT EXISTS word_familiarity_responses');
+  for (const field of [
+    "participant_age_years",
+    "english_variety",
+    "english_variety_other",
+    "gender",
+    "gender_other",
+    "english_teaching_experience",
+    "english_teaching_experience_details",
+    "linguistics_knowledge",
+    "linguistics_knowledge_details",
+  ]) {
+    requireSnippet(problems, "db/schema.sql", schema, field);
+    requireSnippet(
+      problems,
+      "db/migrations/0012_background_questionnaire.sql",
+      backgroundQuestionnaireMigration,
+      field,
+    );
+    requireSnippet(problems, "scripts/apply_d1_schema_updates.mjs", schemaUpdater, field);
+    requireSnippet(problems, "session/start.js", start, field);
+    requireSnippet(problems, "admin/export/[dataset].js", adminExport, field);
+  }
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_without_questionnaire: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_identity_triple_match: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "csv_formula_neutralized: true");
@@ -654,6 +697,12 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_replays_all_practice: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_preserves_first_unsaved_main: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "replayed_practice_idempotent: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "new_v010_main_only_persistence: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "new_v010_practice_assignments_0: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "new_v010_practice_trials_0: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "new_v010_practice_events_0: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "all_demographic_session_columns_roundtrip: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "legacy_practice_contract_compatible: true");
   requireSnippet(
     problems,
     "scripts/test_background_questionnaire_local.mjs",
@@ -725,6 +774,7 @@ const options = {
   wordFamiliarityApi: path.resolve(argValue("--word-familiarity-api", DEFAULTS.wordFamiliarityApi)),
   completeApi: path.resolve(argValue("--complete-api", DEFAULTS.completeApi)),
   trialApi: path.resolve(argValue("--trial-api", DEFAULTS.trialApi)),
+  eventApi: path.resolve(argValue("--event-api", DEFAULTS.eventApi)),
   startApi: path.resolve(argValue("--start-api", DEFAULTS.startApi)),
   counterbalanceApi: path.resolve(argValue("--counterbalance-api", DEFAULTS.counterbalanceApi)),
   finalizeStaleApi: path.resolve(argValue("--finalize-stale-api", DEFAULTS.finalizeStaleApi)),
@@ -733,6 +783,7 @@ const options = {
   adminIndex: path.resolve(argValue("--admin-index", DEFAULTS.adminIndex)),
   adminJs: path.resolve(argValue("--admin-js", DEFAULTS.adminJs)),
   schema: path.resolve(argValue("--schema", DEFAULTS.schema)),
+  backgroundQuestionnaireMigration: path.resolve(argValue("--background-questionnaire-migration", DEFAULTS.backgroundQuestionnaireMigration)),
   wordFamiliarityMigration: path.resolve(argValue("--word-familiarity-migration", DEFAULTS.wordFamiliarityMigration)),
   archivedSessionMigration: path.resolve(argValue("--archived-session-migration", DEFAULTS.archivedSessionMigration)),
   schemaUpdater: path.resolve(argValue("--schema-updater", DEFAULTS.schemaUpdater)),
