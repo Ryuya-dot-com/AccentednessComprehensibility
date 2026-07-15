@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.9.1";
+  const VERSION = "pronunciation_rating_v0.10.0";
   const AUDIO_LIFECYCLE = window.AudioLifecycle;
   if (!AUDIO_LIFECYCLE?.createFeedbackReplayLifecycle || !AUDIO_LIFECYCLE?.isPlaybackCurrent) {
     throw new Error("Audio lifecycle helper is unavailable.");
@@ -257,6 +257,7 @@
     serverResume: null,
     resumeAfterPractice: null,
     replayingPractice: false,
+    practiceRecordingRequired: false,
     serverPracticeAssignments: [],
     serverCompletedTrialKeys: new Set(),
     serverCompletedDistractorIndexes: new Set(),
@@ -942,43 +943,6 @@
   }
 
   function serverAssignmentRows() {
-    const practiceRows = buildPracticeTrials().map((item, index) => ({
-      phase: item.phase || "main",
-      trial_index: index + 1,
-      counterbalance_cell: item.counterbalance_cell || "",
-      list_comb: item.list_comb || "",
-      pronunciation_style: item.pronunciation_style || "",
-      speaker_pattern_bundle: item.speaker_pattern_bundle || "",
-      allocation_strategy_version: item.allocation_strategy_version || "",
-      allocation_cohort: item.allocation_cohort || "",
-      stimulus_list: item.stimulus_list || "",
-      l1_condition: item.l1_condition || "",
-      pronunciation_condition: item.pronunciation_condition || "",
-      speaker_pattern_index: item.speaker_pattern_index || "",
-      speaker_pattern_speaker: item.speaker_pattern_speaker || "",
-      block_index: item.block_index || "",
-      block_list: item.block_list || "",
-      within_block_index: item.within_block_index || "",
-      block_trial_count: item.block_trial_count || "",
-      source_path: item.source_path,
-      audio_url: item.audio_url || "",
-      file_name: item.file_name,
-      target_word: item.target_word,
-      participant_id: item.participant_id,
-      native_language: item.native_language,
-      accent_condition: item.accent_condition,
-      condition: item.condition,
-      talker: item.talker,
-      pass_number: item.pass_number,
-      word_number: item.word_number,
-      trial_number: item.trial_number,
-      take_number: item.take_number,
-      spoken_form: item.spoken_form,
-      practice_note: item.practice_note,
-      source_format: item.source_format,
-      expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
-      expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
-    }));
     const mainRows = (state.mainTrials.length ? state.mainTrials : state.trials).map((item, index) => ({
       phase: item.phase || "main",
       trial_index: index + 1,
@@ -1016,7 +980,7 @@
       expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
       expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
     }));
-    return [...practiceRows, ...mainRows];
+    return mainRows;
   }
 
   async function postJson(path, payload) {
@@ -1173,6 +1137,7 @@
       state.serverResume = null;
       state.resumeAfterPractice = null;
       state.replayingPractice = false;
+      state.practiceRecordingRequired = false;
       state.serverPracticeAssignments = [];
       state.serverCompletedTrialKeys = new Set();
       state.serverCompletedDistractorIndexes = new Set();
@@ -1226,7 +1191,7 @@
       throw new Error("The practice materials changed before the saved practice set was complete. Please contact the researcher.");
     }
     if (!existingServerSession && !practiceAssignmentsCurrent) {
-      throw new Error("The server did not save the current four-item practice set. Please contact the researcher.");
+      throw new Error("The server did not return the current four-item practice set. Please contact the researcher.");
     }
     const returnedMainTrials = Array.isArray(data.main_assignment)
       ? data.main_assignment.map((item) => ({
@@ -1251,6 +1216,7 @@
     state.serverCompletedDistractorIndexes = completedDistractorIndexes;
     state.wordFamiliarity = wordFamiliarity;
     state.wordFamiliarityRequired = data.word_familiarity_required !== false;
+    state.practiceRecordingRequired = data.practice_recording_required === true;
     state.serverPracticeAssignments = serverPracticeAssignments;
     state.practiceTrials = currentPracticeTrials;
     state.replayingPractice = existingServerSession;
@@ -1284,6 +1250,13 @@
 
   async function logServerEvent(eventType, payload = {}, trialIndex = null) {
     if (!state.serverSessionId) return;
+    const eventPayload = {
+      ...payload,
+      phase: state.phase,
+    };
+    const practiceEvent =
+      eventType.startsWith("practice_") || eventPayload.phase === "practice";
+    if (practiceEvent && !state.practiceRecordingRequired) return;
     try {
       await postJson("/api/event", {
         session_id: state.serverSessionId,
@@ -1292,7 +1265,7 @@
         event_type: eventType,
         trial_index: trialIndex,
         event_at: new Date().toISOString(),
-        payload,
+        payload: eventPayload,
       });
     } catch (error) {
       console.warn("server event log failed", error);
@@ -1737,6 +1710,7 @@
     state.serverResume = null;
     state.resumeAfterPractice = null;
     state.replayingPractice = false;
+    state.practiceRecordingRequired = false;
     state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
@@ -1967,6 +1941,7 @@
     state.serverResume = null;
     state.resumeAfterPractice = null;
     state.replayingPractice = false;
+    state.practiceRecordingRequired = false;
     state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
@@ -2741,9 +2716,12 @@
 
   async function persistRowAndAdvance(row) {
     els.nextBtn.disabled = true;
-    els.audioState.textContent = "Saving response...";
+    const responsePhase = row.phase || state.phase;
+    const recordResponse = responsePhase !== "practice" || state.practiceRecordingRequired;
+    els.audioState.textContent = recordResponse ? "Saving response..." : "Continuing...";
     const savedKey = savedTrialKeyFromRow(row);
     const replayedSavedPractice = Boolean(
+      recordResponse &&
       state.replayingPractice &&
         row.phase === "practice" &&
         savedKey &&
@@ -2751,7 +2729,9 @@
     );
     let saveResult = null;
     try {
-      if (replayedSavedPractice) {
+      if (!recordResponse) {
+        state.serverSaveFailed = false;
+      } else if (replayedSavedPractice) {
         await logServerEvent(
           "practice_replayed",
           {
@@ -2777,8 +2757,10 @@
       }
     }
 
-    if (savedKey) state.serverCompletedTrialKeys.add(savedKey);
-    if (!replayedSavedPractice && saveResult?.duplicate !== true) state.rows.push(row);
+    if (recordResponse && savedKey) state.serverCompletedTrialKeys.add(savedKey);
+    if (recordResponse && !replayedSavedPractice && saveResult?.duplicate !== true) {
+      state.rows.push(row);
+    }
 
     const nextIndex = state.currentIndex + 1;
     const breakInterval = Number.parseInt(els.breakInterval.value, 10) || 0;
@@ -3357,6 +3339,9 @@
   }
 
   async function buildDownload() {
+    const recordedTrialOrder = state.practiceRecordingRequired
+      ? [...state.practiceTrials, ...state.mainTrials]
+      : state.mainTrials;
     const knownByWord = new Map(
       state.wordFamiliarity.map((row) => [String(row.target_word || "").toLowerCase(), row.known]),
     );
@@ -3387,9 +3372,9 @@
       counterbalance: state.counterbalance.assigned || "",
       ...backgroundValues(),
       created_at: new Date().toISOString(),
-      trial_count: state.practiceTrials.length + state.mainTrials.length,
+      trial_count: recordedTrialOrder.length,
       word_familiarity: state.wordFamiliarity,
-      trial_order: [...state.practiceTrials, ...state.mainTrials].map((item, index) => ({
+      trial_order: recordedTrialOrder.map((item, index) => ({
         phase: item.phase || "",
         trial_index: index + 1,
         counterbalance_cell: item.counterbalance_cell || "",
@@ -3486,6 +3471,7 @@
     state.serverResume = null;
     state.resumeAfterPractice = null;
     state.replayingPractice = false;
+    state.practiceRecordingRequired = false;
     state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();
@@ -3522,6 +3508,7 @@
     state.serverResume = null;
     state.resumeAfterPractice = null;
     state.replayingPractice = false;
+    state.practiceRecordingRequired = false;
     state.serverPracticeAssignments = [];
     state.serverCompletedTrialKeys = new Set();
     state.serverCompletedDistractorIndexes = new Set();

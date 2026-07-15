@@ -1,6 +1,6 @@
 # Project TODO
 
-Updated: 2026-07-13 JST
+Updated: 2026-07-14 JST
 
 This list tracks the remaining work before using
 `https://accentednesscomprehensibility.pages.dev/` for Prolific data collection.
@@ -18,7 +18,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [x] OSF rename crosswalks are generated for files, folders, and 30 speakers.
 - [x] Draft production manifests are generated from the OSF crosswalk and validate against the app's counterbalance code for all 20 cells.
 - [x] OSF-ready standardized stimulus package is generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`.
-- [x] The v0.8 repository candidate includes staged flow, Sheet2 speaker-pattern metadata, the researcher-selected R2 practice/calibration set, and completion-code hardening.
+- [x] The v0.10 repository candidate keeps the four-item practice/calibration UI while limiting new persisted sessions to 100 main assignments/trials and no practice assignments, trials, events, or local rating CSV rows.
 - [x] Production main audio is hosted in R2 and `COUNTERBALANCE_MANIFEST_URL`/`COUNTERBALANCE_ALLOWED_HOSTS` are configured as encrypted Pages secrets; the checked-in 12-row manifest remains an intentional demo fallback.
 - [x] Placeholder practice tones and the retired ElevenLabs set are removed from the active flow; `app.js` now uses `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
 - [x] Top-level `practice_manifest.csv` and dry-run placeholder audio point to the same direct production R2 WAV URLs.
@@ -26,7 +26,9 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [x] Dictation and rating are separated into staged pages within each combined trial.
 - [x] Practice and main response pages disable replay after successful playback; unlimited replay is available only on the post-response practice-feedback screen.
 - [x] The Sheet2 talker-pattern constraints are explicitly enforced and exported.
-- [x] Reloading a started session repeats all four practice items before continuing at the first unsaved main trial or later saved-session state.
+- [x] Reloading a started session repeats all four browser-only practice items before continuing at the first unsaved main trial or later saved-session state without changing v0.10 server progress.
+- [x] All background fields remain stored once on `sessions`; the questionnaire columns stay nullable so pre-questionnaire sessions remain readable/resumable.
+- [x] Historical practice rows remain readable/resumable. The v0.10 behavior change requires no new D1 migration and does not delete or backfill legacy data.
 
 ## P0: Must Finish Before Any Participant Launch
 
@@ -44,17 +46,17 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Verification command after HTTPS URLs are generated: `node scripts/validate_audio_hosting.mjs --sample 80`.
   - Final full-row check before launch: `node scripts/validate_audio_hosting.mjs --sample 0`.
 
-- [x] Redeploy the current app and verify the live Cloudflare URL.
+- [x] Record the historical v0.8 Cloudflare deployment verification.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - PR #3 was merged as `99f3872` and deployed to the stable host on 2026-07-13. The static and live-API deployment gates passed with v0.8, all four R2 WAVs, protected admin routes, the external production manifest, duplicate-start resume, and non-overwriting practice replay.
   - The Prolific stable-URL change remains a separate manual study-setting action.
   - Remote D1 already contains the staged-flow, speaker-pattern, background-questionnaire, and word-familiarity schema.
   - Migration `0014_archived_session_locks.sql` was applied on 2026-07-13 so archived preview rows retain full Prolific IDs without blocking a replacement active session; active/completed participant locks remain strict.
-  - Required live passes after the v0.8 deployment:
+  - Historical live passes after the v0.8 deployment:
     - Live `/app.js` includes staged combined flow, Sheet2 speaker-pattern metadata, the four R2 practice/calibration WAV paths, `response_flow`, and completion-code hardening.
     - All four practice URLs return `audio/wav`, including the new `chn_female_pizza_practice.wav` object.
-    - Assignment metadata identifies item 4 as `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
+    - Historical assignment metadata identifies item 4 as `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
   - Run after every deployment:
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
@@ -63,6 +65,15 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress` for the final no-Turnstile pilot gate.
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
+
+- [ ] Deploy the v0.10 candidate and verify the stable Cloudflare URL before recruitment.
+  - Do not mark v0.10 as deployed based on local source/preflight results.
+  - Confirm `platform_version=pronunciation_rating_v0.10.0`, `sessions.trial_count=100`, exactly 100 main assignments, and zero new practice assignments, trials, events, and local rating CSV rows.
+  - Confirm all background fields round-trip from the `sessions` row and are not duplicated in main trial rows.
+  - Confirm all four practice items, feedback, and unlimited feedback-stage replay remain available in the browser.
+  - Confirm seeded pre-v0.10 practice rows remain readable/resumable and nullable historical questionnaire values do not block resume.
+  - Run the preflight, live deployment check, and live stress commands above only after the v0.10 Pages deployment is visible at the stable hostname.
+  - Completion: the new live report records a passing v0.10 deployment and the Prolific study still uses the stable hostname.
 
 - [x] Verify ENG/native English production stimulus coverage.
   - Source folder: `/Users/tohokusla/Dropbox/Accentedness/Stimuli/ENG`.
@@ -153,7 +164,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Review templates:
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/practice_reference_rating_review_template.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/audio_repair_review_template.csv`.
-  - The older review/apply scripts target the retired ElevenLabs manifest and must not be run against v0.8 without first being updated for `expert_accentedness_range`.
+  - The older review/apply scripts target the retired ElevenLabs manifest and must not be run against the active range-only practice set without first being updated for `expert_accentedness_range`.
   - Completion: the four current WAVs and documented ranges are reviewed and accepted as practice material.
 
 - [x] Implement one-play-only behavior.
@@ -165,7 +176,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [x] Split dictation and rating into separate pages.
   - Task mode remains `combined`, but each trial now flows through `dictation` then `ratings`.
   - Each stage allows one playback; the ratings stage replays the same audio once without counting as a within-stage replay.
-  - Saved rows include `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, and stage-specific audio durations.
+  - Saved main rows include `response_flow`, `dictation_played_at`, `rating_played_at`, `dictation_submit_rt_ms`, `rating_submit_rt_ms`, and stage-specific audio durations; v0.10 practice rows are not saved.
   - New migration: `db/migrations/0010_staged_response_flow.sql`.
 
 ## P1: Experimental-Design Hardening
@@ -227,8 +238,9 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - This does not include instructions, typing, rating decisions, distractors, questionnaires, pauses, or network latency.
   - Completion: dry-run timing with real audio supports the Prolific time estimate and compensation.
 
-- [ ] Confirm the Japanese/Chinese familiarity questions cover the required questionnaire content.
-  - Current app includes two 6-point daily-life familiarity questions.
+- [ ] Confirm the complete background questionnaire covers the required content.
+  - Current app includes age, first-language English variety, gender, English-teaching experience, relevant linguistics knowledge, and two 6-point daily-life Japanese/Chinese familiarity questions.
+  - The nine background-questionnaire columns remain on `sessions` and nullable for legacy compatibility; new sessions require the applicable values and conditional detail fields.
   - Design notes mention "事前アンケート1bの内容".
   - Completion: collaborators confirm no additional questionnaire fields are required.
 
@@ -236,16 +248,16 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 
 - [ ] Run Cloudflare dry run with the production manifest.
   - Use `/admin/dry-run.html`.
-  - Confirm session start, practice, four main blocks, distractors, save calls, completion, and admin exports.
+  - Confirm session start, four-item browser-only practice, four main blocks, distractors, main-trial save calls, completion, and admin exports.
   - Production preflight script: `scripts/preflight_production.mjs`.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Current preflight report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
   - Current live report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
-  - Current preflight result: PASS when run with the production R2 manifest and `--using-external-manifest-secret`.
+  - The previously recorded preflight result was PASS with the production R2 manifest and `--using-external-manifest-secret`; rerun it for v0.10 before making a deployment claim.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
-  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four practice items repeat without overwriting saved practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
-  - Current stable deployment is v0.8 and uses the external production R2 manifest; remote D1 includes `speaker_pattern_index`/`speaker_pattern_speaker`. The 2026-07-13 live API gate passed and remote D1 stored practice item 4 as `pizza`, `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
-  - Completion: dry run produces valid `ratings.csv`, `analysis.csv`, `quality.csv`, `assignments.csv`, and `events.csv`.
+  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four browser-only practice items repeat without creating v0.10 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
+  - The last recorded stable deployment evidence predates v0.10. The 2026-07-13 live API gate and its persisted practice metadata are historical compatibility evidence, not proof that the new contract is deployed.
+  - Completion: a v0.10 dry run produces valid exports with 100 main assignments, zero current-version practice rows/events/local rating CSV rows, session-level background fields, and readable historical practice rows.
 
 - [ ] Review production secrets and access controls.
   - Confirm `ADMIN_TOKEN`, Prolific completion settings, D1 binding, and Cloudflare Access protection for `/admin/*` and `/api/admin/*`.

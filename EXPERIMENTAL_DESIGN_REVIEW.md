@@ -21,18 +21,20 @@ Main measures:
 - Accentedness rating, 1-9.
 - Comprehensibility rating, 1-9.
 - Intelligibility response, typed word.
-- Response-time and event metadata.
+- Main-trial response-time and event metadata.
 - Required Japanese and Chinese familiarity ratings.
 
 Each participant completes:
 
-1. Setup and familiarity ratings.
-2. Four practice/calibration trials.
+1. The required background questionnaire and familiarity ratings.
+2. Four browser-based practice/calibration trials.
 3. Four main stimulus-list blocks.
 4. A short arithmetic distractor task between Blocks 1-3.
 5. Completion and D1 persistence checks.
 
 The main task is fixed to a combined-trial format: the participant hears one audio token and then provides intelligibility, accentedness, and comprehensibility responses for that token. On the rating page, accentedness is displayed above comprehensibility. If the word cannot be identified, the participant can explicitly mark `I could not identify the word` rather than entering a forced guess.
+
+The v0.10 data contract distinguishes participant experience from persisted research data. Participants still complete all four practice items and receive the same feedback/replay UI, but a new session stores exactly 100 main assignments with `sessions.trial_count=100`. Practice assignments, responses, and events are not written to D1 or the local rating CSV, and completion covers only the 100 main trials plus the required final checklist. All background responses are stored once on the `sessions` row rather than copied into trial records. The questionnaire columns remain nullable for sessions created before the questionnaire; new sessions must provide the required values.
 
 ## Placeholder Stimulus Universe
 
@@ -185,7 +187,7 @@ This table guarantees for every individual participant:
 
 Across one complete 200-participant cycle, every list/style cell × speaker bundle is completed once. Consequently, every word × analytic condition receives 80 ratings; every `JPN`/`CHN` word × speaker × pronunciation token receives 8 ratings; and every active `ENG` word × speaker token receives 16 ratings. These full-cycle guarantees require 200 completed participants, not merely 200 starts. Stale/dropout sessions must be finalized and replaced through rolling recruitment.
 
-The bundle, strategy version, and server-authorized allocation cohort are saved on the session, allocation, assignment, and trial records. Production starts fail closed if the Prolific `STUDY_ID` is not present in the server-side cohort allowlist. Legacy sessions retain `NULL` for these fields and resume their already stored assignments; they are never silently backfilled or reassigned.
+The bundle, strategy version, and server-authorized allocation cohort are saved on the session, allocation, and main assignment/trial records. Production starts fail closed if the Prolific `STUDY_ID` is not present in the server-side cohort allowlist. Legacy sessions retain `NULL` for these fields and resume their already stored assignments; they are never silently backfilled or reassigned. Historical practice assignments, trials, and events remain readable/resumable, even though v0.10 creates no new practice rows.
 
 This is a reviewer-facing advantage over unconstrained randomization: it prevents accidental stretches such as several `JPN` or several `CHN` items in a row, which could encourage short-term adaptation or response anchoring.
 
@@ -313,14 +315,14 @@ These are reference ranges rather than exact scalar ratings. No scalar expert Co
 
 - Present a pre-practice explanation stating that the four samples familiarize participants with the task procedure and calibrate Accentedness ratings against expert reference ranges.
 - Confirm the selected practice audio by collaborator listening review.
-- The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in exports and reporting.
+- The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in `practice_manifest.csv`, client metadata, and reporting; historical raw exports retain it when legacy practice rows exist.
 - Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.
-- Keep practice feedback separate from main-trial data.
+- Keep practice feedback client-only and absent from new-session assignments, trials, events, and local rating CSV rows.
 - Keep practice short and main-task-like: each practice item should require word typing plus both ratings.
 - Permit unlimited replay only while the post-response practice feedback is visible. Practice response pages and all main-task pages retain one playback per page.
-- On reload, repeat all four practice items before continuing to the saved main-trial/checklist/completion position; do not overwrite previously saved practice responses.
+- On reload, repeat all four practice items before continuing to the saved main-trial/checklist/completion position. A v0.10 replay creates no practice persistence; historical practice rows from an earlier session contract remain unchanged and resumable.
 - Avoid free-text explanations during practice unless they are theoretically necessary and preregistered.
 
 Reviewer concern:
@@ -368,7 +370,7 @@ Main-trial scoring and response-time rules must also be reported explicitly:
 - Measure `dictation_submit_rt_ms` and `first_key_rt_ms` from the successful word-identification playback start.
 - Measure `rating_submit_rt_ms`, each scale's first and last selection RT, and the first-rating RT from the successful rating-page playback start.
 - Preserve selection counts, rating interaction sequence, and first-interaction order so that changed answers and response order can be audited.
-- Exclude practice rows from confirmatory outcome analyses. Practice feedback replays are audit events and must not be folded into main-trial response-time or replay measures.
+- New v0.10 sessions contain no practice rows or practice events. Historical practice rows/events from earlier versions remain excluded from confirmatory outcome, response-time, and replay analyses.
 
 ## Analysis Plan
 
@@ -422,7 +424,7 @@ These rules should be preregistered before production data collection:
 - Exclude sessions with server-save failures or missing trial blocks.
 - Exclude participants with extreme nonresponse or invalid typed responses.
 - Flag participants with implausibly short listening/response times.
-- Flag participants who fail practice or distractor criteria, if criteria are set.
+- Flag participants who fail distractor criteria, if such criteria are set. Practice is not a persisted analytic measure in v0.10; any immediate UI-level practice gate would need to be specified separately.
 - Decide whether high Japanese/Chinese familiarity is exclusionary or a covariate.
 
 Do not change exclusion thresholds after looking at condition effects.
@@ -440,10 +442,10 @@ Do not change exclusion thresholds after looking at condition effects.
 | Acoustic quality confounded with condition | High | Manifest can store metadata | Run acoustic audit before launch |
 | Public deployment differs from reviewed local app | High | Live deployment check script compares deployed app, manifest, practice audio, config, and admin protection | Run after every deployment and before Prolific launch |
 | Adaptation within blocks | Medium | No 3 same-L1 run; distractors between blocks | Include order covariates/sensitivity checks |
-| Fatigue or repeated listening changes rating behavior | Medium | Trial order, response order, rating RTs, and replay count are exported | Model process covariates and inspect late-trial sensitivity |
+| Fatigue or repeated listening changes rating behavior | Medium | Main-trial order, response order, rating RTs, and replay count are exported | Model process covariates and inspect late-trial sensitivity |
 | Dropout-induced cell imbalance | Medium | Completion-balanced allocation | Use rolling recruitment to completed target; report assigned/completed/excluded by cell |
 | Unidentified words conflated with missing data | Medium | Explicit unidentified response and export fields | Report unidentified rates by condition |
-| Practice feedback biases main ratings | Medium | Practice is separate | Replace placeholders and avoid condition training |
+| Practice feedback biases main ratings | Medium | Practice is client-only and absent from new persisted data | Replace placeholders and avoid condition training |
 
 ## Verification Commands
 

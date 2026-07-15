@@ -258,7 +258,7 @@ npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migr
 
 Legacy rows intentionally keep `NULL` bundle/version/cohort values and resume their stored assignments; do not backfill them.
 
-The v0.9.1 pre-practice explanation does not add a D1 column or migration. The explanation is presentation-only, while new sessions and trial rows identify the deployed contract through `platform_version=pronunciation_rating_v0.9.1`. Confirm that the existing v0.9 `0015_speaker_pattern_bundles.sql` migration is already present before deploying v0.9.1; do not create a separate field for the instruction text. Main-trial scores and response-time/process fields continue to be saved under the existing schema.
+The v0.10 practice-persistence change does not add a D1 column or migration. New `pronunciation_rating_v0.10.0` sessions persist exactly 100 main assignments, set `sessions.trial_count=100`, and use only those main assignments/trials for progress and completion. The four-item practice calibration remains in the browser, but it creates no new `rating_assignments`, `rating_trials`, `event_logs`, or local rating CSV rows. Keep the existing practice-capable and questionnaire columns nullable so historical practice rows and pre-questionnaire sessions remain readable and resumable. Confirm that `0012_background_questionnaire.sql` and the v0.9 `0015_speaker_pattern_bundles.sql` migration are already present before deploying v0.10; do not create a migration that deletes legacy practice data or makes the background columns `NOT NULL`.
 
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
@@ -267,7 +267,7 @@ node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibili
 node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply
 ```
 
-The updater includes all nine questionnaire columns, the word-familiarity requirement flag, and the normalized checklist table/index. For production, always write the backup outside the repository and apply the schema before deploying code that reads the new schema:
+The updater includes all nine nullable questionnaire columns, the word-familiarity requirement flag, and the normalized checklist table/index. New-session validation requires the applicable background responses, while nullable storage preserves compatibility with sessions created before the questionnaire. For production, always write the backup outside the repository and apply the schema before deploying code that reads the new schema:
 
 ```sh
 node scripts/apply_d1_schema_updates.mjs \
@@ -289,7 +289,7 @@ https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_fem
 
 The two scalar expert fields remain blank because exact scalar Accentedness and Comprehensibility reference ratings have not been established. The app and top-level `practice_manifest.csv` store only `expert_accentedness_range` for these four practice items.
 
-The fourth object is the legacy synthetic macOS `say` voice `Tingting` generated from Mandarin `披萨`, not a human L2-English recording. Its `spoken_form`, `talker`, and `source_format` must remain explicit in assignment exports. Its methodological use was explicitly accepted on 2026-07-13. If it is later replaced with a genuine CHN-female English `pizza` token, update the canonical server assignment, client, manifest, R2 object, and tests together.
+The fourth object is the legacy synthetic macOS `say` voice `Tingting` generated from Mandarin `披萨`, not a human L2-English recording. Its `spoken_form`, `talker`, and `source_format` must remain explicit in `practice_manifest.csv`, client metadata, and methodological reporting; historical assignment exports retain those fields when legacy rows exist. Its methodological use was explicitly accepted on 2026-07-13. If it is later replaced with a genuine CHN-female English `pizza` token, update the client, manifest, R2 object, and tests together.
 
 Both the participant flow and the researcher-only `Load selected practice` helper pass these HTTPS URLs directly to the browser's audio element. The helper does not fetch the R2 objects into JavaScript blobs, so ordinary playback is not dependent on an `Access-Control-Allow-Origin` response header. Test both flows after any audio-host change.
 
@@ -339,7 +339,7 @@ Expose the bucket with a production custom domain when possible, for example:
 https://stimuli.example.edu/
 ```
 
-The current practice implementation references the verified public `r2.dev` URLs listed above. If the audio is later moved to a custom domain, update all four `PRACTICE_ITEMS`, `practice_manifest.csv`, the live-deployment checks, and the allowed-host setting together before changing the Prolific study. A custom domain remains preferable for cache, WAF, access-control, and bot-management options.
+The current practice implementation references the verified public `r2.dev` URLs listed above. If the audio is later moved to a custom domain, update all four client-side `PRACTICE_ITEMS`, `practice_manifest.csv`, the live-deployment checks, and the allowed-host setting together before changing the Prolific study. A custom domain remains preferable for cache, WAF, access-control, and bot-management options.
 
 Generate the production manifest with absolute audio URLs after the public audio base URL is known. Prefer the hosted-manifest builder because it preserves the already validated OSF package manifest and only fills `audio_url` from `audio_file`:
 
@@ -506,13 +506,13 @@ Immediately verify that the public URL is serving the same implementation that w
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start
 ```
 
-Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a pilot. For production, omit that flag if `REQUIRE_TURNSTILE=1` is configured. Keep `--api-dry-run-start` for the final readiness check; it creates one dry-run D1 session and confirms that `/api/session/start` can build the 100-trial server-side main assignment without falling back to placeholder materials. It also repeats the same dry-run start once to verify duplicate-start resume metadata. If `COUNTERBALANCE_MANIFEST_URL` is configured and the public static `remote_manifest.csv` intentionally remains demo-only, also pass `--allow-demo-static-manifest`. The script writes:
+Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a pilot. For production, omit that flag if `REQUIRE_TURNSTILE=1` is configured. Keep `--api-dry-run-start` for the final readiness check; it creates one dry-run D1 session and confirms that `/api/session/start` builds exactly 100 server-side main assignments with `trial_count=100`, no new practice assignments/trials/events, and no placeholder materials. It also repeats the same dry-run start once to verify duplicate-start resume metadata. If `COUNTERBALANCE_MANIFEST_URL` is configured and the public static `remote_manifest.csv` intentionally remains demo-only, also pass `--allow-demo-static-manifest`. The script writes:
 
 ```text
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
 ```
 
-Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that the saved age/background choices and word-checklist requirement are returned by a questionnaire-free `resume_only` lookup.
+Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that all saved background choices and the word-checklist requirement are returned by a questionnaire-free `resume_only` lookup. A passing local check is not evidence that v0.10 has been deployed; record deployment only after the live check succeeds against the stable hostname.
 
 After Wrangler authentication is available, run the aggregate readiness audit:
 
@@ -562,12 +562,16 @@ Enter the `ADMIN_TOKEN` on the admin page and confirm that summary counts load.
 
 Then complete a short test session from the participant page. Do not add `?local=1` for this test, because `?local=1` bypasses server persistence.
 
-After saving a few trials, confirm records exist in D1:
+After completing the browser-only practice and saving a few main trials, confirm the v0.10 session contract in D1. Scope the queries to the test session or current platform version rather than interpreting database-wide totals, because historical sessions may legitimately contain practice rows:
 
 ```sh
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS sessions FROM sessions;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS trials FROM rating_trials;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS events FROM event_logs;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT id, trial_count, completed_trial_count FROM sessions WHERE platform_version = 'pronunciation_rating_v0.10.0';"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT phase, COUNT(*) AS n FROM rating_assignments WHERE session_id = '<v0.10-session-id>' GROUP BY phase;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT phase, COUNT(*) AS n FROM rating_trials WHERE session_id = '<v0.10-session-id>' GROUP BY phase;"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS practice_events FROM event_logs WHERE session_id = '<v0.10-session-id>' AND (event_type LIKE 'practice_%' OR json_extract(payload_json, '$.phase') = 'practice');"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS checklist_rows, SUM(word_known) AS known_words FROM word_familiarity_responses;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT cell_id, status, COUNT(*) AS n FROM counterbalance_allocations GROUP BY cell_id, status;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT block_index, block_list, COUNT(*) AS n FROM rating_assignments WHERE phase = 'main' GROUP BY block_index, block_list ORDER BY block_index;"
@@ -586,7 +590,7 @@ On `/admin/`, confirm that these CSV downloads work:
 
 To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
-To test reload recovery, start a pilot session from the stable Prolific-style URL, save several practice/main trials, then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, all four practice items are presented again, the browser then continues at the first unsaved main trial or later saved-session state, already completed block distractors are not repeated, and completion is issued only after the remaining assignments are saved. Confirm that replaying practice does not overwrite an already saved practice response.
+To test reload recovery, start a pilot session from the stable Prolific-style URL, complete the browser-only practice, save several main trials, and then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, all four practice items are presented again, the browser then continues at the first unsaved main trial or later saved-session state, already completed block distractors are not repeated, and completion is issued only after the remaining main assignments are saved. Confirm that replaying practice leaves the v0.10 session at zero practice assignments, trials, events, and local rating CSV rows. Separately verify that a seeded pre-v0.10 session retains and can resume its historical practice rows.
 
 To test the final checklist, finish all ratings and confirm that the 50-word screen appears before any completion code or Prolific redirect. Leave `capelin` blank in a test response, submit all 50 explicit values, and verify `word-familiarity.csv` contains `word_number=23,target_word=capelin,word_known=0` while the matching `analysis.csv` trial rows also contain `word_known=0`. A zero-known-word submission is valid; failing to review/submit the checklist is not.
 
@@ -612,7 +616,7 @@ Use this stable Pages project hostname in the Prolific Study URL. Do not copy a 
 
 Do not include the completion code or completion URL in the Prolific participant URL. Store the full return URL in `PROLIFIC_COMPLETION_URL`, or store the code in `PROLIFIC_COMPLETION_CODE`.
 
-After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. Completion is issued only when every server-side assignment has a saved rating and every version-required word-familiarity row is present. If completion saving fails, the server detects missing assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
+After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. For new v0.10 sessions, completion is issued only when all 100 server-side main assignments have saved ratings and every version-required word-familiarity row is present; browser-only practice does not enter completion coverage. Legacy sessions continue to use their stored assignment contract. If completion saving fails, the server detects missing required assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
 
 ## 13. Important Checks Before Production
 
@@ -620,6 +624,8 @@ Before running the actual study:
 
 - Confirm the four R2 practice/calibration WAVs are reachable and presented in this order: `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), `pizza` (7–9). Keep scalar expert fields blank unless exact expert ratings are formally established.
 - Confirm unlimited audio replay is available only on the practice-feedback screen; practice response pages and all main-task pages must retain one playback per page.
+- Confirm a new v0.10 session has `trial_count=100`, exactly 100 main assignments, and zero practice assignments, trials, events, and local rating CSV rows.
+- Confirm historical practice rows remain readable/resumable and are not deleted or backfilled.
 - Set `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
 - Apply `db/migrations/0005_session_security.sql` to existing D1 databases.
@@ -629,7 +635,7 @@ Before running the actual study:
 - Apply `db/migrations/0009_response_order_metrics.sql` to existing D1 databases.
 - Apply `db/migrations/0010_staged_response_flow.sql` to existing D1 databases.
 - Apply `db/migrations/0011_speaker_pattern.sql` to existing D1 databases.
-- Apply `db/migrations/0012_background_questionnaire.sql` to existing D1 databases, or confirm all nine columns through the guarded updater.
+- Apply `db/migrations/0012_background_questionnaire.sql` to existing D1 databases, or confirm all nine columns through the guarded updater. Keep them nullable for legacy sessions; new starts enforce required values in application validation.
 - Apply `db/migrations/0013_word_familiarity.sql` before v0.7 code, or confirm the flag, table, and index through the guarded updater.
 - Apply `db/migrations/0014_archived_session_locks.sql` before archiving and replacing a Prolific preview session; confirm active rows remain unique.
 - For a partially migrated D1 database, prefer `node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility --apply --backup-before-apply`; it exports a SQL backup first and applies only missing additive schema.
@@ -649,11 +655,11 @@ Before running the actual study:
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
 - Run `node scripts/validate_audio_hosting.mjs --sample 80` after production HTTPS audio URLs are generated, and use `--sample 0` for the final full-row probe before launch.
 - Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. When the production R2 manifest is provided through `COUNTERBALANCE_MANIFEST_URL`, pass `--production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret`.
-- Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must pass before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
+- Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must verify the v0.10 100-main-trial/zero-new-practice-row contract before Prolific launch. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`.
 - Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the aggregate launch gate.
 - Run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1.
 - For the final launch gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress`.
-- Complete a live pilot reload test: save trials, reload the same stable Prolific-style URL, confirm that all four practice items repeat before the first unsaved main trial or later saved-session state, then finish and verify completion/export rows.
+- Complete a live pilot reload test: save main trials, reload the same stable Prolific-style URL, confirm that all four browser-only practice items repeat before the first unsaved main trial or later saved-session state, then finish and verify completion/export rows and zero v0.10 practice persistence.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.
@@ -663,7 +669,7 @@ Before running the actual study:
 - Confirm that `/admin/` requires the real `ADMIN_TOKEN`.
 - Confirm that `/admin/` shows the full Prolific ID and all background responses, and that its live/dry-run filter and pagination work.
 - Confirm the final screen lists exactly the canonical 50 English words without translations, uses the corrected unfamiliar/blank instruction, and preserves Accentedness before Comprehensibility in task instructions and practice feedback.
-- Download `sessions.csv`, `word-familiarity.csv`, `quality.csv`, and `analysis.csv`; verify checklist coverage, `capelin` word number 23, trial-level `word_known`, questionnaire columns, and the stable `session_id` analysis join key.
+- Download `sessions.csv`, `word-familiarity.csv`, `quality.csv`, `ratings.csv`, `assignments.csv`, `events.csv`, and `analysis.csv`; verify checklist coverage, `capelin` word number 23, trial-level `word_known`, all session-level questionnaire columns, the stable `session_id` analysis join key, 100 current-version main assignments, and no current-version practice rows/events. Historical practice rows may remain in restricted raw exports.
 - Complete at least one full pilot run and one partial dropout pilot, then download all CSV files from `/admin/`.
 
 ## Local UI Testing Only

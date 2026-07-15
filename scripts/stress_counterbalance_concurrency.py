@@ -304,7 +304,7 @@ def duplicate_participant_key_check(path: Path) -> None:
             "started_at_ms": 1,
             "last_seen_at": FIXED_TIMESTAMP,
             "last_seen_at_ms": 1,
-            "trial_count": 104,
+            "trial_count": 100,
         }
         conn.execute(
             """

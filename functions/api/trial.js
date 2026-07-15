@@ -98,7 +98,10 @@ export async function onRequestPost(context) {
     if (cleanText(session.status) !== "started") {
       return errorResponse("Session is not open for trial saves.", 409);
     }
-    assertRequiredIntRange("row.trial_index", trialIndex, 1, Number(session.trial_count || 1000));
+    const maxTrialIndex = phase === "practice"
+      ? 4
+      : Number(session.trial_count || 1000);
+    assertRequiredIntRange("row.trial_index", trialIndex, 1, maxTrialIndex);
 
     const assignment = await db
       .prepare(
@@ -109,6 +112,15 @@ export async function onRequestPost(context) {
       .bind(serverSessionId, phase, trialIndex)
       .first();
     if (!assignment) {
+      if (phase === "practice") {
+        return jsonResponse({
+          ok: true,
+          ignored: true,
+          reason: "practice_not_recorded",
+          session_id: serverSessionId,
+          trial_index: trialIndex,
+        });
+      }
       return errorResponse("Assignment was not found for this session/trial.", 409);
     }
 
