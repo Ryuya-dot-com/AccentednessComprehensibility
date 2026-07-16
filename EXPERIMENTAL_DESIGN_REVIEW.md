@@ -34,7 +34,7 @@ Each participant completes:
 
 The main task is fixed to a combined-trial format: the participant hears one audio token and then provides intelligibility, accentedness, and comprehensibility responses for that token. On the rating page, accentedness is displayed above comprehensibility. If the word cannot be identified, the participant can explicitly mark `I could not identify the word` rather than entering a forced guess.
 
-The v0.10 data contract distinguishes participant experience from persisted research data. v0.10.1 participants complete five practice items and receive feedback/replay UI, but a new session stores exactly 100 main assignments with `sessions.trial_count=100`. Practice assignments, responses, and events are not written to D1 or the local rating CSV, and completion covers only the 100 main trials plus the required final checklist. All background responses are stored once on the `sessions` row rather than copied into trial records. The questionnaire columns remain nullable for sessions created before the questionnaire; new sessions must provide the required values.
+The v0.10 data contract distinguishes participant experience from persisted research data. v0.10.2 and v0.10.1 participants complete the same five-item `practice_calibration_v0.10.1` set and receive feedback/replay UI, but a new session stores exactly 100 main assignments with `sessions.trial_count=100`. Practice assignments, responses, and events are not written to D1 or the local rating CSV, and completion covers only the 100 main trials plus the required final checklist. All background responses are stored once on the `sessions` row rather than copied into trial records. The questionnaire columns remain nullable for sessions created before the questionnaire; new sessions must provide the required values.
 
 ## Placeholder Stimulus Universe
 
@@ -159,6 +159,8 @@ The randomizer enforces:
 - One versioned Sheet2 speaker pattern per 25-trial block.
 - A fixed four-block pattern bundle selected by the server-side allocation, independent of the participant/session seed.
 
+Beginning with v0.10.2, the server draws complete seeded Fisher-Yates permutations and rejects any candidate that violates the no-3 rule. It makes at most 200 attempts and then fails closed. This rejection sampler preserves the conditional distribution over admissible orders and time-reversal symmetry; it does not use the former count-pressure greedy repair that shifted most `ENG` trials into the latter part of each block. `scripts/verify_randomization_distribution.mjs` audits 50,000 deterministic blocks against exact first-position probabilities, mean position 13, forward/reverse position symmetry, JPN/CHN symmetry, order diversity, and the run constraint.
+
 Each block's Sheet2 pattern index is saved as `speaker_pattern_index`. The expected speaker for each pre-shuffle word position is saved as `speaker_pattern_speaker`; the concrete selected stimulus still carries `participant_id` and `talker`.
 
 ## Versioned Speaker-Pattern Bundles
@@ -193,7 +195,7 @@ This is a reviewer-facing advantage over unconstrained randomization: it prevent
 
 Reviewer concern:
 
-- Constrained randomization is not pure randomization. The manuscript should state the constraint explicitly and include `trial_index`, `block_index`, and possibly previous-trial L1 as covariates or sensitivity checks.
+- Constrained randomization is not unconstrained randomization. The manuscript should state the no-3 rule and seeded rejection procedure explicitly and include `trial_index`, `block_index`, and possibly previous-trial L1 as process covariates or sensitivity checks.
 
 ## Distractor Task
 
@@ -323,7 +325,7 @@ These are collaborator-reviewed reference ranges rather than exact scalar rating
 - Keep practice feedback client-only and absent from new-session assignments, trials, events, and local rating CSV rows.
 - Keep practice short and main-task-like: each practice item should require word typing plus both ratings.
 - Permit unlimited replay only while the post-response practice feedback is visible. Practice response pages and all main-task pages retain one playback per page.
-- On reload, repeat the practice set associated with the stored session version before continuing to the saved main-trial/checklist/completion position. v0.10.1 repeats the current five items, v0.10.0 retains its historical four, and earlier persisted-practice sessions replay their saved rows. Browser-only practice creates no new persistence.
+- On reload, repeat the practice set associated with the stored session version before continuing to the saved main-trial/checklist/completion position. v0.10.2 and v0.10.1 repeat the current five items, v0.10.0 retains its historical four, and earlier persisted-practice sessions replay their saved rows. Browser-only practice creates no new persistence.
 - Avoid free-text explanations during practice unless they are theoretically necessary and preregistered.
 
 Reviewer concern:
@@ -458,6 +460,7 @@ node --check functions/api/_counterbalance.js
 node --check scripts/verify_counterbalance.mjs
 node --check scripts/simulate_counterbalance_design.mjs
 node scripts/verify_counterbalance.mjs
+node scripts/verify_randomization_distribution.mjs
 node scripts/verify_speaker_pattern_bundles.mjs
 node scripts/simulate_counterbalance_design.mjs
 python3 scripts/stress_counterbalance_concurrency.py --participants 200
@@ -484,7 +487,7 @@ Before launch, replace or complete:
 - `[PLACEHOLDER_SPEAKER_ID]` and `[PLACEHOLDER_TALKER_ID]`.
 - `[PLACEHOLDER_LEXICAL_METADATA]`.
 - `[PLACEHOLDER_ACOUSTIC_METADATA]`.
-- Practice audio and reference ranges are resolved in v0.10.1: five reviewed WAVs with both Accentedness and Comprehensibility ranges.
+- Practice audio and reference ranges are resolved by `practice_calibration_v0.10.1`: five reviewed WAVs with both Accentedness and Comprehensibility ranges. The v0.10.2 platform deliberately reuses that unchanged practice set.
 - `[PLACEHOLDER_EXCLUSION_THRESHOLDS]`.
 - `[PLACEHOLDER_TARGET_SAMPLE_SIZE]`.
 

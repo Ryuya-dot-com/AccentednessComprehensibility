@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 import {
   CANONICAL_PRACTICE_ASSIGNMENT,
   CURRENT_PRACTICE_SET_ID,
@@ -13,7 +14,7 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.2";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
@@ -56,6 +57,12 @@ const DEFAULTS = {
   schemaUpdater: path.join(REPO_ROOT, "scripts", "apply_d1_schema_updates.mjs"),
   archivedSessionLockTest: path.join(REPO_ROOT, "scripts", "test_archived_session_lock.py"),
   backgroundLocalTest: path.join(REPO_ROOT, "scripts", "test_background_questionnaire_local.mjs"),
+  randomizationDistributionTest: path.join(
+    REPO_ROOT,
+    "scripts",
+    "verify_randomization_distribution.mjs",
+  ),
+  readinessAudit: path.join(REPO_ROOT, "scripts", "audit_cloudflare_readiness.mjs"),
   liveCheck: path.join(REPO_ROOT, "scripts", "check_live_deployment.mjs"),
   stressCheck: path.join(REPO_ROOT, "scripts", "stress_live_counterbalance_concurrency.mjs"),
   smokeGenerator: path.join(REPO_ROOT, "scripts", "generate_smoke_test_200.py"),
@@ -581,6 +588,8 @@ function checkProlificFlowSourceGuards(options) {
   const schemaUpdater = readTextIfExists(options.schemaUpdater);
   const archivedSessionLockTest = readTextIfExists(options.archivedSessionLockTest);
   const backgroundLocalTest = readTextIfExists(options.backgroundLocalTest);
+  const randomizationDistributionTest = readTextIfExists(options.randomizationDistributionTest);
+  const readinessAudit = readTextIfExists(options.readinessAudit);
   const liveCheck = readTextIfExists(options.liveCheck);
   const stressCheck = readTextIfExists(options.stressCheck);
   const smokeGenerator = readTextIfExists(options.smokeGenerator);
@@ -609,6 +618,8 @@ function checkProlificFlowSourceGuards(options) {
     ["scripts/apply_d1_schema_updates.mjs", schemaUpdater],
     ["scripts/test_archived_session_lock.py", archivedSessionLockTest],
     ["scripts/test_background_questionnaire_local.mjs", backgroundLocalTest],
+    ["scripts/verify_randomization_distribution.mjs", randomizationDistributionTest],
+    ["scripts/audit_cloudflare_readiness.mjs", readinessAudit],
     ["scripts/check_live_deployment.mjs", liveCheck],
     ["scripts/stress_live_counterbalance_concurrency.mjs", stressCheck],
     ["scripts/generate_smoke_test_200.py", smokeGenerator],
@@ -687,8 +698,8 @@ function checkProlificFlowSourceGuards(options) {
     requireSnippet(problems, "app.js", app, expected.sourceFormat);
   }
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
-  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.10.1"');
-  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.10.1"');
+  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.10.2"');
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.10.2"');
   requireSnippet(problems, "index.html", index, "In this practice session, you will transcribe and rate five sample words.");
   requireSnippet(problems, "index.html", index, "familiarize you with the task procedure; and");
   requireSnippet(problems, "index.html", index, "help you calibrate your Accentedness and Comprehensibility ratings by comparing them with expert reference ranges.");
@@ -753,6 +764,12 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "session/start.js", start, "constantTimeEqual");
   requireSnippet(problems, "session/start.js", start, '"word_familiarity"');
   requireSnippet(problems, "session/start.js", start, `CURRENT_PLATFORM_VERSION = "${PLATFORM_VERSION}"`);
+  requireSnippet(
+    problems,
+    "session/start.js",
+    start,
+    'PREVIOUS_CANONICAL_PRACTICE_PLATFORM_VERSION = "pronunciation_rating_v0.10.1"',
+  );
   requireSnippet(problems, "session/start.js", start, "reload_required: true");
   requireSnippet(problems, "session/start.js", start, "const nextAssignment = mainRows.find");
   requireSnippet(problems, "session/start.js", start, "resume.practice_replay_required = true");
@@ -788,7 +805,20 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "savedPracticeEvent");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_event_ignored");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "checkDeployedClientPracticeContract");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "checkMainAssignmentOrder");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "maximumSameL1Run");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "exact persisted main assignment order");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "session_id: result.data.session_id");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "parsed statically");
+  requireSnippet(problems, "scripts/audit_cloudflare_readiness.mjs", readinessAudit, 'argValue("--expected-source"');
+  requireSnippet(problems, "scripts/audit_cloudflare_readiness.mjs", readinessAudit, "prewriteBlockers");
+  requireSnippet(problems, "scripts/audit_cloudflare_readiness.mjs", readinessAudit, "Non-writing readiness only");
+  requireSnippet(
+    problems,
+    "scripts/audit_cloudflare_readiness.mjs",
+    readinessAudit,
+    "checkLiveDeployment({ apiDryRunStart: true })",
+  );
   if (liveCheck.includes('from "node:vm"') || liveCheck.includes("runInNewContext")) {
     problems.push("scripts/check_live_deployment.mjs must statically parse remote app.js without executing it");
   }
@@ -805,8 +835,14 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "chn_male_balloon_practice.wav");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "if (turnstileToken)");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "legacyPracticeSix");
+  requireSnippet(
+    problems,
+    "scripts/test_background_questionnaire_local.mjs",
+    backgroundLocalTest,
+    "legacy_v0101_browser_only_resume_exact: true",
+  );
   requireSnippet(problems, "functions/api/trial.js", trial, "Number.MAX_SAFE_INTEGER");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.10.1_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.10.2_smoke");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_organizer_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_male_balloon_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"practice_assignments": 0');
@@ -818,6 +854,22 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "_counterbalance.js", counterbalance, "expert_comprehensibility_range");
   forbidSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, 'CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1"');
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "MAX_CONSTRAINED_SHUFFLE_ATTEMPTS = 200");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, ":rejection:${attempt}");
+  forbidSnippet(problems, "_counterbalance.js", counterbalance, "chooseConstrainedL1");
+  forbidSnippet(problems, "_counterbalance.js", counterbalance, "pressure * 1000");
+  requireSnippet(
+    problems,
+    "scripts/verify_randomization_distribution.mjs",
+    randomizationDistributionTest,
+    "EXPECTED_FIRST_L1_PROBABILITY",
+  );
+  requireSnippet(
+    problems,
+    "scripts/verify_randomization_distribution.mjs",
+    randomizationDistributionTest,
+    "reversal symmetry",
+  );
   requireSnippet(problems, "_counterbalance.js", counterbalance, "CROSS JOIN speaker_pattern_bundles");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "WHERE allocation_cohort = ?");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "AND allocation_strategy_version = ?");
@@ -926,6 +978,35 @@ function checkProlificFlowSourceGuards(options) {
   return problems;
 }
 
+function checkRandomizationDistribution(options) {
+  if (!fileExists(options.randomizationDistributionTest)) {
+    return {
+      name: "Constrained-randomization distribution",
+      problems: [`Missing randomization distribution test: ${options.randomizationDistributionTest}`],
+      summary: "not run",
+    };
+  }
+  const result = spawnSync(process.execPath, [options.randomizationDistributionTest], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 120_000,
+  });
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  const problems = [];
+  if (result.error) problems.push(`Could not run the distribution audit: ${result.error.message}`);
+  if (result.status !== 0) {
+    problems.push(
+      `Distribution audit exited ${result.status ?? "without a status"}: ${output.slice(0, 800) || "no output"}`,
+    );
+  }
+  return {
+    name: "Constrained-randomization distribution",
+    problems,
+    summary: problems.length ? "FAIL" : "PASS (50,000 blocks)",
+  };
+}
+
 function markdownReport(checks, options) {
   const blockers = checks.flatMap((check) => check.problems.map((problem) => ({ ...check, problem })));
   const lines = [
@@ -993,6 +1074,10 @@ const options = {
   schemaUpdater: path.resolve(argValue("--schema-updater", DEFAULTS.schemaUpdater)),
   archivedSessionLockTest: path.resolve(argValue("--archived-session-lock-test", DEFAULTS.archivedSessionLockTest)),
   backgroundLocalTest: path.resolve(argValue("--background-local-test", DEFAULTS.backgroundLocalTest)),
+  randomizationDistributionTest: path.resolve(
+    argValue("--randomization-distribution-test", DEFAULTS.randomizationDistributionTest),
+  ),
+  readinessAudit: path.resolve(argValue("--readiness-audit", DEFAULTS.readinessAudit)),
   liveCheck: path.resolve(argValue("--live-check", DEFAULTS.liveCheck)),
   stressCheck: path.resolve(argValue("--stress-check", DEFAULTS.stressCheck)),
   smokeGenerator: path.resolve(argValue("--smoke-generator", DEFAULTS.smokeGenerator)),
@@ -1081,6 +1166,7 @@ const checks = [
     problems: checkProlificFlowSourceGuards(options),
     summary: "completion redirect, trial save, duplicate start, counterbalance, and dropout guards",
   },
+  checkRandomizationDistribution(options),
 ];
 
 fs.mkdirSync(path.dirname(options.out), { recursive: true });

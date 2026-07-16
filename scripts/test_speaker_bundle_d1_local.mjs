@@ -14,7 +14,7 @@ import {
 } from "../functions/api/_counterbalance.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.2";
 const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
 const EXPECTED_PRACTICE = Object.freeze([
   Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", comp: "1–2", accent: "1–2" }),

@@ -42,7 +42,8 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.10.2";
+const PREVIOUS_CANONICAL_PRACTICE_PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
 const LEGACY_BROWSER_PRACTICE_SET_ID = "practice_calibration_v0.10.0";
 const LEGACY_BROWSER_PRACTICE_ASSIGNMENT_V0100 = Object.freeze([
   Object.freeze({
@@ -145,7 +146,12 @@ const LEGACY_BROWSER_PRACTICE_ASSIGNMENT_V0100 = Object.freeze([
 
 function browserPracticeAssignmentForPlatformVersion(platformVersion) {
   const version = cleanText(platformVersion);
-  if (version === CURRENT_PLATFORM_VERSION) return CANONICAL_PRACTICE_ASSIGNMENT;
+  if (
+    version === CURRENT_PLATFORM_VERSION ||
+    version === PREVIOUS_CANONICAL_PRACTICE_PLATFORM_VERSION
+  ) {
+    return CANONICAL_PRACTICE_ASSIGNMENT;
+  }
   if (version === "pronunciation_rating_v0.10.0") {
     return LEGACY_BROWSER_PRACTICE_ASSIGNMENT_V0100;
   }

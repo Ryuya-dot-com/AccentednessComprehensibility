@@ -162,14 +162,39 @@ function checkPagesDeployments(project) {
   const parsed = parseJson(result.stdout);
   const deployments = Array.isArray(parsed) ? parsed : [];
   const latest = deployments[0] || {};
+  const latestId = latest.id || latest.Id || "";
+  const latestBranch = latest.branch || latest.Branch || "";
+  const latestSource = latest.source || latest.Source || "";
+  const latestStatus = latest.status || latest.Status || "";
+  const expectedSource = argValue("--expected-source", process.env.EXPECTED_PAGES_SOURCE || "");
+  const normalizedSource = String(latestSource).toLowerCase();
+  const normalizedExpectedSource = String(expectedSource).toLowerCase();
+  const sourceMatches = !expectedSource || Boolean(
+    normalizedSource &&
+      (normalizedSource.startsWith(normalizedExpectedSource) ||
+        normalizedExpectedSource.startsWith(normalizedSource)),
+  );
+  if (result.ok && !deployments.length) problems.push("No production Pages deployment was returned.");
+  if (result.ok && latestBranch !== "main") {
+    problems.push(`Latest production Pages deployment is from ${latestBranch || "(missing branch)"}, not main.`);
+  }
+  if (result.ok && expectedSource && !sourceMatches) {
+    problems.push(
+      `Latest production Pages source ${latestSource || "(missing)"} does not match expected ${expectedSource}.`,
+    );
+  }
   return {
     name: "Pages production deployment",
     problems,
     summary: JSON.stringify({
       project,
       deployments_seen: deployments.length,
-      latest_id: latest.id || "",
+      latest_id: latestId,
       latest_created_on: latest.created_on || latest.createdOn || "",
+      latest_branch: latestBranch,
+      latest_source: latestSource,
+      expected_source: expectedSource,
+      latest_status: latestStatus,
       latest_stage: latest.latest_stage?.name || latest.latestStage?.name || latest.stage || "",
     }),
     details: outputExcerpt(result),
@@ -217,7 +242,7 @@ function checkD1Schema(database) {
 }
 
 function checkLocalPreflight() {
-  const args = ["scripts/preflight_production.mjs"];
+  const args = ["scripts/preflight_production.mjs", "--package-root", PACKAGE_ROOT];
   const productionManifest = argValue("--production-manifest", process.env.PRODUCTION_MANIFEST || "");
   if (productionManifest) args.push("--production-manifest", productionManifest);
   if (hasFlag("--using-external-manifest-secret")) args.push("--using-external-manifest-secret");
@@ -227,6 +252,17 @@ function checkLocalPreflight() {
     name: "Local production preflight",
     problems,
     summary: result.ok ? "PASS" : "FAIL",
+    details: outputExcerpt(result, 1400),
+  };
+}
+
+function checkRandomizationDistribution() {
+  const result = run("node", ["scripts/verify_randomization_distribution.mjs"]);
+  const problems = result.ok ? [] : ["Constrained-randomization distribution audit failed."];
+  return {
+    name: "Constrained-randomization distribution",
+    problems,
+    summary: result.ok ? "PASS (50,000 blocks)" : "FAIL",
     details: outputExcerpt(result, 1400),
   };
 }
@@ -253,8 +289,9 @@ function checkAudioHosting() {
   };
 }
 
-function checkLiveDeployment() {
-  const args = ["scripts/check_live_deployment.mjs", "--api-dry-run-start"];
+function checkLiveDeployment({ apiDryRunStart = false } = {}) {
+  const args = ["scripts/check_live_deployment.mjs"];
+  if (apiDryRunStart) args.push("--api-dry-run-start");
   if (hasFlag("--allow-turnstile-off")) args.push("--allow-turnstile-off");
   if (hasFlag("--allow-demo-static-manifest")) args.push("--allow-demo-static-manifest");
   const token = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
@@ -262,10 +299,19 @@ function checkLiveDeployment() {
   const result = run("node", args);
   const problems = result.ok ? [] : ["Live deployment check still has launch blockers."];
   return {
-    name: "Live deployment and API dry-run",
+    name: apiDryRunStart ? "Live deployment and API dry-run" : "Live deployment (non-writing)",
     problems,
     summary: result.ok ? "PASS" : "FAIL",
     details: outputExcerpt(result, 1400),
+  };
+}
+
+function skippedLiveApiDryRun(reason) {
+  return {
+    name: "Live deployment and API dry-run",
+    problems: [],
+    summary: "SKIPPED",
+    details: reason,
   };
 }
 
@@ -341,21 +387,34 @@ function markdown(checks, context) {
 const project = argValue("--project-name", DEFAULT_PROJECT);
 const database = argValue("--database", DEFAULT_DATABASE);
 const out = path.resolve(argValue("--out", DEFAULT_OUT));
-const liveDeploymentCheck = checkLiveDeployment();
 const checks = [
   checkWranglerAuth(),
   checkPagesSecrets(project),
   checkPagesDeployments(project),
   checkD1Info(database),
   checkD1Schema(database),
+  checkRandomizationDistribution(),
   checkLocalPreflight(),
   checkAudioHosting(),
-  liveDeploymentCheck,
 ];
+const nonWritingLiveDeploymentCheck = checkLiveDeployment();
+checks.push(nonWritingLiveDeploymentCheck);
+let liveApiDryRunCheck = null;
+if (hasFlag("--api-dry-run-start")) {
+  const prewriteBlockers = checks.flatMap((check) => check.problems);
+  liveApiDryRunCheck = prewriteBlockers.length
+    ? skippedLiveApiDryRun("No production write was attempted because an earlier readiness check failed.")
+    : checkLiveDeployment({ apiDryRunStart: true });
+} else {
+  liveApiDryRunCheck = skippedLiveApiDryRun(
+    "Non-writing readiness only. Pass --api-dry-run-start explicitly for the authorized final D1-writing gate.",
+  );
+}
+checks.push(liveApiDryRunCheck);
 if (hasFlag("--live-concurrency-stress")) {
   checks.push(
-    liveDeploymentCheck.problems.length
-      ? skippedLiveConcurrencyStress("Skipped because the live API dry-run check did not pass.")
+    !hasFlag("--api-dry-run-start") || liveApiDryRunCheck.summary === "SKIPPED" || liveApiDryRunCheck.problems.length
+      ? skippedLiveConcurrencyStress("Skipped because the explicitly authorized live API dry-run check did not pass.")
       : hasFlag("--allow-turnstile-off")
         ? checkLiveConcurrencyStress()
         : blockedTurnstileConcurrencyStress(),

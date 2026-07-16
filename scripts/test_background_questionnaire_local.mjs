@@ -13,7 +13,8 @@ import { CANONICAL_PRACTICE_ASSIGNMENT } from "../functions/api/_counterbalance.
 import { TARGET_WORDS } from "../functions/api/_word-familiarity.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.2";
+const PREVIOUS_CANONICAL_PRACTICE_PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
 const LEGACY_PLATFORM_VERSION = "pronunciation_rating_v0.6.0";
 const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
 const LEGACY_BROWSER_PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
@@ -518,7 +519,10 @@ function allUnknownWordFamiliarity() {
   return TARGET_WORDS.map((word) => ({ ...word, known: false }));
 }
 
-async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
+async function exerciseBrowserOnlyResumeFixture(
+  suffix,
+  { storedPlatformVersion, expectedPracticeSetId, label, assertPracticeRows },
+) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   sqlite.exec(fs.readFileSync(path.join(ROOT, "db/schema.sql"), "utf8"));
@@ -527,14 +531,41 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
     DB: db,
     ENVIRONMENT: "development",
     REQUIRE_TURNSTILE: "0",
-    PROLIFIC_COMPLETION_CODE: "LOCAL-V0100-COMPLETE",
+    PROLIFIC_COMPLETION_CODE: "LOCAL-BROWSER-RESUME-COMPLETE",
   };
   const fixtureIdentity = identity(suffix);
-  const sessionId = `browser-v0100-fixture-${suffix}`;
+  const sessionId = `browser-only-fixture-${suffix}`;
   const participantKey = `prolific:${fixtureIdentity.prolific_study_id.toLowerCase()}:${fixtureIdentity.prolific_pid.toLowerCase()}`;
   const startedAtMs = Date.now() - 60_000;
   const startedAt = new Date(startedAtMs).toISOString();
-  const persistedMain = mainAssignment();
+  const persistedMainRows = [
+    mainAssignment(3, "balloon", 50),
+    mainAssignment(1, "capelin", 23),
+    mainAssignment(2, "organizer", 40),
+  ];
+  const mainOrderSignature = (rows) =>
+    rows
+      .map((row) => [
+        row.phase,
+        Number(row.trial_index),
+        row.source_path,
+        row.audio_url,
+        row.file_name,
+        row.target_word,
+        row.participant_id,
+        row.native_language,
+        row.accent_condition,
+        row.condition,
+        row.talker,
+        String(row.word_number),
+        String(row.trial_number),
+        row.spoken_form,
+        row.source_format,
+        row.stimulus_list,
+        row.l1_condition,
+        row.pronunciation_condition,
+      ].join("|"))
+      .join("\n");
 
   try {
     sqlite.prepare(
@@ -553,13 +584,13 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
         ?, ?, ?, 'combined', ?, ?, ?, ?, ?,
         34, 'other', 'Irish English', 'other', 'Test response',
         'yes', '5 years, adults', 'yes', 'English phonetics',
-        3, 4, 1, '{}', ?, ?, ?, ?, 'started', 1, 0
+        3, 4, 1, '{}', ?, ?, ?, ?, 'started', 3, 0
       )`,
     ).run(
       sessionId,
       fixtureIdentity.rater_id,
       fixtureIdentity.session_label,
-      LEGACY_BROWSER_PLATFORM_VERSION,
+      storedPlatformVersion,
       fixtureIdentity.prolific_pid,
       fixtureIdentity.prolific_study_id,
       fixtureIdentity.prolific_session_id,
@@ -570,7 +601,7 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
       startedAtMs,
     );
 
-    sqlite.prepare(
+    const insertAssignment = sqlite.prepare(
       `INSERT INTO rating_assignments (
         id, session_id, phase, trial_index, source_path, audio_url, file_name,
         target_word, participant_id, native_language, accent_condition,
@@ -579,29 +610,32 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )`,
-    ).run(
-      `${sessionId}:main:1`,
-      sessionId,
-      persistedMain.phase,
-      persistedMain.trial_index,
-      persistedMain.source_path,
-      persistedMain.audio_url,
-      persistedMain.file_name,
-      persistedMain.target_word,
-      persistedMain.participant_id,
-      persistedMain.native_language,
-      persistedMain.accent_condition,
-      persistedMain.condition,
-      persistedMain.talker,
-      persistedMain.word_number,
-      persistedMain.trial_number,
-      persistedMain.spoken_form,
-      persistedMain.source_format,
-      persistedMain.stimulus_list,
-      persistedMain.l1_condition,
-      persistedMain.pronunciation_condition,
-      startedAt,
     );
+    for (const persistedMain of persistedMainRows) {
+      insertAssignment.run(
+        `${sessionId}:main:${persistedMain.trial_index}`,
+        sessionId,
+        persistedMain.phase,
+        persistedMain.trial_index,
+        persistedMain.source_path,
+        persistedMain.audio_url,
+        persistedMain.file_name,
+        persistedMain.target_word,
+        persistedMain.participant_id,
+        persistedMain.native_language,
+        persistedMain.accent_condition,
+        persistedMain.condition,
+        persistedMain.talker,
+        persistedMain.word_number,
+        persistedMain.trial_number,
+        persistedMain.spoken_form,
+        persistedMain.source_format,
+        persistedMain.stimulus_list,
+        persistedMain.l1_condition,
+        persistedMain.pronunciation_condition,
+        startedAt,
+      );
+    }
 
     const persistedAssignments = sqlite.prepare(
       `SELECT phase, COUNT(*) AS count
@@ -609,8 +643,8 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
     ).all(sessionId);
     assert(
       !persistedAssignments.some((row) => row.phase === "practice") &&
-        persistedAssignments.find((row) => row.phase === "main")?.count === 1,
-      "The v0.10.0 browser-only fixture must contain zero practice assignments and one main assignment.",
+        persistedAssignments.find((row) => row.phase === "main")?.count === 3,
+      `${label} fixture must contain zero practice assignments and three main assignments.`,
     );
 
     const resumed = await invokeLocalHandler(startSessionHandler, env, "/api/session/start", {
@@ -619,24 +653,26 @@ async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
       platform_version: PLATFORM_VERSION,
       resume_only: true,
     });
-    assert(resumed.response.status === 200, `v0.10.0 browser-only fixture resume failed: ${resumed.text}`);
+    assert(resumed.response.status === 200, `${label} fixture resume failed: ${resumed.text}`);
     assert(
       resumed.json?.existing_session === true &&
         resumed.json?.session_id === sessionId &&
-        resumed.json?.platform_version === LEGACY_BROWSER_PLATFORM_VERSION &&
-        resumed.json?.practice_set_id === LEGACY_BROWSER_PRACTICE_SET_ID &&
+        resumed.json?.platform_version === storedPlatformVersion &&
+        resumed.json?.practice_set_id === expectedPracticeSetId &&
         resumed.json?.practice_recording_required === false &&
-        resumed.json?.main_assignment?.length === 1 &&
+        resumed.json?.main_assignment?.length === 3 &&
         resumed.json?.saved_trials?.length === 0 &&
         resumed.json?.resume?.next_phase === "main" &&
         Number(resumed.json?.resume?.next_trial_index) === 1 &&
         resumed.json?.resume?.practice_replay_required === true,
-      `The v0.10.0 browser-only fixture did not retain its historical resume contract: ${resumed.text}`,
+      `${label} fixture did not retain its browser-only resume contract: ${resumed.text}`,
     );
-    assertLegacyBrowserPracticeUiRows(
-      resumed.json?.practice_assignment,
-      "v0.10.0 browser-only resume",
+    const expectedMainOrder = persistedMainRows.slice().sort((left, right) => left.trial_index - right.trial_index);
+    assert(
+      mainOrderSignature(resumed.json?.main_assignment || []) === mainOrderSignature(expectedMainOrder),
+      `${label} fixture did not preserve the exact persisted main assignment order.`,
     );
+    assertPracticeRows(resumed.json?.practice_assignment, `${label} browser-only resume`);
   } finally {
     sqlite.close();
   }
@@ -933,8 +969,8 @@ async function main() {
   assert(indexPage.text.includes('id="word-familiarity-panel"'), "Participant page is missing the checklist panel.");
   assert(indexPage.text.includes("Review all 50 words"), "Participant page is missing the 50-word instruction.");
   assert(indexPage.text.includes("If you were unfamiliar with it"), "Participant page has the wrong checklist instruction.");
-  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.10.1"'), "Participant page does not load the versioned audio lifecycle guard.");
-  assert(indexPage.text.includes('src="app.js?v=0.10.1"'), "Participant page does not cache-bust app.js v0.10.1.");
+  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.10.2"'), "Participant page does not load the versioned audio lifecycle guard.");
+  assert(indexPage.text.includes('src="app.js?v=0.10.2"'), "Participant page does not cache-bust app.js v0.10.2.");
   assert(
     indexPage.text.includes("In this practice session, you will transcribe and rate five sample words.") &&
       indexPage.text.includes("familiarize you with the task procedure; and") &&
@@ -1075,13 +1111,13 @@ async function main() {
   assert(started.response.status === 200, `Valid start failed: ${started.response.status} ${started.text}`);
   assert(started.json?.ok === true && started.json?.session_id, `Start response is incomplete: ${started.text}`);
   assert(started.json?.session_token, "Start response did not issue a session token.");
-  assert(started.json?.word_familiarity_required === true, "New v0.10.1 session did not require the checklist.");
-  assert(started.json?.practice_recording_required === false, "New v0.10.1 session unexpectedly records practice.");
+  assert(started.json?.word_familiarity_required === true, "New v0.10.2 session did not require the checklist.");
+  assert(started.json?.practice_recording_required === false, "New v0.10.2 session unexpectedly records practice.");
   assert(
     Number(started.json?.trial_count) === 1 &&
       started.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       started.json?.main_assignment?.length === 1,
-    `New v0.10.1 start did not return ${PRACTICE_ITEMS.length} client-only practice items plus one recorded main trial: ${started.text}`,
+    `New v0.10.2 start did not return ${PRACTICE_ITEMS.length} client-only practice items plus one recorded main trial: ${started.text}`,
   );
   const sessionId = started.json.session_id;
 
@@ -1117,7 +1153,7 @@ async function main() {
   assert(resumed.json?.session_id === sessionId, "Resume returned a different session ID.");
   assertSavedDemographics(resumed.json, payload, "Fresh resume");
   assert(resumed.json?.resume?.practice_replay_required === true, "Resume did not require all current practice items to replay.");
-  assert(resumed.json?.practice_recording_required === false, "New v0.10.1 resume unexpectedly records practice.");
+  assert(resumed.json?.practice_recording_required === false, "New v0.10.2 resume unexpectedly records practice.");
   assert(
     resumed.json?.resume?.next_phase === "main" &&
       Number(resumed.json?.resume?.next_trial_index) === 1 &&
@@ -1325,7 +1361,18 @@ async function main() {
   assert(completed.response.status === 200 && completed.json?.ok === true, `Completion failed: ${completed.text}`);
   assert(completed.json?.status === "completed", `Expected completed status: ${completed.text}`);
 
-  await exerciseBrowserOnlyV0100ResumeFixture(`${runId}_browser_v0100`);
+  await exerciseBrowserOnlyResumeFixture(`${runId}_browser_v0101`, {
+    storedPlatformVersion: PREVIOUS_CANONICAL_PRACTICE_PLATFORM_VERSION,
+    expectedPracticeSetId: PRACTICE_SET_ID,
+    label: "v0.10.1",
+    assertPracticeRows: assertCanonicalPracticeUiRows,
+  });
+  await exerciseBrowserOnlyResumeFixture(`${runId}_browser_v0100`, {
+    storedPlatformVersion: LEGACY_BROWSER_PLATFORM_VERSION,
+    expectedPracticeSetId: LEGACY_BROWSER_PRACTICE_SET_ID,
+    label: "v0.10.0",
+    assertPracticeRows: assertLegacyBrowserPracticeUiRows,
+  });
   await exercisePersistedPracticeLegacyFixture(`${runId}_legacy`);
 
   const progressSuffix = `${runId}_resume_progress`;
@@ -1603,6 +1650,7 @@ async function main() {
     new_v010_practice_events_0: true,
     all_demographic_session_columns_roundtrip: true,
     legacy_v0100_browser_only_resume_exact: true,
+    legacy_v0101_browser_only_resume_exact: true,
     legacy_practice_contract_compatible: true,
   }, null, 2));
 }
