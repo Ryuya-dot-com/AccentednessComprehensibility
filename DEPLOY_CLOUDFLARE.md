@@ -258,7 +258,9 @@ npx wrangler d1 execute accentedness-comprehensibility --remote --file=./db/migr
 
 Legacy rows intentionally keep `NULL` bundle/version/cohort values and resume their stored assignments; do not backfill them.
 
-The v0.10 practice-persistence change does not add a D1 column or migration. New `pronunciation_rating_v0.10.1` sessions persist exactly 100 main assignments, set `sessions.trial_count=100`, and use only those main assignments/trials for progress and completion. The five-item practice calibration remains in the browser, but it creates no new `rating_assignments`, `rating_trials`, `event_logs`, or local rating CSV rows. Resume selects browser-only practice from the stored `sessions.platform_version`: v0.10.0 retains its historical four-item set and v0.10.1 uses `practice_calibration_v0.10.1`. Treat a practice-set change as a platform-version change and retain its registry entry for as long as that version can resume. Keep the existing practice-capable and questionnaire columns nullable so historical practice rows and pre-questionnaire sessions remain readable and resumable. Confirm that `0012_background_questionnaire.sql` and the v0.9 `0015_speaker_pattern_bundles.sql` migration are already present before deploying v0.10.1; do not create a migration that deletes legacy practice data or makes the background columns `NOT NULL`.
+The v0.10 practice-persistence change and the v0.10.2 constrained-randomization correction do not add a D1 column or migration. New `pronunciation_rating_v0.10.2` sessions persist exactly 100 main assignments, set `sessions.trial_count=100`, and use only those main assignments/trials for progress and completion. The five-item `practice_calibration_v0.10.1` calibration remains unchanged in the browser, but it creates no new `rating_assignments`, `rating_trials`, `event_logs`, or local rating CSV rows. Resume selects browser-only practice from the stored `sessions.platform_version`: v0.10.0 retains its historical four-item set, while v0.10.1 and v0.10.2 use `practice_calibration_v0.10.1`. The saved main assignment is always resumed without reshuffling. Keep the existing practice-capable and questionnaire columns nullable so historical practice rows and pre-questionnaire sessions remain readable and resumable. Confirm that `0012_background_questionnaire.sql` and the v0.9 `0015_speaker_pattern_bundles.sql` migration are already present before deploying v0.10.2; do not create a migration that deletes legacy practice data or makes the background columns `NOT NULL`.
+
+v0.10.2 replaces the former greedy no-3-run repair with seeded Fisher-Yates rejection sampling. Run `node scripts/verify_randomization_distribution.mjs` before deployment; it must pass the 50,000-block L1-position symmetry audit. This version change affects only new main-trial order generation. It does not change the 20 cells, 10 speaker bundles, practice WAVs, R2 manifest, D1 schema, Prolific Study URL, or completion URL.
 
 If the remote D1 database may be partially migrated, use the guarded schema updater instead of replaying all migration files. It inspects D1 first and applies only missing additive columns:
 
@@ -290,7 +292,7 @@ https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_mal
 
 The two scalar expert fields remain blank because the collaborator supplied ranges rather than scalar ratings. The app and top-level `practice_manifest.csv` store `expert_accentedness_range` and `expert_comprehensibility_range` for all five items. The manifest also pins `practice_set_id=practice_calibration_v0.10.1`, byte size, and SHA-256 for deployment verification.
 
-The current CHN items are researcher-provided English `organizer` and `balloon` WAVs. The retired synthetic Tingting `披萨` item remains only in the explicit v0.10.0 browser-practice registry, historical persisted practice rows, and compatibility tests; it is never part of a new v0.10.1 session.
+The current CHN items are researcher-provided English `organizer` and `balloon` WAVs. The retired synthetic Tingting `披萨` item remains only in the explicit v0.10.0 browser-practice registry, historical persisted practice rows, and compatibility tests; it is never part of a new v0.10.2 session.
 
 Both the participant flow and the researcher-only `Load selected practice` helper pass these HTTPS URLs directly to the browser's audio element. The helper does not fetch the R2 objects into JavaScript blobs, so ordinary playback is not dependent on an `Access-Control-Allow-Origin` response header. Test both flows after any audio-host change.
 
@@ -513,20 +515,77 @@ Use `--allow-turnstile-off` only while Turnstile is intentionally disabled for a
 /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md
 ```
 
+The dry-run summary records both `session_id` and the synthetic `prolific_session_id`. When the pre-recruitment production D1 must return to a zero-transactional-row baseline, copy the reported `session_id` and first verify that it is the intended synthetic row:
+
+```sh
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT s.id, s.status AS session_status, ca.status AS allocation_status, ca.allocation_cohort, s.platform_version, s.prolific_pid, s.prolific_study_id, s.prolific_session_id FROM sessions s JOIN counterbalance_allocations ca ON ca.session_id = s.id WHERE s.id = '<dry-run-session-id>';"
+```
+
+Proceed only when the single row is `pronunciation_rating_v0.10.2`, its `allocation_status` starts with `dry_run_`, `allocation_cohort` starts with `dry_run:`, `prolific_pid`/`prolific_session_id` have the live-check prefixes, and it has `prolific_study_id='DRY_RUN'`. (The raw `sessions.status` remains `started`/`completed`; only the allocation status carries the dry-run prefix.) Record a D1 Time Travel bookmark or export a backup before deletion. Run the following as one reviewed SQL file. Do not add explicit `BEGIN TRANSACTION`/`COMMIT` or rely on a temporary table in a Wrangler D1 `--file` import; every statement instead repeats the same guarded target query:
+
+```sql
+DELETE FROM rating_trials WHERE session_id IN (
+  SELECT s.id FROM sessions s JOIN counterbalance_allocations ca ON ca.session_id = s.id
+  WHERE s.id = '<dry-run-session-id>' AND ca.status LIKE 'dry_run_%' AND ca.allocation_cohort LIKE 'dry_run:%'
+    AND s.platform_version = 'pronunciation_rating_v0.10.2' AND s.prolific_study_id = 'DRY_RUN'
+);
+DELETE FROM word_familiarity_responses WHERE session_id IN (
+  SELECT s.id FROM sessions s JOIN counterbalance_allocations ca ON ca.session_id = s.id
+  WHERE s.id = '<dry-run-session-id>' AND ca.status LIKE 'dry_run_%' AND ca.allocation_cohort LIKE 'dry_run:%'
+    AND s.platform_version = 'pronunciation_rating_v0.10.2' AND s.prolific_study_id = 'DRY_RUN'
+);
+DELETE FROM event_logs WHERE session_id IN (
+  SELECT s.id FROM sessions s JOIN counterbalance_allocations ca ON ca.session_id = s.id
+  WHERE s.id = '<dry-run-session-id>' AND ca.status LIKE 'dry_run_%' AND ca.allocation_cohort LIKE 'dry_run:%'
+    AND s.platform_version = 'pronunciation_rating_v0.10.2' AND s.prolific_study_id = 'DRY_RUN'
+);
+DELETE FROM rating_assignments WHERE session_id IN (
+  SELECT s.id FROM sessions s JOIN counterbalance_allocations ca ON ca.session_id = s.id
+  WHERE s.id = '<dry-run-session-id>' AND ca.status LIKE 'dry_run_%' AND ca.allocation_cohort LIKE 'dry_run:%'
+    AND s.platform_version = 'pronunciation_rating_v0.10.2' AND s.prolific_study_id = 'DRY_RUN'
+);
+DELETE FROM counterbalance_allocations
+WHERE session_id = '<dry-run-session-id>'
+  AND status LIKE 'dry_run_%'
+  AND allocation_cohort LIKE 'dry_run:%'
+  AND EXISTS (
+    SELECT 1 FROM sessions s
+    WHERE s.id = counterbalance_allocations.session_id
+      AND s.platform_version = 'pronunciation_rating_v0.10.2'
+      AND s.prolific_study_id = 'DRY_RUN'
+      AND s.prolific_pid LIKE 'LIVE_CHECK_%'
+      AND s.prolific_session_id LIKE 'LIVE_CHECK_SESSION_%'
+  );
+DELETE FROM sessions
+WHERE id = '<dry-run-session-id>'
+  AND platform_version = 'pronunciation_rating_v0.10.2'
+  AND prolific_study_id = 'DRY_RUN'
+  AND prolific_pid LIKE 'LIVE_CHECK_%'
+  AND prolific_session_id LIKE 'LIVE_CHECK_SESSION_%'
+  AND NOT EXISTS (
+    SELECT 1 FROM counterbalance_allocations ca WHERE ca.session_id = sessions.id
+  );
+```
+
+Apply it with `wrangler d1 execute accentedness-comprehensibility --remote --file <reviewed-cleanup.sql> --yes`. Then repeat the six transactional-table count query, require all six counts to be zero, require `counterbalance_cells=20` and `speaker_pattern_bundles=10`, and run both `PRAGMA quick_check;` (must return `ok`) and `PRAGMA foreign_key_check;` (must return no rows). Never use a blanket production reset after recruitment has begun.
+
 Do not run or resume Prolific recruitment until this check passes against the new production deployment. The dry-run start also verifies that all saved background choices and the word-checklist requirement are returned by a questionnaire-free `resume_only` lookup. A passing local check is not evidence that a candidate has been deployed; record deployment only after the live check succeeds against the stable hostname.
 
-Historical deployment record: PR #8 was merged as `d58a81a` and Cloudflare Pages deployed v0.10.0 to the stable hostname on 2026-07-15. Its four-item live check passed at that time. This is not evidence that the v0.10.1 five-item practice set is deployed; record a separate v0.10.1 live check after the hotfix is merged.
+Historical deployment record: PR #8 was merged as `d58a81a` and Cloudflare Pages deployed v0.10.0 to the stable hostname on 2026-07-15. PR #10 was merged as `f63df8e` and Cloudflare Pages deployed the five-item v0.10.1 practice set on 2026-07-16. Neither historical check is evidence that the corrected v0.10.2 rejection sampler is deployed; record a separate v0.10.2 source/hash/live check after this change reaches `main`.
 
 After Wrangler authentication is available, run the aggregate readiness audit:
 
 ```sh
 node scripts/audit_cloudflare_readiness.mjs \
   --allow-turnstile-off \
+  --expected-source <merged-main-sha> \
   --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv \
   --using-external-manifest-secret
 ```
 
-It writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/CLOUDFLARE_READINESS_REPORT_20260703.md` and combines Wrangler authentication, Pages secrets, Pages deployment visibility, D1 info, D1 schema drift, local preflight, hosted-audio checks, and live API dry-run checks. Pass `--production-manifest` after the hosted manifest is generated so both preflight and audio-hosting checks inspect the actual launch manifest. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+It writes `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/CLOUDFLARE_READINESS_REPORT_20260703.md` and combines Wrangler authentication, Pages secrets, Pages deployment/source visibility, D1 info, D1 schema drift, the distribution audit, local preflight, hosted-audio checks, and a non-writing stable-host check. The latest production deployment must be from `main`; `--expected-source` pins it to the reviewed merged commit. Pass `--production-manifest` after the hosted manifest is generated so both preflight and audio-hosting checks inspect the actual launch manifest. Add `--allow-demo-static-manifest` only when `COUNTERBALANCE_MANIFEST_URL` is intentionally the production manifest source.
+
+The aggregate audit is non-writing by default. Only after it passes, rerun the same command with `--api-dry-run-start` for the explicitly authorized final D1-writing gate. All offline and non-writing checks run first, and the script skips the write if any earlier gate fails. After a production dry run, use the guarded session-specific cleanup above and restore the zero-row/20-cell/10-bundle/`quick_check`/foreign-key baseline before recruitment.
 
 ## 10. Configure Edge Protection
 
@@ -565,13 +624,13 @@ Enter the `ADMIN_TOKEN` on the admin page and confirm that summary counts load.
 
 Then complete a short test session from the participant page. Do not add `?local=1` for this test, because `?local=1` bypasses server persistence.
 
-After completing the browser-only practice and saving a few main trials, confirm the v0.10.1 session contract in D1. Scope the queries to the test session or current platform version rather than interpreting database-wide totals, because historical sessions may legitimately contain practice rows:
+After completing the browser-only practice and saving a few main trials, confirm the v0.10.2 session contract in D1. Scope the queries to the test session or current platform version rather than interpreting database-wide totals, because historical sessions may legitimately contain practice rows:
 
 ```sh
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS sessions FROM sessions;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS trials FROM rating_trials;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS events FROM event_logs;"
-npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT id, trial_count, completed_trial_count FROM sessions WHERE platform_version = 'pronunciation_rating_v0.10.1';"
+npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT id, trial_count, completed_trial_count FROM sessions WHERE platform_version = 'pronunciation_rating_v0.10.2';"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT phase, COUNT(*) AS n FROM rating_assignments WHERE session_id = '<v0.10-session-id>' GROUP BY phase;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT phase, COUNT(*) AS n FROM rating_trials WHERE session_id = '<v0.10-session-id>' GROUP BY phase;"
 npx wrangler d1 execute accentedness-comprehensibility --remote --command "SELECT COUNT(*) AS practice_events FROM event_logs WHERE session_id = '<v0.10-session-id>' AND (event_type LIKE 'practice_%' OR json_extract(payload_json, '$.phase') = 'practice');"
@@ -593,7 +652,7 @@ On `/admin/`, confirm that these CSV downloads work:
 
 To test dropout handling, start a pilot session, save a few trials, then stop. After the chosen inactivity window, use `Finalize stale sessions` on `/admin/`. Confirm that the session changes from `started` to `incomplete_dropout`, no Prolific completion code is issued, `analysis.csv` excludes the session, and `quality.csv` shows the missing-trial count. The same finalization endpoint also marks stale orphan counterbalance allocations as incomplete if a Worker interruption occurred after allocation but before session creation.
 
-To test reload recovery, start a pilot session from the stable Prolific-style URL, complete the browser-only practice, save several main trials, and then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, all five current practice items are presented again, the browser then continues at the first unsaved main trial or later saved-session state, already completed block distractors are not repeated, and completion is issued only after the remaining main assignments are saved. Confirm that replaying practice leaves the v0.10.1 session at zero practice assignments, trials, events, and local rating CSV rows. Separately verify that a seeded pre-v0.10 session replays and can resume its persisted historical practice rows.
+To test reload recovery, start a pilot session from the stable Prolific-style URL, complete the browser-only practice, save several main trials, and then reload the same URL. Confirm that `/api/session/start` returns `existing_session: true`, all five current practice items are presented again, the browser then continues with the exact persisted v0.10.2 order at the first unsaved main trial or later saved-session state, already completed block distractors are not repeated, and completion is issued only after the remaining main assignments are saved. Confirm that replaying practice leaves the v0.10.2 session at zero practice assignments, trials, events, and local rating CSV rows. Separately verify v0.10.1 five-item browser-only resume, v0.10.0 four-item browser-only resume, and persisted-practice legacy resume.
 
 To test the final checklist, finish all ratings and confirm that the 50-word screen appears before any completion code or Prolific redirect. Leave `capelin` blank in a test response, submit all 50 explicit values, and verify `word-familiarity.csv` contains `word_number=23,target_word=capelin,word_known=0` while the matching `analysis.csv` trial rows also contain `word_known=0`. A zero-known-word submission is valid; failing to review/submit the checklist is not.
 
@@ -619,7 +678,7 @@ Use this stable Pages project hostname in the Prolific Study URL. Do not copy a 
 
 Do not include the completion code or completion URL in the Prolific participant URL. Store the full return URL in `PROLIFIC_COMPLETION_URL`, or store the code in `PROLIFIC_COMPLETION_CODE`.
 
-After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. For new v0.10.1 sessions, completion is issued only when all 100 server-side main assignments have saved ratings and every version-required word-familiarity row is present; browser-only practice does not enter completion coverage. Legacy sessions continue to use their stored assignment contract. If completion saving fails, the server detects missing required assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
+After Cloudflare marks the session as `completed`, `/api/session/complete` returns the Prolific completion URL and the browser redirects to Prolific. For new v0.10.2 sessions, completion is issued only when all 100 server-side main assignments have saved ratings and every version-required word-familiarity row is present; browser-only practice does not enter completion coverage. Legacy sessions continue to use their stored assignment contract. If completion saving fails, the server detects missing required assignments/trials/checklist rows, the session is implausibly fast, or both `PROLIFIC_COMPLETION_URL` and `PROLIFIC_COMPLETION_CODE` are missing, the participant sees `CONTACT_RESEARCHER` instead.
 
 ## 13. Important Checks Before Production
 
@@ -627,7 +686,7 @@ Before running the actual study:
 
 - Confirm the five R2 practice/calibration WAVs are reachable, match the pinned SHA-256 values, and are presented in this order: `appreciation` (Acc 1–2, Comp 1–2), `pesticide` (Acc 2–3, Comp 1–2), `quality` (Acc 4–5, Comp 2–3), `organizer` (Acc 4–6, Comp 5–7), `balloon` (Acc 6–8, Comp 4–6). Keep scalar expert fields blank because the reviewed values are ranges.
 - Confirm unlimited audio replay is available only on the practice-feedback screen; practice response pages and all main-task pages must retain one playback per page.
-- Confirm a new v0.10.1 session has `trial_count=100`, exactly 100 main assignments, and zero practice assignments, trials, events, and local rating CSV rows.
+- Confirm a new v0.10.2 session has `trial_count=100`, exactly 100 main assignments, and zero practice assignments, trials, events, and local rating CSV rows.
 - Confirm historical practice rows remain readable/resumable and are not deleted or backfilled.
 - Set `PROLIFIC_COMPLETION_URL` or `PROLIFIC_COMPLETION_CODE` as a Cloudflare Pages secret.
 - Remove any `completion_code` query parameter from the Prolific Study URL.
@@ -658,11 +717,12 @@ Before running the actual study:
 - Run `python3 scripts/audit_audio_qc.py` and resolve or explicitly accept launch-blocking flags in `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`. The current QC report has 0 launch-blocking failure rows after the `jpn_s06` / `capelin` OSF package copy was repaired.
 - Run `node scripts/validate_audio_hosting.mjs --sample 80` after production HTTPS audio URLs are generated, and use `--sample 0` for the final full-row probe before launch.
 - Run `node scripts/preflight_production.mjs`. If the repository is not checked out next to `Stimuli_OSF_Release_20260703`, pass `--package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`. It must pass before Prolific launch. When the production R2 manifest is provided through `COUNTERBALANCE_MANIFEST_URL`, pass `--production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret`.
-- Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must verify the exact structured v0.10.1 five-item contract, route-specific cache headers, 100 main assignments, and explicit API suppression of practice trial/event writes before Prolific launch. When `REQUIRE_TURNSTILE=1`, provide a fresh single-use token through `TURNSTILE_TEST_TOKEN` (or `--turnstile-token`) without committing or printing it. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`. Then run the scoped D1 queries above to prove that the synthetic session has zero persisted practice assignments, trials, and events.
-- Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the aggregate pilot/test gate. Concurrency stress is permitted only with the documented `--allow-turnstile-off` state because one Turnstile token cannot be reused across simultaneous starts. Run the separate single live dry-run with a fresh token as the Turnstile-required production gate.
+- Run `node scripts/verify_randomization_distribution.mjs`; the 50,000-block distribution gate must pass before deployment.
+- Run `node scripts/check_live_deployment.mjs --api-dry-run-start` after deployment. It must verify the v0.10.2 platform with the unchanged structured v0.10.1 five-item practice set, route-specific cache headers, 100 main assignments, and explicit API suppression of practice trial/event writes before Prolific launch. When `REQUIRE_TURNSTILE=1`, provide a fresh single-use token through `TURNSTILE_TEST_TOKEN` (or `--turnstile-token`) without committing or printing it. During a no-Turnstile pilot only, use `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` and document that exception. If the static manifest is intentionally demo-only because `COUNTERBALANCE_MANIFEST_URL` is configured, add `--allow-demo-static-manifest`. Then run the scoped D1 queries above to prove that the synthetic session has zero persisted practice assignments, trials, and events. Before recruitment, remove only the reported guarded dry-run session using the reviewed cleanup procedure above, then reconfirm zero transactional rows, reference counts 20/10, `quick_check=ok`, and zero foreign-key violations.
+- Run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --expected-source <merged-main-sha> --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret` after Wrangler authentication is available; this is the non-writing aggregate gate. Rerun it with `--api-dry-run-start` only for the authorized final write, then perform the guarded cleanup. Concurrency stress is permitted only with the documented `--allow-turnstile-off` state because one Turnstile token cannot be reused across simultaneous starts, and a separate staging D1 is preferred.
 - Only in an explicitly documented pilot/test window with Turnstile disabled, run `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes. This creates dry-run starts only and verifies that one simultaneous wave spreads across the 20 cells with assigned spread 0 or 1; the script rejects every token-bearing invocation because both the wave and duplicate-session probe require multiple requests.
-- For the no-Turnstile concurrency gate, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress`. The Turnstile-required production gate remains the separate single live dry-run with one fresh token described above.
-- Complete a live pilot reload test: save main trials, reload the same stable Prolific-style URL, confirm that all five browser-only practice items repeat before the first unsaved main trial or later saved-session state, then finish and verify completion/export rows and zero v0.10.1 practice persistence.
+- For a no-Turnstile concurrency gate against a separate staging D1, run `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --api-dry-run-start --expected-source <merged-main-sha> --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress`. Do not use the 40-session stress gate against the clean production D1 merely to prove distribution; the Turnstile-required production gate remains one fresh token for one live dry run followed by guarded cleanup.
+- Complete a live pilot reload test: save main trials, reload the same stable Prolific-style URL, confirm that all five browser-only practice items repeat before the exact persisted main order resumes at the first unsaved trial or later saved-session state, then finish and verify completion/export rows and zero v0.10.2 practice persistence.
 - Run `python3 scripts/stress_counterbalance_concurrency.py --participants 200` and keep the generated concurrency report with the OSF metadata.
 - Run `node scripts/verify_counterbalance.mjs` and `node scripts/simulate_counterbalance_design.mjs`.
 - Use rolling Prolific recruitment until the target completed-session count is reached; do not rely on one fixed launch batch if dropouts must be replaced.

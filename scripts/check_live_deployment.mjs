@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.2";
 const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
 const PRACTICE_AUDIO_ROOT =
@@ -479,8 +479,8 @@ function checkRequiredAudioLifecycleSnippets(helperText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="audio-lifecycle.js?v=0.10.1"',
-    'src="app.js?v=0.10.1"',
+    'src="audio-lifecycle.js?v=0.10.2"',
+    'src="app.js?v=0.10.2"',
     "In this practice session, you will transcribe and rate five sample words.",
     "familiarize you with the task procedure; and",
     "help you calibrate your Accentedness and Comprehensibility ratings by comparing them with expert reference ranges.",
@@ -591,6 +591,67 @@ function summarizeHeaders(response) {
   };
 }
 
+function maximumSameL1Run(rows) {
+  let previous = "";
+  let current = 0;
+  let maximum = 0;
+  for (const row of rows) {
+    current = row.l1_condition === previous ? current + 1 : 1;
+    previous = row.l1_condition;
+    maximum = Math.max(maximum, current);
+  }
+  return maximum;
+}
+
+function checkMainAssignmentOrder(assignment) {
+  if (assignment.length !== 100) return [];
+  const problems = [];
+  const trialIndexes = new Set(assignment.map((row) => Number(row.trial_index)));
+  if (trialIndexes.size !== 100 || !Array.from({ length: 100 }, (_, index) => index + 1).every((value) => trialIndexes.has(value))) {
+    problems.push("main assignment trial_index values are not exactly 1-100");
+  }
+
+  for (let blockIndex = 1; blockIndex <= 4; blockIndex += 1) {
+    const block = assignment.filter((row) => Number(row.block_index) === blockIndex);
+    if (block.length !== 25) {
+      problems.push(`Block ${blockIndex} has ${block.length} rows instead of 25`);
+      continue;
+    }
+    block.sort((left, right) => Number(left.within_block_index) - Number(right.within_block_index));
+    const validPositions = block.every(
+      (row, index) =>
+        Number(row.within_block_index) === index + 1 &&
+        Number(row.trial_index) === (blockIndex - 1) * 25 + index + 1,
+    );
+    if (!validPositions) problems.push(`Block ${blockIndex} has invalid within-block/trial indexes`);
+
+    const counts = block.reduce((result, row) => {
+      result[row.l1_condition] = (result[row.l1_condition] || 0) + 1;
+      return result;
+    }, {});
+    if (counts.ENG !== 5 || counts.JPN !== 10 || counts.CHN !== 10) {
+      problems.push(`Block ${blockIndex} L1 counts are ${JSON.stringify(counts)} instead of ENG=5/JPN=10/CHN=10`);
+    }
+    const maximumRun = maximumSameL1Run(block);
+    if (maximumRun > 2) {
+      problems.push(`Block ${blockIndex} has a same-L1 run of ${maximumRun}`);
+    }
+  }
+  return problems;
+}
+
+function assignmentOrderSignature(rows) {
+  return rows.map((row) => [
+    Number(row.trial_index),
+    Number(row.block_index),
+    Number(row.within_block_index),
+    row.l1_condition,
+    row.pronunciation_condition,
+    row.participant_id,
+    row.audio_url,
+  ].join("|")).join("\n");
+}
+
 async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
   const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const payload = {
@@ -671,6 +732,9 @@ async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
     ? await postJson(baseUrl, "/api/session/start", resumePayload)
     : null;
   const duplicateResume = duplicate?.data?.resume || {};
+  const duplicateMainRows = Array.isArray(duplicate?.data?.main_assignment)
+    ? duplicate.data.main_assignment
+    : [];
   const duplicatePracticeRows = Array.isArray(duplicate?.data?.practice_assignment)
     ? duplicate.data.practice_assignment
     : [];
@@ -699,6 +763,7 @@ async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
     ...(result.response.status === 200 ? [] : [`/api/session/start returned ${result.response.status}`]),
     ...(result.data.ok === true ? [] : [`/api/session/start response was not ok: ${result.data.error || result.text.slice(0, 160)}`]),
     ...(assignment.length === 100 ? [] : [`expected 100 main assignments, got ${assignment.length}`]),
+    ...checkMainAssignmentOrder(assignment),
     ...(Number(result.data.trial_count) === 100 ? [] : [`expected trial_count 100, got ${result.data.trial_count}`]),
     ...(result.data.practice_recording_required === false
       ? []
@@ -757,6 +822,9 @@ async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
             : ["duplicate start did not preserve the no-practice-recording contract"]),
           ...(duplicate.data.session_id === result.data.session_id ? [] : ["duplicate start did not return the same session_id"]),
           ...(duplicate.data.session_token ? [] : ["duplicate start did not issue a fresh session_token"]),
+          ...(assignmentOrderSignature(duplicateMainRows) === assignmentOrderSignature(assignment)
+            ? []
+            : ["duplicate start did not preserve the exact persisted main assignment order"]),
           ...(JSON.stringify(duplicate.data.counterbalance) === JSON.stringify(assignedCounterbalance)
             ? []
             : ["duplicate start did not preserve the complete counterbalance allocation"]),
@@ -814,6 +882,8 @@ async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
       status: result.response.status,
       ok: result.data.ok === true,
       dry_run: result.data.dry_run === true,
+      session_id: result.data.session_id || "",
+      prolific_session_id: payload.prolific_session_id,
       trial_count: result.data.trial_count,
       main_assignment: assignment.length,
       counterbalance_cell: assignedCounterbalance.counterbalance_cell || "",

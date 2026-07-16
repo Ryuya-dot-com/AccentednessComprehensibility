@@ -1,6 +1,6 @@
 # Project TODO
 
-Updated: 2026-07-16 JST
+Updated: 2026-07-17 JST
 
 This list tracks the remaining work before using
 `https://accentednesscomprehensibility.pages.dev/` for Prolific data collection.
@@ -29,6 +29,8 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [x] Reloading a current started session repeats all five browser-only practice items before continuing at the first unsaved main trial or later saved-session state without changing server progress; persisted legacy four-item sessions replay their saved set.
 - [x] All background fields remain stored once on `sessions`; the questionnaire columns stay nullable so pre-questionnaire sessions remain readable/resumable.
 - [x] Historical practice rows remain readable/resumable. The v0.10 behavior change requires no new D1 migration and does not delete or backfill legacy data.
+- [x] The v0.10.2 constrained-randomization correction removes the L1-position-biased greedy repair and uses seeded Fisher-Yates rejection sampling with a 200-attempt fail-closed limit.
+- [x] `scripts/verify_randomization_distribution.mjs` verifies 50,000 blocks for seed reproducibility, no-3 runs, L1 position symmetry, mean position, first-position probability, and order diversity.
 
 ## P0: Must Finish Before Any Participant Launch
 
@@ -41,14 +43,21 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - A non-writing stable-host check on 2026-07-16 confirmed all five R2 objects match the reviewed byte sizes and SHA-256 values. The Pages portion correctly remains FAIL until this PR is merged because the stable host still serves v0.10.0, Tingting `pizza`, and `Comprehensibility: —`.
   - No D1 migration is required.
 
-- [ ] Merge and deploy the v0.10.1 hotfix, then pass the stable-host gate before recruitment.
+- [x] Merge and deploy the v0.10.1 five-item practice hotfix and reset the production D1 participant tables before recruitment.
   - Confirm GitHub PR checks/manual evidence and merge only after review.
   - Confirm Cloudflare Pages production points to the merged `main` commit.
   - Run the non-writing live check first; confirm all five R2 GETs match exact size and SHA-256.
   - Run `--api-dry-run-start` only as the authorized final gate because it writes one synthetic D1 session.
   - Confirm the live UI shows no `Comprehensibility: —` placeholder and presents `organizer` and `balloon`.
-  - Finalize/archive pre-hotfix test sessions before recruitment so the production cohort starts cleanly on v0.10.1.
+  - Pre-hotfix test sessions were archived and production participant/allocation tables were reset; the 20 cell and 10 bundle reference rows were retained.
   - Keep the regenerated audio-QC and duration outputs with the release evidence; verify the five reviewed package WAVs remain the only inputs to the practice-duration total.
+
+- [ ] Merge and deploy v0.10.2, then pass the stable-host randomization gate before recruitment.
+  - Keep `practice_set_id=practice_calibration_v0.10.1`; the practice audio and reviewed ranges are unchanged.
+  - Confirm the served platform version and cache-busted assets are v0.10.2.
+  - Run `node scripts/verify_randomization_distribution.mjs`, all 20×10 design/manifest tests, local D1 integration, and the non-writing live check.
+  - Run participant-writing concurrency/E2E checks against a separate staging D1 where possible; do not repopulate the freshly reset production D1 merely to prove stress behavior.
+  - Confirm a stored v0.10.1 session, if encountered in an archived/test database, resumes the exact saved main order and the five-item practice set.
 
 - [x] Host production audio in Cloudflare R2 and provide the authoritative manifest through `COUNTERBALANCE_MANIFEST_URL`.
   - Option A: public static files committed/deployed with the Pages project.
@@ -76,11 +85,11 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - All four practice URLs return `audio/wav`, including the new `chn_female_pizza_practice.wav` object.
     - Historical assignment metadata identifies item 4 as `macos_tts_tingting`, `spoken_form=披萨`, and `source_format=macos_say_tingting_tts_wav`.
   - Run after every deployment:
-    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
+    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --expected-source <merged-main-sha>` after Wrangler authentication is available; this is non-writing unless `--api-dry-run-start` is added explicitly.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
     - `TURNSTILE_TEST_TOKEN=<fresh-token> node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required; never commit or print the token.
     - `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes, only while Turnstile is intentionally disabled for the documented pilot/test gate.
-    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress` for the final no-Turnstile pilot gate.
+    - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --api-dry-run-start --expected-source <merged-main-sha> --live-concurrency-stress` only against the documented pilot/staging D1; keep production to one guarded dry run plus cleanup.
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
 
@@ -271,7 +280,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Standard persistent live report path: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - The v0.10 preflight and stable-host live API deployment check passed on 2026-07-15 with the external production manifest assumptions documented above.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
-  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all five browser-only practice items repeat without creating v0.10.1 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
+  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all five browser-only practice items repeat without creating v0.10.2 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues with the persisted order at the first unsaved main item or later state.
   - The current stable application contract is v0.10; its application changes were introduced by merge commit `d58a81a`. The 2026-07-13 live API gate and its persisted practice metadata remain historical compatibility evidence.
   - Completion: a v0.10 dry run produces valid exports with 100 main assignments, zero current-version practice rows/events/local rating CSV rows, session-level background fields, and readable historical practice rows.
 
@@ -302,7 +311,7 @@ python3 scripts/stress_counterbalance_concurrency.py --participants 200
 node scripts/stress_live_counterbalance_concurrency.mjs --participants 40
 node scripts/apply_d1_schema_updates.mjs --database accentedness-comprehensibility
 node scripts/build_hosted_manifest.mjs --audio-base-url https://stimuli.example.edu --out /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv
-node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress
+node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --api-dry-run-start --expected-source <merged-main-sha> --production-manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest_production_r2_20260703.csv --using-external-manifest-secret --live-concurrency-stress
 node scripts/validate_audio_hosting.mjs --sample 80
 node scripts/preflight_production.mjs --package-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703
 node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start

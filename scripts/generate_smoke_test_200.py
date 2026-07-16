@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "exports" / "smoke_test_200"
-VERSION = "pronunciation_rating_v0.10.1_smoke"
+VERSION = "pronunciation_rating_v0.10.2_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
 PRACTICE_AUDIO_ROOT = "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration"

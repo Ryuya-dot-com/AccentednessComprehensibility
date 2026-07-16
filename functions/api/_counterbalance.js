@@ -3,6 +3,7 @@ import { cleanText, nullableText, safeJson } from "./_utils.js";
 const L1_ORDER = ["ENG", "JPN", "CHN"];
 const CONSTRAINED_RUN_L1 = new Set(L1_ORDER);
 const MAX_CONSTRAINED_RUN = 2;
+const MAX_CONSTRAINED_SHUFFLE_ATTEMPTS = 200;
 const SPEAKER_PATTERN_COUNT = 10;
 export const CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
 const SPEAKER_PATTERN_SPEAKER_COUNT = {
@@ -281,68 +282,16 @@ function hasLongConstrainedRun(items) {
   return false;
 }
 
-function wouldCreateLongConstrainedRun(output, l1) {
-  if (!CONSTRAINED_RUN_L1.has(l1)) return false;
-  if (output.length < MAX_CONSTRAINED_RUN) return false;
-  return output
-    .slice(-MAX_CONSTRAINED_RUN)
-    .every((item) => itemL1(item) === l1);
-}
-
-function remainingCount(groups, l1) {
-  return groups.get(l1)?.length || 0;
-}
-
-function chooseConstrainedL1(groups, output, rng) {
-  const totalRemaining = [...groups.values()].reduce((sum, group) => sum + group.length, 0);
-  const choices = [...groups.keys()].filter((l1) => {
-    if (!remainingCount(groups, l1)) return false;
-    return !wouldCreateLongConstrainedRun(output, l1);
-  });
-  if (!choices.length) return "";
-
-  let best = "";
-  let bestScore = -Infinity;
-  for (const l1 of choices) {
-    const count = remainingCount(groups, l1);
-    const others = totalRemaining - count;
-    const pressure = CONSTRAINED_RUN_L1.has(l1)
-      ? count / Math.max(1, MAX_CONSTRAINED_RUN * (others + 1))
-      : count / Math.max(1, totalRemaining);
-    const score = pressure * 1000 + count + rng();
-    if (score > bestScore) {
-      best = l1;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-function constrainedShuffleByL1(items, seedText) {
-  const initiallyShuffled = shuffle(items, seedText);
-  if (!hasLongConstrainedRun(initiallyShuffled)) return initiallyShuffled;
-
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rng = mulberry32(hashString(`${seedText}:constrained:${attempt}`));
-    const groups = new Map();
-    for (const item of shuffle(items, `${seedText}:groups:${attempt}`)) {
-      const l1 = itemL1(item) || "UNKNOWN";
-      if (!groups.has(l1)) groups.set(l1, []);
-      groups.get(l1).push(item);
-    }
-
-    const output = [];
-    while (output.length < items.length) {
-      const l1 = chooseConstrainedL1(groups, output, rng);
-      if (!l1) break;
-      output.push(groups.get(l1).pop());
-    }
-    if (output.length === items.length && !hasLongConstrainedRun(output)) {
-      return output;
-    }
+export function constrainedShuffleByL1(items, seedText) {
+  for (let attempt = 0; attempt < MAX_CONSTRAINED_SHUFFLE_ATTEMPTS; attempt += 1) {
+    const attemptSeed = attempt === 0 ? seedText : `${seedText}:rejection:${attempt}`;
+    const candidate = shuffle(items, attemptSeed);
+    if (!hasLongConstrainedRun(candidate)) return candidate;
   }
 
-  throw new Error("Could not create a randomized order without 3 consecutive same-L1 trials.");
+  throw new Error(
+    `Could not create a randomized order without 3 consecutive same-L1 trials after ${MAX_CONSTRAINED_SHUFFLE_ATTEMPTS} attempts.`,
+  );
 }
 
 function pickOne(items, seedText) {
