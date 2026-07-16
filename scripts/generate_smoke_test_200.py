@@ -3,8 +3,9 @@
 
 The script creates a SQLite database from db/schema.sql, populates Prolific-style
 sessions, optionally mixes in finalized dropout sessions, writes
-admin-export-like CSV files, and asserts that the main smoke-test invariants
-hold.
+admin-export-like CSV files, and asserts that the main-persistence smoke-test
+invariants hold. Practice is browser-only, so no practice rows are inserted;
+the current five-item practice metadata contract is validated separately.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import argparse
 import csv
 import json
 import random
+import re
 import shutil
 import sqlite3
 from datetime import datetime, timezone
@@ -21,64 +23,91 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "exports" / "smoke_test_200"
-VERSION = "pronunciation_rating_v0.10.0_smoke"
+VERSION = "pronunciation_rating_v0.10.1_smoke"
 STUDY_ID = "SMOKE_STUDY_2026"
 COMPLETION_CODE = "SMOKE-COMPLETE"
 PRACTICE_AUDIO_ROOT = "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration"
 PRACTICE_ITEMS = [
     (
         "appreciation",
-        "accent_band_1_3",
+        "reference_acc_1_2_comp_1_2",
         "ENG",
         "natural",
         "practice_eng_female",
         f"{PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav",
         1,
-        3,
+        2,
+        1,
+        2,
         "appreciation",
         "researcher_provided_calibration_wav",
-        "Researcher-provided calibration WAV; expert Accentedness reference range 1–3",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 1–2; expert Comprehensibility reference range 1–2",
     ),
     (
         "pesticide",
-        "accent_band_3_5",
+        "reference_acc_2_3_comp_1_2",
         "JPN",
         "accented",
         "practice_jpn_male",
         f"{PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav",
+        1,
+        2,
+        2,
         3,
-        5,
         "pesticide",
         "researcher_provided_calibration_wav",
-        "Researcher-provided calibration WAV; expert Accentedness reference range 3–5",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 2–3; expert Comprehensibility reference range 1–2",
     ),
     (
         "quality",
-        "accent_band_5_7",
+        "reference_acc_4_5_comp_2_3",
         "JPN",
         "accented",
         "practice_jpn_female",
         f"{PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav",
+        2,
+        3,
+        4,
         5,
-        7,
         "quality",
         "researcher_provided_calibration_wav",
-        "Researcher-provided calibration WAV; expert Accentedness reference range 5–7",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 4–5; expert Comprehensibility reference range 2–3",
     ),
     (
-        "pizza",
-        "accent_band_7_9",
+        "organizer",
+        "reference_acc_4_6_comp_5_7",
         "CHN",
         "accented",
-        "macos_tts_tingting",
-        f"{PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav",
+        "practice_chn_female",
+        f"{PRACTICE_AUDIO_ROOT}/chn_female_organizer_practice.wav",
+        5,
         7,
-        9,
-        "披萨",
-        "macos_say_tingting_tts_wav",
-        "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨; expert Accentedness reference range 7–9",
+        4,
+        6,
+        "organizer",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 4–6; expert Comprehensibility reference range 5–7",
+    ),
+    (
+        "balloon",
+        "reference_acc_6_8_comp_4_6",
+        "CHN",
+        "accented",
+        "practice_chn_male",
+        f"{PRACTICE_AUDIO_ROOT}/chn_male_balloon_practice.wav",
+        4,
+        6,
+        6,
+        8,
+        "balloon",
+        "researcher_provided_calibration_wav",
+        "Researcher-provided calibration WAV; expert Accentedness reference range 6–8; expert Comprehensibility reference range 4–6",
     ),
 ]
+PRACTICE_GROUP_PATTERN = re.compile(
+    r"^reference_acc_(?P<accent_min>[1-9])_(?P<accent_max>[1-9])_"
+    r"comp_(?P<comp_min>[1-9])_(?P<comp_max>[1-9])$"
+)
 TRIAL_COUNT = 100
 
 # Canonical CounterBalance.xlsx Sheet1 numbering. Keep this in sync with
@@ -267,6 +296,51 @@ def iso(ms: int) -> str:
 
 def normalize_word(value: str) -> str:
     return "".join(ch for ch in value.lower() if "a" <= ch <= "z")
+
+
+def parse_practice_group(value: str) -> tuple[int, int, int, int]:
+    """Return Accentedness min/max and Comprehensibility min/max."""
+    match = PRACTICE_GROUP_PATTERN.fullmatch(value)
+    if match is None:
+        raise ValueError(f"invalid practice_group: {value!r}")
+    accent_min = int(match.group("accent_min"))
+    accent_max = int(match.group("accent_max"))
+    comp_min = int(match.group("comp_min"))
+    comp_max = int(match.group("comp_max"))
+    if accent_min > accent_max or comp_min > comp_max:
+        raise ValueError(f"practice_group range is reversed: {value!r}")
+    return accent_min, accent_max, comp_min, comp_max
+
+
+def practice_feedback_for_group(value: str) -> str:
+    accent_min, accent_max, comp_min, comp_max = parse_practice_group(value)
+    return (
+        f"Expert Accentedness reference range: {accent_min}–{accent_max}; "
+        f"Expert Comprehensibility reference range: {comp_min}–{comp_max}"
+    )
+
+
+def assert_current_practice_metadata() -> int:
+    """Validate the bounded browser-only practice contract used by this smoke test."""
+    expected_words = ("appreciation", "pesticide", "quality", "organizer", "balloon")
+    if tuple(item[0] for item in PRACTICE_ITEMS) != expected_words:
+        raise AssertionError("PRACTICE_ITEMS must contain the current five calibration words in order")
+    if len({item[5] for item in PRACTICE_ITEMS}) != len(PRACTICE_ITEMS):
+        raise AssertionError("PRACTICE_ITEMS audio URLs must be unique")
+    for item in PRACTICE_ITEMS:
+        accent_min, accent_max, comp_min, comp_max = parse_practice_group(item[1])
+        if (comp_min, comp_max, accent_min, accent_max) != item[6:10]:
+            raise AssertionError(
+                f"practice_group disagrees with reference ranges for {item[0]}: {item[1]}"
+            )
+        expected_name = f"_{item[0]}_practice.wav"
+        if not item[5].startswith(f"{PRACTICE_AUDIO_ROOT}/") or not item[5].endswith(expected_name):
+            raise AssertionError(f"unexpected current practice audio URL for {item[0]}: {item[5]}")
+        if f"Accentedness reference range {accent_min}–{accent_max}" not in item[12]:
+            raise AssertionError(f"missing Accentedness range in note for {item[0]}")
+        if f"Comprehensibility reference range {comp_min}–{comp_max}" not in item[12]:
+            raise AssertionError(f"missing Comprehensibility range in note for {item[0]}")
+    return len(PRACTICE_ITEMS)
 
 
 def insert_row(conn: sqlite3.Connection, table: str, row: dict) -> None:
@@ -481,9 +555,9 @@ def response_for(row: dict, participant_index: int) -> dict:
     normalized = normalize_word(typed)
     normalized_target = normalize_word(target)
     if row["phase"] == "practice":
-        _, _, accent_min, accent_max = row["practice_group"].split("_")
-        accent = (int(accent_min) + int(accent_max)) // 2
-        comp = accent
+        accent_min, accent_max, comp_min, comp_max = parse_practice_group(row["practice_group"])
+        accent = (accent_min + accent_max) // 2
+        comp = (comp_min + comp_max) // 2
     else:
         l1 = row["l1_condition"]
         pron = row["pronunciation_condition"]
@@ -594,7 +668,7 @@ def assignment_to_trial(row: dict, session: dict, participant_index: int, saved_
         "expert_comprehensibility_1_9": row["expert_comprehensibility_1_9"] or None,
         "expert_accentedness_1_9": row["expert_accentedness_1_9"] or None,
         "practice_feedback": (
-            f"Expert Accentedness reference range: {row['practice_group'].removeprefix('accent_band_').replace('_', '–')}"
+            practice_feedback_for_group(row["practice_group"])
             if row["phase"] == "practice"
             else None
         ),
@@ -848,6 +922,8 @@ def generate_database(conn: sqlite3.Connection, participant_count: int, dropout_
 
     conn.commit()
     return {
+        "persistence_scope": "main_only",
+        "practice_metadata_item_count": assert_current_practice_metadata(),
         "participant_count": participant_count,
         "dropout_count": dropout_count,
         "completed_count": participant_count - dropout_count,
@@ -1122,6 +1198,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
     expected_practice = generation["practice_saved_total"]
     expected_analysis = completed_count * 100
     expected_word_familiarity = generation["word_familiarity_response_total"]
+    practice_metadata_item_count = assert_current_practice_metadata()
     canonical_rows = fetch_all(
         conn,
         "SELECT word_number, target_word FROM word_familiarity_responses",
@@ -1139,10 +1216,11 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             "l1_condition": item[2],
             "pronunciation_condition": item[3],
             "audio_url": item[5],
-            "range": f"{item[6]}–{item[7]}",
+            "comp_range": f"{item[6]}–{item[7]}",
+            "accent_range": f"{item[8]}–{item[9]}",
             "talker": item[4],
-            "spoken_form": item[8],
-            "source_format": item[9],
+            "spoken_form": item[10],
+            "source_format": item[11],
             "condition": f"practice_{item[3]}",
             "accent_condition": item[3],
         }
@@ -1175,7 +1253,8 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             or row["participant_id"] != expected_item["talker"]
             or row["talker"] != expected_item["talker"]
             or row["spoken_form"] != expected_item["spoken_form"]
-            or expected_item["range"] not in str(row["practice_note"] or "")
+            or expected_item["comp_range"] not in str(row["practice_note"] or "")
+            or expected_item["accent_range"] not in str(row["practice_note"] or "")
             or row["source_format"] != expected_item["source_format"]
             or row["expert_comprehensibility_1_9"] is not None
             or row["expert_accentedness_1_9"] is not None
@@ -1249,6 +1328,7 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "unknown_word_responses": scalar(conn, "SELECT COUNT(*) - SUM(word_known) FROM word_familiarity_responses"),
         "capelin_known_responses": scalar(conn, "SELECT SUM(word_known) FROM word_familiarity_responses WHERE word_number = 23 AND target_word = 'capelin'"),
         "canonical_word_familiarity_mismatches": canonical_word_familiarity_mismatches,
+        "current_practice_metadata_items": practice_metadata_item_count,
         "practice_assignment_mismatches": practice_assignment_mismatches,
         "invalid_demographic_sessions": scalar(conn, """
             SELECT COUNT(*)
@@ -1277,14 +1357,14 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
             WHERE phase = 'practice'
               AND (expert_comprehensibility_1_9 IS NOT NULL OR expert_accentedness_1_9 IS NOT NULL)
         """),
-        "sessions_with_more_than_four_practice_trials": scalar(conn, """
+        "sessions_with_more_than_current_practice_trials": scalar(conn, f"""
             SELECT COUNT(*)
             FROM (
               SELECT session_id
               FROM rating_trials
               WHERE phase = 'practice'
               GROUP BY session_id
-              HAVING COUNT(*) > 4
+              HAVING COUNT(*) > {len(PRACTICE_ITEMS)}
             )
         """),
         "practice_resume_events": scalar(conn, "SELECT COUNT(*) FROM event_logs WHERE event_type = 'session_resume_practice_required'"),
@@ -1356,11 +1436,12 @@ def assert_smoke(conn: sqlite3.Connection, participant_count: int, exports: dict
         "dropout_sessions_with_partial_word_familiarity": generation["dropout_sessions_with_partial_word_familiarity"],
         "dropout_sessions_without_word_familiarity": generation["dropout_sessions_without_word_familiarity"],
         "canonical_word_familiarity_mismatches": 0,
+        "current_practice_metadata_items": len(PRACTICE_ITEMS),
         "practice_assignment_mismatches": 0,
         "invalid_demographic_sessions": 0,
         "practice_phase_events": 0,
         "practice_scalar_expert_values": 0,
-        "sessions_with_more_than_four_practice_trials": 0,
+        "sessions_with_more_than_current_practice_trials": 0,
         "practice_resume_events": generation["practice_resume_session_count"],
         "practice_replayed_events": generation["practice_replay_event_total"],
         "practice_feedback_replay_start_events": generation["practice_feedback_replay_pair_total"],

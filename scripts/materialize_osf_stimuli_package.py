@@ -15,6 +15,7 @@ from pathlib import Path
 DEFAULT_DATE = datetime.now().strftime("%Y%m%d")
 SELECTED_PRACTICE_ROWS = [
     {
+        "practice_set_id": "practice_calibration_v0.10.1",
         "trial_index": "1",
         "target_word": "appreciation",
         "l1_condition": "ENG",
@@ -27,11 +28,13 @@ SELECTED_PRACTICE_ROWS = [
         "source_format": "researcher_provided_calibration_wav",
         "expert_comprehensibility_1_9": "",
         "expert_accentedness_1_9": "",
-        "expert_accentedness_range": "1–3",
-        "status": "selected",
-        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
+        "expert_comprehensibility_range": "1–2",
+        "expert_accentedness_range": "1–2",
+        "status": "selected_reviewed",
+        "note": "Researcher-provided calibration WAV; collaborator-reviewed reference ranges.",
     },
     {
+        "practice_set_id": "practice_calibration_v0.10.1",
         "trial_index": "2",
         "target_word": "pesticide",
         "l1_condition": "JPN",
@@ -44,11 +47,13 @@ SELECTED_PRACTICE_ROWS = [
         "source_format": "researcher_provided_calibration_wav",
         "expert_comprehensibility_1_9": "",
         "expert_accentedness_1_9": "",
-        "expert_accentedness_range": "3–5",
-        "status": "selected",
-        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
+        "expert_comprehensibility_range": "1–2",
+        "expert_accentedness_range": "2–3",
+        "status": "selected_reviewed",
+        "note": "Researcher-provided calibration WAV; collaborator-reviewed reference ranges.",
     },
     {
+        "practice_set_id": "practice_calibration_v0.10.1",
         "trial_index": "3",
         "target_word": "quality",
         "l1_condition": "JPN",
@@ -61,26 +66,48 @@ SELECTED_PRACTICE_ROWS = [
         "source_format": "researcher_provided_calibration_wav",
         "expert_comprehensibility_1_9": "",
         "expert_accentedness_1_9": "",
-        "expert_accentedness_range": "5–7",
-        "status": "selected",
-        "note": "Researcher-provided calibration WAV; range only; scalar expert ratings unavailable.",
+        "expert_comprehensibility_range": "2–3",
+        "expert_accentedness_range": "4–5",
+        "status": "selected_reviewed",
+        "note": "Researcher-provided calibration WAV; collaborator-reviewed reference ranges.",
     },
     {
+        "practice_set_id": "practice_calibration_v0.10.1",
         "trial_index": "4",
-        "target_word": "pizza",
+        "target_word": "organizer",
         "l1_condition": "CHN",
         "pronunciation_condition": "accented",
-        "voice_variant": "macos_tingting",
-        "source_relative_path": "Practice&Calibration/chinese/pizza.wav",
-        "package_relative_path": "practice/calibration/chn_female_pizza_practice.wav",
-        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_female_pizza_practice.wav",
-        "spoken_form": "披萨",
-        "source_format": "macos_say_tingting_tts_wav",
+        "voice_variant": "chn_female",
+        "source_relative_path": "Practice&Calibration/CHN_Female_Organizer_Practice.wav",
+        "package_relative_path": "practice/calibration/chn_female_organizer_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_female_organizer_practice.wav",
+        "spoken_form": "organizer",
+        "source_format": "researcher_provided_calibration_wav",
         "expert_comprehensibility_1_9": "",
         "expert_accentedness_1_9": "",
-        "expert_accentedness_range": "7–9",
-        "status": "selected",
-        "note": "Synthetic macOS say voice Tingting using Mandarin 披萨; not a human L2-English recording.",
+        "expert_comprehensibility_range": "5–7",
+        "expert_accentedness_range": "4–6",
+        "status": "selected_reviewed",
+        "note": "Researcher-provided calibration WAV; collaborator-reviewed reference ranges.",
+    },
+    {
+        "practice_set_id": "practice_calibration_v0.10.1",
+        "trial_index": "5",
+        "target_word": "balloon",
+        "l1_condition": "CHN",
+        "pronunciation_condition": "accented",
+        "voice_variant": "chn_male",
+        "source_relative_path": "Practice&Calibration/CHN_Male_Balloon_Practice.wav",
+        "package_relative_path": "practice/calibration/chn_male_balloon_practice.wav",
+        "app_relative_path": "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_male_balloon_practice.wav",
+        "spoken_form": "balloon",
+        "source_format": "researcher_provided_calibration_wav",
+        "expert_comprehensibility_1_9": "",
+        "expert_accentedness_1_9": "",
+        "expert_comprehensibility_range": "4–6",
+        "expert_accentedness_range": "6–8",
+        "status": "selected_reviewed",
+        "note": "Researcher-provided calibration WAV; collaborator-reviewed reference ranges.",
     },
 ]
 CONTENT_TYPES = {
@@ -110,10 +137,17 @@ def copy_file(source: Path, destination: Path, overwrite: bool) -> str:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         if destination.stat().st_size == source.stat().st_size:
-            return "already_exists_same_size"
+            source_sha256 = sha256_file(source)
+            destination_sha256 = sha256_file(destination)
+            if destination_sha256 == source_sha256:
+                return "already_exists_same_sha256"
+            if not overwrite:
+                return "exists_different_sha256"
         if not overwrite:
             return "exists_different_size"
     shutil.copy2(source, destination)
+    if sha256_file(destination) != sha256_file(source):
+        raise OSError(f"copy verification failed: {source} -> {destination}")
     return "copied"
 
 
@@ -136,7 +170,7 @@ def package_readme(package_root: Path, counts: Counter, manifest_name: str) -> s
         "- `main/`: production stimuli using standardized OSF filenames.",
         "- `practice/`: practice/calibration and ElevenLabs candidate stimuli.",
         "- `metadata/`: rename crosswalks and documentation.",
-        "- `metadata/selected_practice_manifest.csv`: four practice WAVs selected for the live app, with range-only ratings and source provenance.",
+        "- `metadata/selected_practice_manifest.csv`: five practice WAVs selected for the live app, with collaborator-reviewed rating ranges and source provenance.",
         "- `metadata/r2_upload_plan.csv`: local file, R2 object key, content type, size, and checksum for upload planning.",
         "- `metadata/osf_package_checksums_sha256.csv`: SHA-256 checksums for copied audio files.",
         f"- `{manifest_name}`: app-ready production manifest using paths relative to this package root.",
@@ -151,10 +185,9 @@ def package_readme(package_root: Path, counts: Counter, manifest_name: str) -> s
         "",
         "## Practice Selection",
         "",
-        "The app practice session uses the four WAVs listed in",
-        "`metadata/selected_practice_manifest.csv`: `appreciation`, `pesticide`, `quality`, and `pizza`.",
-        "The manifest stores Accentedness ranges, not scalar expert ratings. The fourth item is",
-        "synthetic macOS Tingting TTS of Mandarin `披萨`, not a human L2-English recording.",
+        "The app practice session uses the five researcher-provided WAVs listed in",
+        "`metadata/selected_practice_manifest.csv`: `appreciation`, `pesticide`, `quality`, `organizer`, and `balloon`.",
+        "The manifest stores collaborator-reviewed Accentedness and Comprehensibility ranges, not scalar expert ratings.",
         "",
         "## Audio Counts",
         "",
@@ -345,6 +378,7 @@ def main() -> int:
         selected_practice_path,
         selected_rows,
         [
+            "practice_set_id",
             "trial_index",
             "target_word",
             "l1_condition",
@@ -357,6 +391,7 @@ def main() -> int:
             "source_format",
             "expert_comprehensibility_1_9",
             "expert_accentedness_1_9",
+            "expert_comprehensibility_range",
             "expert_accentedness_range",
             "status",
             "note",
@@ -372,7 +407,11 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    blocking = status_counts["missing_source"] + status_counts["exists_different_size"]
+    blocking = (
+        status_counts["missing_source"]
+        + status_counts["exists_different_size"]
+        + status_counts["exists_different_sha256"]
+    )
     print(f"package_root: {out_dir}")
     print(f"manifest: {manifest_destination}")
     print(f"copy_log: {log_path}")

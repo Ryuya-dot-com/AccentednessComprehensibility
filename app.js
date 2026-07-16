@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "pronunciation_rating_v0.10.0";
+  const VERSION = "pronunciation_rating_v0.10.1";
   const AUDIO_LIFECYCLE = window.AudioLifecycle;
   if (!AUDIO_LIFECYCLE?.createFeedbackReplayLifecycle || !AUDIO_LIFECYCLE?.isPlaybackCurrent) {
     throw new Error("Audio lifecycle helper is unavailable.");
@@ -37,10 +37,12 @@
 
   const PRACTICE_AUDIO_ROOT =
     "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+  const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
   const PRACTICE_ITEMS = [
     {
+      practice_set_id: PRACTICE_SET_ID,
       practice_kind: "combined",
-      practice_group: "accent_band_1_3",
+      practice_group: "reference_acc_1_2_comp_1_2",
       word: "appreciation",
       file_name: "ENG_Female_appreciation_Practice.wav",
       audio_url: `${PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
@@ -49,13 +51,15 @@
       talker: "practice_eng_female",
       voice_variant: "eng_female",
       spoken_form: "appreciation",
-      expert_accentedness_range: "1–3",
+      expert_comprehensibility_range: "1–2",
+      expert_accentedness_range: "1–2",
       source_format: "researcher_provided_calibration_wav",
-      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 1–3.",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 1–2. Expert Comprehensibility reference range: 1–2.",
     },
     {
+      practice_set_id: PRACTICE_SET_ID,
       practice_kind: "combined",
-      practice_group: "accent_band_3_5",
+      practice_group: "reference_acc_2_3_comp_1_2",
       word: "pesticide",
       file_name: "JPN_Male_pesticide.wav",
       audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
@@ -64,13 +68,15 @@
       talker: "practice_jpn_male",
       voice_variant: "jpn_male",
       spoken_form: "pesticide",
-      expert_accentedness_range: "3–5",
+      expert_comprehensibility_range: "1–2",
+      expert_accentedness_range: "2–3",
       source_format: "researcher_provided_calibration_wav",
-      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 3–5.",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 2–3. Expert Comprehensibility reference range: 1–2.",
     },
     {
+      practice_set_id: PRACTICE_SET_ID,
       practice_kind: "combined",
-      practice_group: "accent_band_5_7",
+      practice_group: "reference_acc_4_5_comp_2_3",
       word: "quality",
       file_name: "JPN_Female_quality_Practice.wav",
       audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
@@ -79,26 +85,82 @@
       talker: "practice_jpn_female",
       voice_variant: "jpn_female",
       spoken_form: "quality",
-      expert_accentedness_range: "5–7",
+      expert_comprehensibility_range: "2–3",
+      expert_accentedness_range: "4–5",
       source_format: "researcher_provided_calibration_wav",
-      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 5–7.",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 4–5. Expert Comprehensibility reference range: 2–3.",
     },
     {
+      practice_set_id: PRACTICE_SET_ID,
       practice_kind: "combined",
-      practice_group: "accent_band_7_9",
-      word: "pizza",
-      file_name: "chn_female_pizza_practice.wav",
-      audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+      practice_group: "reference_acc_4_6_comp_5_7",
+      word: "organizer",
+      file_name: "CHN_Female_Organizer_Practice.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_organizer_practice.wav`,
       l1_condition: "CHN",
       pronunciation_condition: "accented",
-      talker: "macos_tts_tingting",
-      voice_variant: "macos_tingting",
-      spoken_form: "披萨",
-      expert_accentedness_range: "7–9",
-      source_format: "macos_say_tingting_tts_wav",
-      practice_note: "Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨. Expert Accentedness reference range: 7–9.",
+      talker: "practice_chn_female",
+      voice_variant: "chn_female",
+      spoken_form: "organizer",
+      expert_comprehensibility_range: "5–7",
+      expert_accentedness_range: "4–6",
+      source_format: "researcher_provided_calibration_wav",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 4–6. Expert Comprehensibility reference range: 5–7.",
+    },
+    {
+      practice_set_id: PRACTICE_SET_ID,
+      practice_kind: "combined",
+      practice_group: "reference_acc_6_8_comp_4_6",
+      word: "balloon",
+      file_name: "CHN_Male_Balloon_Practice.wav",
+      audio_url: `${PRACTICE_AUDIO_ROOT}/chn_male_balloon_practice.wav`,
+      l1_condition: "CHN",
+      pronunciation_condition: "accented",
+      talker: "practice_chn_male",
+      voice_variant: "chn_male",
+      spoken_form: "balloon",
+      expert_comprehensibility_range: "4–6",
+      expert_accentedness_range: "6–8",
+      source_format: "researcher_provided_calibration_wav",
+      practice_note: "Researcher-provided calibration WAV. Expert Accentedness reference range: 6–8. Expert Comprehensibility reference range: 4–6.",
     },
   ];
+  const LEGACY_BROWSER_PRACTICE_SETS = Object.freeze({
+    "practice_calibration_v0.10.0": Object.freeze([
+      Object.freeze({
+        practice_set_id: "practice_calibration_v0.10.0",
+        trial_index: 1,
+        target_word: "appreciation",
+        audio_url: `${PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
+        expert_comprehensibility_range: "",
+        expert_accentedness_range: "1–3",
+      }),
+      Object.freeze({
+        practice_set_id: "practice_calibration_v0.10.0",
+        trial_index: 2,
+        target_word: "pesticide",
+        audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
+        expert_comprehensibility_range: "",
+        expert_accentedness_range: "3–5",
+      }),
+      Object.freeze({
+        practice_set_id: "practice_calibration_v0.10.0",
+        trial_index: 3,
+        target_word: "quality",
+        audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
+        expert_comprehensibility_range: "",
+        expert_accentedness_range: "5–7",
+      }),
+      Object.freeze({
+        practice_set_id: "practice_calibration_v0.10.0",
+        trial_index: 4,
+        target_word: "pizza",
+        audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+        expert_comprehensibility_range: "",
+        expert_accentedness_range: "7–9",
+      }),
+    ]),
+  });
 
   // Canonical CounterBalance.xlsx Sheet1 order. Keep this in sync with
   // functions/api/_word-familiarity.js; production preflight checks all 50 words.
@@ -896,6 +958,7 @@
     return PRACTICE_ITEMS.map((item, index) => ({
       id: `practice_combined_${index + 1}`,
       phase: "practice",
+      practice_set_id: item.practice_set_id,
       practice_kind: item.practice_kind,
       practice_group: item.practice_group,
       source_path: item.audio_url,
@@ -920,26 +983,25 @@
       speaker_pattern_index: item.speaker_pattern_index || "",
       speaker_pattern_speaker: item.speaker_pattern_speaker || "",
       voice_variant: item.voice_variant || "",
+      expert_comprehensibility_range: item.expert_comprehensibility_range || "",
       expert_accentedness_range: item.expert_accentedness_range || "",
       placeholder_audio: Boolean(item.placeholder_audio),
     }));
   }
 
-  function practiceAssignmentsMatchCurrent(serverRows, currentRows) {
-    if (!Array.isArray(serverRows) || serverRows.length !== currentRows.length) return false;
-    return currentRows.every((current, index) => {
+  function practiceAssignmentsMatchExpected(serverRows, expectedRows) {
+    if (!Array.isArray(serverRows) || serverRows.length !== expectedRows.length) return false;
+    return expectedRows.every((expected, index) => {
       const server = serverRows[index] || {};
       return (
         Number.parseInt(server.trial_index, 10) === index + 1 &&
-        String(server.target_word || "").trim().toLowerCase() === current.target_word &&
-        String(server.audio_url || "").trim() === current.audio_url
+        String(server.practice_set_id || "").trim() === expected.practice_set_id &&
+        String(server.target_word || "").trim().toLowerCase() === expected.target_word &&
+        String(server.audio_url || "").trim() === expected.audio_url &&
+        String(server.expert_comprehensibility_range || "").trim() === expected.expert_comprehensibility_range &&
+        String(server.expert_accentedness_range || "").trim() === expected.expert_accentedness_range
       );
     });
-  }
-
-  function allFourPracticeAssignmentsCompleted(completedKeys = state.serverCompletedTrialKeys) {
-    return PRACTICE_ITEMS.every((_, index) =>
-      completedKeys.has(trialKey("practice", index + 1)));
   }
 
   function serverAssignmentRows() {
@@ -1102,6 +1164,7 @@
       if (!resumeOnly) {
         payload.practice_assignment = buildPracticeTrials().map((item, index) => ({
           phase: item.phase || "practice",
+          practice_set_id: item.practice_set_id,
           trial_index: index + 1,
           source_path: item.source_path,
           audio_url: item.audio_url || "",
@@ -1123,6 +1186,8 @@
           practice_group: item.practice_group,
           expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
           expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
+          expert_comprehensibility_range: item.expert_comprehensibility_range || "",
+          expert_accentedness_range: item.expert_accentedness_range || "",
         }));
       }
     } else if (!resumeOnly) {
@@ -1176,22 +1241,35 @@
       existingServerSession || state.counterbalance.enabled
       ? returnedPracticeAssignments
       : currentPracticeTrials.map((item, index) => ({ ...item, trial_index: index + 1 }));
-    const practiceAssignmentsCurrent = practiceAssignmentsMatchCurrent(
+    const practiceRecordingRequired = data.practice_recording_required === true;
+    const legacyPersistedPractice = existingServerSession && practiceRecordingRequired;
+    const practiceAssignmentsCurrent = practiceAssignmentsMatchExpected(
       serverPracticeAssignments,
       currentPracticeTrials,
     );
-    if (existingServerSession && serverPracticeAssignments.length !== currentPracticeTrials.length) {
-      throw new Error("The saved session does not contain all four practice assignments. Please contact the researcher.");
+    const returnedPracticeSetId = String(
+      data.practice_set_id || serverPracticeAssignments[0]?.practice_set_id || "",
+    ).trim();
+    const historicalBrowserPracticeExpected = LEGACY_BROWSER_PRACTICE_SETS[returnedPracticeSetId];
+    const historicalBrowserPractice = Boolean(
+      existingServerSession &&
+        !practiceRecordingRequired &&
+        historicalBrowserPracticeExpected &&
+        practiceAssignmentsMatchExpected(serverPracticeAssignments, historicalBrowserPracticeExpected),
+    );
+    if (legacyPersistedPractice && !serverPracticeAssignments.length) {
+      throw new Error("The saved legacy session does not contain its practice assignments. Please contact the researcher.");
     }
     if (
       existingServerSession &&
+      !legacyPersistedPractice &&
       !practiceAssignmentsCurrent &&
-      !allFourPracticeAssignmentsCompleted(completedTrialKeys)
+      !historicalBrowserPractice
     ) {
       throw new Error("The practice materials changed before the saved practice set was complete. Please contact the researcher.");
     }
     if (!existingServerSession && !practiceAssignmentsCurrent) {
-      throw new Error("The server did not return the current four-item practice set. Please contact the researcher.");
+      throw new Error(`The server did not return the current ${PRACTICE_ITEMS.length}-item practice set. Please contact the researcher.`);
     }
     const returnedMainTrials = Array.isArray(data.main_assignment)
       ? data.main_assignment.map((item) => ({
@@ -1216,9 +1294,19 @@
     state.serverCompletedDistractorIndexes = completedDistractorIndexes;
     state.wordFamiliarity = wordFamiliarity;
     state.wordFamiliarityRequired = data.word_familiarity_required !== false;
-    state.practiceRecordingRequired = data.practice_recording_required === true;
+    state.practiceRecordingRequired = practiceRecordingRequired;
     state.serverPracticeAssignments = serverPracticeAssignments;
-    state.practiceTrials = currentPracticeTrials;
+    state.practiceTrials = legacyPersistedPractice || historicalBrowserPractice
+      ? serverPracticeAssignments.map((item, index) => ({
+          ...item,
+          id: item.id || `legacy_practice_${index + 1}`,
+          phase: "practice",
+          source_path: item.source_path || item.audio_url,
+          target_word: item.target_word || item.word,
+          word: item.word || item.target_word,
+          placeholder_audio: Boolean(item.placeholder_audio),
+        }))
+      : currentPracticeTrials;
     state.replayingPractice = existingServerSession;
     state.resumeAfterPractice = existingServerSession ? serverResume : null;
     state.mainTrials = mainTrials;
@@ -1233,8 +1321,8 @@
     if (state.serverResume.practice_replay_required !== true) {
       throw new Error("The server did not require practice replay for this saved session.");
     }
-    if (state.practiceTrials.length !== PRACTICE_ITEMS.length) {
-      throw new Error("The complete four-item practice set could not be loaded.");
+    if (!state.practiceTrials.length) {
+      throw new Error("The complete practice set could not be loaded.");
     }
     state.resumeAfterPractice = state.serverResume;
     state.replayingPractice = true;
@@ -1630,6 +1718,10 @@
         spoken_form: valueFrom(manifest, ["spoken_form", "spoken_text", "prompt"]),
         practice_note: valueFrom(manifest, ["practice_note", "note", "notes"]),
         source_format: valueFrom(manifest, ["source_format"]) || parsed.source_format,
+        expert_comprehensibility_1_9: valueFrom(manifest, ["expert_comprehensibility_1_9"]),
+        expert_accentedness_1_9: valueFrom(manifest, ["expert_accentedness_1_9"]),
+        expert_comprehensibility_range: valueFrom(manifest, ["expert_comprehensibility_range"]),
+        expert_accentedness_range: valueFrom(manifest, ["expert_accentedness_range"]),
         manifest,
       };
     });
@@ -1675,6 +1767,10 @@
       spoken_form: valueFrom(row, ["spoken_form", "spoken_text", "prompt"]),
       practice_note: valueFrom(row, ["practice_note", "note", "notes"]),
       source_format: valueFrom(row, ["source_format"]) || "github_remote",
+      expert_comprehensibility_1_9: valueFrom(row, ["expert_comprehensibility_1_9"]),
+      expert_accentedness_1_9: valueFrom(row, ["expert_accentedness_1_9"]),
+      expert_comprehensibility_range: valueFrom(row, ["expert_comprehensibility_range"]),
+      expert_accentedness_range: valueFrom(row, ["expert_accentedness_range"]),
       manifest: row,
     };
   }
@@ -2076,7 +2172,12 @@
   }
 
   function buildPracticeFeedback(row, item) {
-    const expertAccentRange = String(item.expert_accentedness_range || "").trim();
+    const expertAccentRange = String(
+      item.expert_accentedness_range || item.expert_accentedness_1_9 || "—",
+    ).trim();
+    const expertCompRange = String(
+      item.expert_comprehensibility_range || item.expert_comprehensibility_1_9 || "—",
+    ).trim();
     const userComp = selectedRatingNumber("comprehensibility");
     const userAccent = selectedRatingNumber("accentedness");
     const answerText = row.intelligibility_unidentified === 1
@@ -2089,7 +2190,7 @@
         `Your answer: ${answerText}\n` +
         "Expert raters rated this as:\n" +
         `Accentedness: ${expertAccentRange} (Your rating: ${userAccent})\n` +
-        `Comprehensibility: — (Your rating: ${userComp})\n` +
+        `Comprehensibility: ${expertCompRange} (Your rating: ${userComp})\n` +
         "These reference ratings are only for practice.",
     };
   }
@@ -3401,6 +3502,8 @@
         practice_note: item.practice_note,
         expert_comprehensibility_1_9: item.expert_comprehensibility_1_9 || "",
         expert_accentedness_1_9: item.expert_accentedness_1_9 || "",
+        expert_comprehensibility_range: item.expert_comprehensibility_range || "",
+        expert_accentedness_range: item.expert_accentedness_range || "",
       })),
     };
 

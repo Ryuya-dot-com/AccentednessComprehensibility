@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
+import {
+  CANONICAL_PRACTICE_ASSIGNMENT,
+  CURRENT_PRACTICE_SET_ID,
+} from "../functions/api/_counterbalance.js";
 
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
@@ -8,22 +13,25 @@ const DROPBOX_PACKAGE_ROOT = "/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_
 const PACKAGE_ROOT = path.resolve(
   argValue("--package-root", process.env.STIMULI_PACKAGE_ROOT || defaultPackageRoot()),
 );
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const EXPECTED_PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", range: "1–3" }),
-  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", range: "3–5" }),
-  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", range: "5–7" }),
-  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", range: "7–9" }),
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", fileName: "ENG_Female_appreciation_Practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_1_2_comp_1_2", compRange: "1–2", accentRange: "1–2", sizeBytes: 203920, sha256: "69aee95815630ec2e5563473eb3e7c4b4e1606134beb44910676e2f1e901c1bd" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", fileName: "JPN_Male_pesticide.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_2_3_comp_1_2", compRange: "1–2", accentRange: "2–3", sizeBytes: 154808, sha256: "3ef097d287d04a8f5e300917727abd5f28f55e8e1f2abcb66fc0f210ec6c30d4" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", fileName: "JPN_Female_quality_Practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_4_5_comp_2_3", compRange: "2–3", accentRange: "4–5", sizeBytes: 164088, sha256: "8b01e13b47f45f8efda480339c15876a2d4594000b07454a177a1d4b78ea9763" }),
+  Object.freeze({ word: "organizer", file: "chn_female_organizer_practice.wav", fileName: "CHN_Female_Organizer_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", spokenForm: "organizer", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_4_6_comp_5_7", compRange: "5–7", accentRange: "4–6", sizeBytes: 184152, sha256: "1336b859808f091e6cc31a3247695f56e197bacedd9d4ca9b48f4b4cef859ac1" }),
+  Object.freeze({ word: "balloon", file: "chn_male_balloon_practice.wav", fileName: "CHN_Male_Balloon_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_male", spokenForm: "balloon", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_6_8_comp_4_6", compRange: "4–6", accentRange: "6–8", sizeBytes: 124440, sha256: "5803d3d56eaba60cabfe8aed51570a4905216ae7a1876131709c3fd671586ba4" }),
 ]);
 const DEFAULTS = {
   productionManifest: path.join(PACKAGE_ROOT, "remote_manifest.csv"),
   deployedManifest: path.join(REPO_ROOT, "remote_manifest.csv"),
   audioQcIssues: path.join(PACKAGE_ROOT, "metadata", "audio_qc_issues.csv"),
+  audioQcDetail: path.join(PACKAGE_ROOT, "metadata", "audio_qc_by_file.csv"),
   lexicalPairwise: path.join(PACKAGE_ROOT, "metadata", "lexical_balance_pairwise_differences.csv"),
   selectedPracticeManifest: path.join(REPO_ROOT, "practice_manifest.csv"),
   durationSummary: path.join(PACKAGE_ROOT, "metadata", "duration_estimate_summary.csv"),
+  durationDetail: path.join(PACKAGE_ROOT, "metadata", "duration_estimate_by_cell_seed.csv"),
   indexHtml: path.join(REPO_ROOT, "index.html"),
   appJs: path.join(REPO_ROOT, "app.js"),
   audioLifecycle: path.join(REPO_ROOT, "audio-lifecycle.js"),
@@ -118,6 +126,64 @@ function parseCsv(text) {
     .map((values) =>
       Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])),
     );
+}
+
+function normalizeRuntimePracticeItem(item, index) {
+  return {
+    practiceSetId: String(item.practice_set_id || "").trim(),
+    trialIndex: Number(item.trial_index || index + 1),
+    word: String(item.word || item.target_word || "").trim().toLowerCase(),
+    fileName: String(item.file_name || "").trim(),
+    audioUrl: String(item.audio_url || "").trim(),
+    l1: String(item.l1_condition || "").trim(),
+    pronunciation: String(item.pronunciation_condition || "").trim(),
+    talker: String(item.talker || "").trim(),
+    spokenForm: String(item.spoken_form || "").trim(),
+    sourceFormat: String(item.source_format || "").trim(),
+    practiceGroup: String(item.practice_group || "").trim(),
+    compRange: String(item.expert_comprehensibility_range || "").trim(),
+    accentRange: String(item.expert_accentedness_range || "").trim(),
+  };
+}
+
+function practiceContractProblems(items, label) {
+  const problems = [];
+  if (!Array.isArray(items) || items.length !== EXPECTED_PRACTICE_ITEMS.length) {
+    return [`${label}: expected ${EXPECTED_PRACTICE_ITEMS.length} practice items, found ${items?.length ?? "(invalid)"}`];
+  }
+  items.forEach((item, index) => {
+    const actual = normalizeRuntimePracticeItem(item, index);
+    const expected = EXPECTED_PRACTICE_ITEMS[index];
+    const expectedValues = {
+      practiceSetId: CURRENT_PRACTICE_SET_ID,
+      trialIndex: index + 1,
+      word: expected.word,
+      fileName: expected.fileName,
+      audioUrl: `${PRACTICE_AUDIO_ROOT}/${expected.file}`,
+      l1: expected.l1,
+      pronunciation: expected.pronunciation,
+      talker: expected.talker,
+      spokenForm: expected.spokenForm,
+      sourceFormat: expected.sourceFormat,
+      practiceGroup: expected.practiceGroup,
+      compRange: expected.compRange,
+      accentRange: expected.accentRange,
+    };
+    for (const [field, expectedValue] of Object.entries(expectedValues)) {
+      if (actual[field] !== expectedValue) {
+        problems.push(`${label} item ${index + 1} (${expected.word}): ${field} is ${actual[field] || "(missing)"}, expected ${expectedValue}`);
+      }
+    }
+  });
+  return problems;
+}
+
+function clientPracticeItems(appText) {
+  const start = appText.indexOf("  const PRACTICE_AUDIO_ROOT");
+  const end = appText.indexOf("\n  ];", start);
+  if (start < 0 || end < 0) throw new Error("could not locate PRACTICE_ITEMS in app.js");
+  const source = appText.slice(start, end + 5).replace(/^  /gm, "");
+  return vm.runInNewContext(`${source}\nPRACTICE_ITEMS;`, Object.create(null), { timeout: 1000 });
 }
 
 function readCsv(filePath) {
@@ -249,7 +315,7 @@ function checkLexical(rows) {
 function checkPractice(rows, options) {
   const problems = [];
   if (rows.length !== EXPECTED_PRACTICE_ITEMS.length) {
-    problems.push(`expected 4 current practice rows, found ${rows.length}`);
+    problems.push(`expected ${EXPECTED_PRACTICE_ITEMS.length} current practice rows, found ${rows.length}`);
   }
   for (const [index, expected] of EXPECTED_PRACTICE_ITEMS.entries()) {
     const row = rows[index] || {};
@@ -275,8 +341,14 @@ function checkPractice(rows, options) {
     if (String(row.condition || "").trim() !== `practice_${expected.pronunciation}`) {
       problems.push(`practice row ${index + 1}: expected condition practice_${expected.pronunciation}`);
     }
-    if (String(row.expert_accentedness_range || "").trim() !== expected.range) {
-      problems.push(`practice row ${index + 1}: expected Accentedness range ${expected.range}`);
+    if (String(row.practice_set_id || "").trim() !== CURRENT_PRACTICE_SET_ID) {
+      problems.push(`practice row ${index + 1}: expected practice_set_id ${CURRENT_PRACTICE_SET_ID}`);
+    }
+    if (String(row.expert_comprehensibility_range || "").trim() !== expected.compRange) {
+      problems.push(`practice row ${index + 1}: expected Comprehensibility range ${expected.compRange}`);
+    }
+    if (String(row.expert_accentedness_range || "").trim() !== expected.accentRange) {
+      problems.push(`practice row ${index + 1}: expected Accentedness range ${expected.accentRange}`);
     }
     if (String(row.talker || "").trim() !== expected.talker || String(row.participant_id || "").trim() !== expected.talker) {
       problems.push(`practice row ${index + 1}: expected talker/participant_id ${expected.talker}`);
@@ -290,9 +362,78 @@ function checkPractice(rows, options) {
     if (String(row.source_format || "").trim() !== expected.sourceFormat) {
       problems.push(`practice row ${index + 1}: source_format must be ${expected.sourceFormat}`);
     }
+    if (Number(row.size_bytes) !== expected.sizeBytes) {
+      problems.push(`practice row ${index + 1}: expected size_bytes ${expected.sizeBytes}`);
+    }
+    if (String(row.sha256 || "").trim().toLowerCase() !== expected.sha256) {
+      problems.push(`practice row ${index + 1}: expected SHA-256 ${expected.sha256}`);
+    }
   }
-  if (rows.some((row) => /elevenlabs|chocolate|coffee|sofa|shelter/i.test(JSON.stringify(row)))) {
+  if (rows.some((row) => /elevenlabs|chocolate|coffee|sofa|shelter|chn_female_pizza|macos_tts_tingting/i.test(JSON.stringify(row)))) {
     problems.push("practice manifest still contains a superseded practice item or ElevenLabs source");
+  }
+  return problems;
+}
+
+function checkCurrentPracticeAudioQc(rows) {
+  const problems = [];
+  const currentRows = rows.filter(
+    (row) =>
+      String(row.current_app_practice || "").trim() === "1" ||
+      String(row.asset_role || "").trim() === "current_practice_package_asset",
+  );
+  if (currentRows.length !== EXPECTED_PRACTICE_ITEMS.length) {
+    problems.push(
+      `audio QC must contain exactly ${EXPECTED_PRACTICE_ITEMS.length} current-practice rows, found ${currentRows.length}`,
+    );
+  }
+  const byPath = new Map(currentRows.map((row) => [String(row.relative_path || "").trim(), row]));
+  for (const expected of EXPECTED_PRACTICE_ITEMS) {
+    const expectedPath = `practice/calibration/${expected.file}`;
+    const row = byPath.get(expectedPath);
+    if (!row) {
+      problems.push(`audio QC is missing current practice ${expectedPath}`);
+      continue;
+    }
+    if (String(row.target_word || "").trim().toLowerCase() !== expected.word) {
+      problems.push(`audio QC ${expectedPath}: target_word must be ${expected.word}`);
+    }
+    if (String(row.asset_role || "").trim() !== "current_practice_package_asset") {
+      problems.push(`audio QC ${expectedPath}: asset_role must be current_practice_package_asset`);
+    }
+    if (String(row.file_exists || "").trim() !== "1" || String(row.decode_ok || "").trim() !== "1") {
+      problems.push(`audio QC ${expectedPath}: file must exist and decode successfully`);
+    }
+    if (Number(row.size_bytes) !== expected.sizeBytes) {
+      problems.push(`audio QC ${expectedPath}: expected size ${expected.sizeBytes}`);
+    }
+    if (String(row.sha256 || "").trim().toLowerCase() !== expected.sha256) {
+      problems.push(`audio QC ${expectedPath}: SHA-256 does not match the reviewed file`);
+    }
+    if (String(row.failure_flags || "").trim()) {
+      problems.push(`audio QC ${expectedPath}: failure_flags=${row.failure_flags}`);
+    }
+  }
+  return problems;
+}
+
+function checkDurationDetail(rows) {
+  const problems = [];
+  if (!rows.length) return ["duration detail has no rows"];
+  const practiceCounts = new Set(rows.map((row) => String(row.practice_trial_count || "").trim()));
+  if (practiceCounts.size !== 1 || !practiceCounts.has(String(EXPECTED_PRACTICE_ITEMS.length))) {
+    problems.push(
+      `duration detail practice_trial_count values are ${[...practiceCounts].join(", ") || "(missing)"}; expected only ${EXPECTED_PRACTICE_ITEMS.length}`,
+    );
+  }
+  const practiceDurations = rows
+    .map((row) => Number.parseFloat(row.practice_audio_unique_s || ""))
+    .filter(Number.isFinite);
+  if (practiceDurations.length !== rows.length || practiceDurations.some((value) => value <= 0)) {
+    problems.push("duration detail has a missing or nonpositive practice_audio_unique_s value");
+  }
+  if (new Set(practiceDurations.map((value) => value.toFixed(3))).size !== 1) {
+    problems.push("duration detail does not use one stable current-practice duration across all cells/seeds");
   }
   return problems;
 }
@@ -314,13 +455,40 @@ function checkRepoStatic() {
   const headers = fileExists(path.join(REPO_ROOT, "_headers"))
     ? fs.readFileSync(path.join(REPO_ROOT, "_headers"), "utf8")
     : "";
-  for (const token of [
-    "Content-Security-Policy",
-    "X-Frame-Options",
-    "X-Content-Type-Options",
-    "Permissions-Policy",
+  const rules = new Map();
+  let route = "";
+  for (const line of headers.split(/\r?\n/)) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    if (!/^\s/.test(line)) {
+      route = line.trim();
+      if (!rules.has(route)) rules.set(route, new Map());
+      continue;
+    }
+    const separator = line.indexOf(":");
+    if (!route || separator < 0) continue;
+    rules.get(route).set(
+      line.slice(0, separator).trim().toLowerCase(),
+      line.slice(separator + 1).trim(),
+    );
+  }
+  const globalHeaders = rules.get("/*") || new Map();
+  for (const name of [
+    "content-security-policy",
+    "x-frame-options",
+    "x-content-type-options",
+    "permissions-policy",
   ]) {
-    if (!headers.includes(token)) problems.push(`_headers missing ${token}`);
+    if (!globalHeaders.has(name)) problems.push(`_headers /* rule missing ${name}`);
+  }
+  for (const [expectedRoute, expectedValue] of [
+    ["/", "no-cache, no-store, must-revalidate"],
+    ["/index.html", "no-cache, no-store, must-revalidate"],
+    ["/app.js", "no-cache, must-revalidate"],
+  ]) {
+    const actual = rules.get(expectedRoute)?.get("cache-control") || "";
+    if (actual.toLowerCase() !== expectedValue) {
+      problems.push(`_headers ${expectedRoute} cache-control is ${actual || "(missing)"}; expected ${expectedValue}`);
+    }
   }
   if (!fileExists(path.join(REPO_ROOT, "wrangler.toml.example"))) {
     problems.push("wrangler.toml.example is missing");
@@ -448,6 +616,13 @@ function checkProlificFlowSourceGuards(options) {
     if (!text) problems.push(`${label} is missing or empty`);
   }
 
+  problems.push(...practiceContractProblems(CANONICAL_PRACTICE_ASSIGNMENT, "server canonical practice"));
+  try {
+    problems.push(...practiceContractProblems(clientPracticeItems(app), "client canonical practice"));
+  } catch (error) {
+    problems.push(`client canonical practice could not be evaluated: ${error.message}`);
+  }
+
   requireSnippet(problems, "app.js", app, "window.location.assign(completionUrl)");
   requireSnippet(problems, "app.js", app, `const VERSION = "${PLATFORM_VERSION}"`);
   requireSnippet(problems, "app.js", app, "Your response could not be saved. Please try Continue again.");
@@ -468,6 +643,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "app.js", app, "error.data?.reload_required === true");
   requireSnippet(problems, "app.js", app, "The word played:");
   requireSnippet(problems, "app.js", app, "Expert Accentedness reference range:");
+  requireSnippet(problems, "app.js", app, "Expert Comprehensibility reference range:");
   requireSnippet(problems, "app.js", app, "resumeAfterPractice");
   requireSnippet(problems, "app.js", app, "replayingPractice");
   requireSnippet(problems, "app.js", app, "practiceRecordingRequired");
@@ -493,28 +669,31 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_audio_lifecycle.cjs", audioLifecycleTest, "stale_audio_error_guard: true");
   requireSnippet(problems, "app.js", app, "You may replay this practice audio as many times as needed.");
   requireSnippet(problems, "app.js", app, "Expert raters rated this as:");
-  requireSnippet(problems, "app.js", app, "Comprehensibility: — (Your rating:");
+  requireSnippet(problems, "app.js", app, "Comprehensibility: ${expertCompRange} (Your rating:");
+  forbidSnippet(problems, "app.js", app, "Comprehensibility: — (Your rating:");
   requireSnippet(problems, "app.js", app, "These reference ratings are only for practice.");
+  requireSnippet(problems, "app.js", app, "LEGACY_BROWSER_PRACTICE_SETS");
+  requireSnippet(problems, "app.js", app, "historicalBrowserPractice");
   requireSnippet(problems, "app.js", app, '"practice_feedback_replay_start"');
   requireSnippet(problems, "app.js", app, '"practice_feedback_replay_end"');
   forbidSnippet(problems, "app.js", app, "practiceFeedbackReplayCount >=");
   for (const expected of EXPECTED_PRACTICE_ITEMS) {
     requireSnippet(problems, "app.js", app, `word: "${expected.word}"`);
     requireSnippet(problems, "app.js", app, expected.file);
-    requireSnippet(problems, "app.js", app, `"${expected.range}"`);
+    requireSnippet(problems, "app.js", app, `expert_comprehensibility_range: "${expected.compRange}"`);
+    requireSnippet(problems, "app.js", app, `expert_accentedness_range: "${expected.accentRange}"`);
     requireSnippet(problems, "app.js", app, expected.talker);
     requireSnippet(problems, "app.js", app, expected.spokenForm);
     requireSnippet(problems, "app.js", app, expected.sourceFormat);
   }
-  forbidSnippet(problems, "app.js", app, "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703");
-  forbidSnippet(problems, "app.js", app, "practice_elevenlabs_mp3_norm");
-  forbidSnippet(problems, "app.js", app, "CHN_Male_shelter_Practice.wav");
   requireSnippet(problems, "app.js", app, "^\\s*[=+\\-@]");
-  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.10.0"');
-  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.10.0"');
-  requireSnippet(problems, "index.html", index, "In this practice session, you will transcribe and rate four sample words.");
+  requireSnippet(problems, "index.html", index, 'src="audio-lifecycle.js?v=0.10.1"');
+  requireSnippet(problems, "index.html", index, 'src="app.js?v=0.10.1"');
+  requireSnippet(problems, "index.html", index, "In this practice session, you will transcribe and rate five sample words.");
   requireSnippet(problems, "index.html", index, "familiarize you with the task procedure; and");
-  requireSnippet(problems, "index.html", index, "help you calibrate your Accentedness ratings by comparing them with expert reference ranges.");
+  requireSnippet(problems, "index.html", index, "help you calibrate your Accentedness and Comprehensibility ratings by comparing them with expert reference ranges.");
+  requireSnippet(problems, "index.html", index, "rate 5 words. The word played and expert Accentedness and Comprehensibility reference ranges will be shown after each");
+  requireSnippet(problems, "index.html", index, "compare your response with the expert Accentedness and Comprehensibility reference ranges");
   requireSnippet(problems, "index.html", index, "listen to the sample again as many times as you like.");
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-btn"');
   requireSnippet(problems, "index.html", index, 'id="practice-feedback-replay-status"');
@@ -606,22 +785,38 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_replay_required");
   requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "resumedPracticeSave");
-  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "macos_say_tingting_tts_wav");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "savedPracticeEvent");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "practice_event_ignored");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "checkDeployedClientPracticeContract");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "parsed statically");
+  if (liveCheck.includes('from "node:vm"') || liveCheck.includes("runInNewContext")) {
+    problems.push("scripts/check_live_deployment.mjs must statically parse remote app.js without executing it");
+  }
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "checkCacheControl");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, 'x-frame-options');
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "TURNSTILE_TEST_TOKEN");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "chn_female_organizer_practice.wav");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "chn_male_balloon_practice.wav");
+  requireSnippet(problems, "scripts/check_live_deployment.mjs", liveCheck, "expert_comprehensibility_range");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "participant_age_years: 30");
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, PLATFORM_VERSION);
   requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "resume_practice_required");
-  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "macos_tts_tingting");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.10.0_smoke");
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_pizza_practice.wav");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "chn_female_organizer_practice.wav");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "chn_male_balloon_practice.wav");
+  requireSnippet(problems, "scripts/stress_live_counterbalance_concurrency.mjs", stressCheck, "if (turnstileToken)");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "legacyPracticeSix");
+  requireSnippet(problems, "functions/api/trial.js", trial, "Number.MAX_SAFE_INTEGER");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "pronunciation_rating_v0.10.1_smoke");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_female_organizer_practice.wav");
+  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "chn_male_balloon_practice.wav");
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"practice_assignments": 0');
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"practice_phase_events": 0');
   requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, '"invalid_demographic_sessions": 0');
-  requireSnippet(problems, "scripts/generate_smoke_test_200.py", smokeGenerator, "macos_say_tingting_tts_wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, PRACTICE_AUDIO_ROOT);
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_tts_tingting");
-  requireSnippet(problems, "_counterbalance.js", counterbalance, 'spoken_form: "披萨"');
-  requireSnippet(problems, "_counterbalance.js", counterbalance, "macos_say_tingting_tts_wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_organizer_practice.wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "chn_male_balloon_practice.wav");
+  requireSnippet(problems, "_counterbalance.js", counterbalance, "expert_comprehensibility_range");
+  forbidSnippet(problems, "_counterbalance.js", counterbalance, "chn_female_pizza_practice.wav");
   requireSnippet(problems, "_counterbalance.js", counterbalance, 'CURRENT_ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1"');
   requireSnippet(problems, "_counterbalance.js", counterbalance, "CROSS JOIN speaker_pattern_bundles");
   requireSnippet(problems, "_counterbalance.js", counterbalance, "WHERE allocation_cohort = ?");
@@ -692,7 +887,7 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_identity_triple_match: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "csv_formula_neutralized: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "word_familiarity_rows: 50");
-  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_set_v081_exact: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_set_v0101_exact: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "practice_feedback_unlimited_replay_contract: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_replays_all_practice: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "resume_preserves_first_unsaved_main: true");
@@ -703,6 +898,11 @@ function checkProlificFlowSourceGuards(options) {
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "new_v010_practice_events_0: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "all_demographic_session_columns_roundtrip: true");
   requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "legacy_practice_contract_compatible: true");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "lost its historical Accentedness ranges");
+  requireSnippet(problems, "session/start.js", start, "legacyAccentRange");
+  requireSnippet(problems, "session/start.js", start, "browserPracticeAssignmentForPlatformVersion");
+  requireSnippet(problems, "session/start.js", start, "practice_calibration_v0.10.0");
+  requireSnippet(problems, "scripts/test_background_questionnaire_local.mjs", backgroundLocalTest, "legacy_v0100_browser_only_resume_exact: true");
   requireSnippet(
     problems,
     "scripts/test_background_questionnaire_local.mjs",
@@ -740,9 +940,11 @@ function markdownReport(checks, options) {
     `- Production manifest: \`${options.productionManifest}\``,
     `- Deployed/repo manifest: \`${options.deployedManifest}\``,
     `- Audio QC issues: \`${options.audioQcIssues}\``,
+    `- Audio QC detail: \`${options.audioQcDetail}\``,
     `- Lexical balance: \`${options.lexicalPairwise}\``,
     `- Current practice manifest: \`${options.selectedPracticeManifest}\``,
     `- Duration summary: \`${options.durationSummary}\``,
+    `- Duration detail: \`${options.durationDetail}\``,
     "",
     "## Checks",
     "",
@@ -762,9 +964,11 @@ const options = {
   productionManifest: path.resolve(argValue("--production-manifest", DEFAULTS.productionManifest)),
   deployedManifest: path.resolve(argValue("--deployed-manifest", DEFAULTS.deployedManifest)),
   audioQcIssues: path.resolve(argValue("--audio-qc-issues", DEFAULTS.audioQcIssues)),
+  audioQcDetail: path.resolve(argValue("--audio-qc-detail", DEFAULTS.audioQcDetail)),
   lexicalPairwise: path.resolve(argValue("--lexical-pairwise", DEFAULTS.lexicalPairwise)),
   selectedPracticeManifest: path.resolve(argValue("--selected-practice-manifest", DEFAULTS.selectedPracticeManifest)),
   durationSummary: path.resolve(argValue("--duration-summary", DEFAULTS.durationSummary)),
+  durationDetail: path.resolve(argValue("--duration-detail", DEFAULTS.durationDetail)),
   indexHtml: path.resolve(argValue("--index-html", DEFAULTS.indexHtml)),
   appJs: path.resolve(argValue("--app-js", DEFAULTS.appJs)),
   audioLifecycle: path.resolve(argValue("--audio-lifecycle", DEFAULTS.audioLifecycle)),
@@ -802,9 +1006,11 @@ const options = {
 const productionRows = readCsv(options.productionManifest);
 const deployedRows = readCsv(options.deployedManifest);
 const audioQcRows = readCsv(options.audioQcIssues);
+const audioQcDetailRows = readCsv(options.audioQcDetail);
 const lexicalRows = readCsv(options.lexicalPairwise);
 const practiceRows = readCsv(options.selectedPracticeManifest);
 const durationRows = readCsv(options.durationSummary);
+const durationDetailRows = readCsv(options.durationDetail);
 const audioQc = checkAudioQc(audioQcRows, options);
 const lexical = checkLexical(lexicalRows);
 const duration = checkDuration(durationRows);
@@ -833,7 +1039,9 @@ const checks = [
     name: "Audio QC",
     problems: [
       ...csvInputProblems("Audio QC issues", options.audioQcIssues, audioQcRows),
+      ...csvInputProblems("Audio QC detail", options.audioQcDetail, audioQcDetailRows),
       ...audioQc.problems,
+      ...checkCurrentPracticeAudioQc(audioQcDetailRows),
     ],
     summary: audioQc.summary,
   },
@@ -857,7 +1065,9 @@ const checks = [
     name: "Duration lower-bound estimate",
     problems: [
       ...csvInputProblems("Duration summary", options.durationSummary, durationRows),
+      ...csvInputProblems("Duration detail", options.durationDetail, durationDetailRows),
       ...duration.problems,
+      ...checkDurationDetail(durationDetailRows),
     ],
     summary: duration.summary,
   },

@@ -98,10 +98,18 @@ export async function onRequestPost(context) {
     if (cleanText(session.status) !== "started") {
       return errorResponse("Session is not open for trial saves.", 409);
     }
-    const maxTrialIndex = phase === "practice"
-      ? 4
-      : Number(session.trial_count || 1000);
-    assertRequiredIntRange("row.trial_index", trialIndex, 1, maxTrialIndex);
+    if (phase === "practice") {
+      // Historical releases persisted different practice-set lengths. Assignment
+      // existence below is the authoritative compatibility bound for those rows.
+      assertRequiredIntRange("row.trial_index", trialIndex, 1, Number.MAX_SAFE_INTEGER);
+    } else {
+      assertRequiredIntRange(
+        "row.trial_index",
+        trialIndex,
+        1,
+        Number(session.trial_count || 1000),
+      );
+    }
 
     const assignment = await db
       .prepare(

@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACKAGE_ROOT = PROJECT_ROOT / "Stimuli_OSF_Release_20260703"
 DEFAULT_APP_PRACTICE_ROOT = None
+EXPECTED_CURRENT_PRACTICE_COUNT = 5
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".webm", ".flac"}
 DETAIL_COLUMNS = [
     "qc_scope",
@@ -286,7 +287,7 @@ def package_asset_role(relative_path: str, selected_by_package: dict[str, dict[s
     if relative_path.startswith("main/"):
         return "main"
     if relative_path in selected_by_package:
-        return "selected_practice_package_copy"
+        return "current_practice_package_asset"
     if relative_path.startswith("practice/calibration/"):
         return "practice_calibration_package"
     if relative_path.startswith("practice/elevenlabs/"):
@@ -300,6 +301,7 @@ def audio_rows(
     selected_by_package: dict[str, dict[str, str]],
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
+    package_paths_seen: set[str] = set()
     if package_root.exists():
         for path in sorted(package_root.rglob("*")):
             if not path.is_file() or path.suffix.lower() not in AUDIO_EXTENSIONS:
@@ -307,6 +309,7 @@ def audio_rows(
             relative_path = path.relative_to(package_root).as_posix()
             if relative_path.startswith("metadata/"):
                 continue
+            package_paths_seen.add(relative_path)
             rows.append(
                 {
                     "qc_scope": "osf_package",
@@ -315,6 +318,15 @@ def audio_rows(
                     "absolute_path": str(path),
                 }
             )
+    for relative_path in sorted(set(selected_by_package) - package_paths_seen):
+        rows.append(
+            {
+                "qc_scope": "osf_package",
+                "asset_role": "current_practice_package_asset",
+                "relative_path": relative_path,
+                "absolute_path": str(package_root / relative_path),
+            }
+        )
     if app_practice_root and app_practice_root.exists():
         repo_relative_root = app_practice_root.relative_to(REPO_ROOT)
         for path in sorted(app_practice_root.rglob("*")):
@@ -323,7 +335,7 @@ def audio_rows(
             rows.append(
                 {
                     "qc_scope": "app_static_practice",
-                    "asset_role": "selected_practice_app_asset",
+                    "asset_role": "legacy_app_practice_asset",
                     "relative_path": (repo_relative_root / path.relative_to(app_practice_root)).as_posix(),
                     "absolute_path": str(path),
                 }
@@ -339,7 +351,8 @@ def enrich_metadata(
 ) -> dict[str, str]:
     relative_path = base["relative_path"]
     metadata = manifest_by_audio.get(relative_path, {})
-    selected = selected_by_package.get(relative_path) or selected_by_app.get(relative_path) or {}
+    selected_package = selected_by_package.get(relative_path)
+    selected = selected_package or selected_by_app.get(relative_path) or {}
     row = {**base}
     row.update(
         {
@@ -355,7 +368,7 @@ def enrich_metadata(
             "stimulus_list": metadata.get("stimulus_list", ""),
             "source_format": metadata.get("source_format", ""),
             "voice_variant": selected.get("voice_variant", ""),
-            "current_app_practice": "1" if selected else "0",
+            "current_app_practice": "1" if selected_package else "0",
         }
     )
     return row
@@ -368,7 +381,7 @@ def should_measure_lufs(row: dict[str, Any], mode: str) -> bool:
         return True
     role = str(row.get("asset_role", ""))
     return row.get("extension") == ".mp3" and (
-        role.startswith("practice_") or role.startswith("selected_practice_")
+        role.startswith("practice_") or role.startswith("current_practice_")
     )
 
 
@@ -418,7 +431,7 @@ def collect_failures(row: dict[str, Any], thresholds: Thresholds) -> tuple[list[
         if peak is not None and abs(peak - thresholds.peak_target_abs) > thresholds.peak_target_tolerance_abs:
             reviews.append("peak_not_near_0_99_review")
 
-    if role == "selected_practice_app_asset":
+    if role == "current_practice_package_asset":
         if extension not in {".wav", ".mp3"}:
             failures.append("selected_practice_audio_format_unexpected")
         if lufs is not None and abs(lufs - thresholds.practice_lufs) > thresholds.practice_lufs_tolerance:
@@ -659,6 +672,19 @@ def main() -> int:
         practice_lufs_tolerance=args.practice_lufs_tolerance,
     )
 
+    selected_manifest_rows = read_csv(selected_practice_manifest)
+    selected_manifest_paths = [
+        row.get("package_relative_path", "") for row in selected_manifest_rows
+    ]
+    if (
+        len(selected_manifest_rows) != EXPECTED_CURRENT_PRACTICE_COUNT
+        or any(not value for value in selected_manifest_paths)
+        or len(set(selected_manifest_paths)) != EXPECTED_CURRENT_PRACTICE_COUNT
+    ):
+        raise SystemExit(
+            "selected practice manifest must contain exactly "
+            f"{EXPECTED_CURRENT_PRACTICE_COUNT} rows with unique package paths"
+        )
     manifest_by_audio, selected_by_package, selected_by_app = metadata_indexes(
         remote_manifest,
         selected_practice_manifest,
@@ -696,6 +722,10 @@ def main() -> int:
     print(f"summary: {summary_path}")
     print(f"issues: {issues_path}")
     print(f"audio rows: {len(detail_rows)}")
+    print(
+        "current practice package rows: "
+        f"{sum(1 for row in detail_rows if row.get('current_app_practice') == '1')}"
+    )
     print(f"rows with failure flags: {failure_count}")
     print(f"rows with review flags: {review_count}")
     return 0

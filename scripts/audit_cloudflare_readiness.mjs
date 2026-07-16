@@ -257,6 +257,8 @@ function checkLiveDeployment() {
   const args = ["scripts/check_live_deployment.mjs", "--api-dry-run-start"];
   if (hasFlag("--allow-turnstile-off")) args.push("--allow-turnstile-off");
   if (hasFlag("--allow-demo-static-manifest")) args.push("--allow-demo-static-manifest");
+  const token = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
+  if (token) args.push("--turnstile-token", token);
   const result = run("node", args);
   const problems = result.ok ? [] : ["Live deployment check still has launch blockers."];
   return {
@@ -275,8 +277,6 @@ function checkLiveConcurrencyStress() {
     "--timeout-ms",
     argValue("--live-stress-timeout-ms", "30000"),
   ];
-  const token = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
-  if (token) args.push("--turnstile-token", token);
   const result = run("node", args);
   const problems = result.ok ? [] : ["Live counterbalance concurrency stress test failed."];
   return {
@@ -284,6 +284,17 @@ function checkLiveConcurrencyStress() {
     problems,
     summary: result.ok ? "PASS" : "FAIL",
     details: outputExcerpt(result, 1800),
+  };
+}
+
+function blockedTurnstileConcurrencyStress() {
+  return {
+    name: "Live counterbalance concurrency stress",
+    problems: [
+      "Concurrency stress cannot reuse a single-use Turnstile token. Run it only in an explicitly documented --allow-turnstile-off pilot/test environment, and keep the Turnstile-required live dry-run as a separate gate.",
+    ],
+    summary: "BLOCKED",
+    details: "No stress requests were sent.",
   };
 }
 
@@ -345,7 +356,9 @@ if (hasFlag("--live-concurrency-stress")) {
   checks.push(
     liveDeploymentCheck.problems.length
       ? skippedLiveConcurrencyStress("Skipped because the live API dry-run check did not pass.")
-      : checkLiveConcurrencyStress(),
+      : hasFlag("--allow-turnstile-off")
+        ? checkLiveConcurrencyStress()
+        : blockedTurnstileConcurrencyStress(),
   );
 }
 

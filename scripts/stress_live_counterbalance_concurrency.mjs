@@ -3,14 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ target_word: "appreciation", audio_file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spoken_form: "appreciation", source_format: "researcher_provided_calibration_wav", range: "1–3" }),
-  Object.freeze({ target_word: "pesticide", audio_file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spoken_form: "pesticide", source_format: "researcher_provided_calibration_wav", range: "3–5" }),
-  Object.freeze({ target_word: "quality", audio_file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spoken_form: "quality", source_format: "researcher_provided_calibration_wav", range: "5–7" }),
-  Object.freeze({ target_word: "pizza", audio_file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spoken_form: "披萨", source_format: "macos_say_tingting_tts_wav", range: "7–9" }),
+  Object.freeze({ target_word: "appreciation", audio_file: "eng_female_appreciation_practice.wav", file_name: "ENG_Female_appreciation_Practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spoken_form: "appreciation", source_format: "researcher_provided_calibration_wav", practice_group: "reference_acc_1_2_comp_1_2", comp_range: "1–2", accent_range: "1–2" }),
+  Object.freeze({ target_word: "pesticide", audio_file: "jpn_male_pesticide_practice.wav", file_name: "JPN_Male_pesticide.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spoken_form: "pesticide", source_format: "researcher_provided_calibration_wav", practice_group: "reference_acc_2_3_comp_1_2", comp_range: "1–2", accent_range: "2–3" }),
+  Object.freeze({ target_word: "quality", audio_file: "jpn_female_quality_practice.wav", file_name: "JPN_Female_quality_Practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spoken_form: "quality", source_format: "researcher_provided_calibration_wav", practice_group: "reference_acc_4_5_comp_2_3", comp_range: "2–3", accent_range: "4–5" }),
+  Object.freeze({ target_word: "organizer", audio_file: "chn_female_organizer_practice.wav", file_name: "CHN_Female_Organizer_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", spoken_form: "organizer", source_format: "researcher_provided_calibration_wav", practice_group: "reference_acc_4_6_comp_5_7", comp_range: "5–7", accent_range: "4–6" }),
+  Object.freeze({ target_word: "balloon", audio_file: "chn_male_balloon_practice.wav", file_name: "CHN_Male_Balloon_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_male", spoken_form: "balloon", source_format: "researcher_provided_calibration_wav", practice_group: "reference_acc_6_8_comp_4_6", comp_range: "4–6", accent_range: "6–8" }),
 ]);
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PROJECT_ROOT = path.resolve(REPO_ROOT, "..");
@@ -74,11 +76,12 @@ function startsValue() {
 
 function practiceAssignment() {
   return PRACTICE_ITEMS.map((item, index) => ({
+    practice_set_id: PRACTICE_SET_ID,
     phase: "practice",
     trial_index: index + 1,
     source_path: `${PRACTICE_AUDIO_ROOT}/${item.audio_file}`,
     audio_url: `${PRACTICE_AUDIO_ROOT}/${item.audio_file}`,
-    file_name: item.audio_file,
+    file_name: item.file_name,
     target_word: item.target_word,
     participant_id: item.talker,
     native_language: item.l1,
@@ -88,12 +91,12 @@ function practiceAssignment() {
     word_number: String(index + 1),
     trial_number: String(index + 1),
     spoken_form: item.spoken_form,
-    practice_note: item.source_format === "macos_say_tingting_tts_wav"
-      ? `Synthetic macOS say Tingting Mandarin form 披萨; expert Accentedness reference range: ${item.range}.`
-      : `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.range}.`,
+    practice_note: `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.accent_range}; expert Comprehensibility reference range: ${item.comp_range}.`,
     source_format: item.source_format,
     practice_kind: "combined",
-    practice_group: `accent_band_${item.range.replace("–", "_")}`,
+    practice_group: item.practice_group,
+    expert_comprehensibility_range: item.comp_range,
+    expert_accentedness_range: item.accent_range,
   }));
 }
 
@@ -341,8 +344,12 @@ async function duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnsti
   const practiceMatches = resumedPractice.length === PRACTICE_ITEMS.length &&
     PRACTICE_ITEMS.every((expected, index) => {
       const actual = resumedPractice[index] || {};
-      return actual.target_word === expected.target_word &&
-        actual.audio_url === `${PRACTICE_AUDIO_ROOT}/${expected.audio_file}`;
+      return actual.practice_set_id === PRACTICE_SET_ID &&
+        actual.target_word === expected.target_word &&
+        actual.audio_url === `${PRACTICE_AUDIO_ROOT}/${expected.audio_file}` &&
+        actual.practice_group === expected.practice_group &&
+        actual.expert_comprehensibility_range === expected.comp_range &&
+        actual.expert_accentedness_range === expected.accent_range;
     });
   const firstMetadata = allocationMetadata(first);
   const secondMetadata = allocationMetadata(second);
@@ -651,6 +658,11 @@ const allowNonHttps = hasFlag("--allow-non-https");
 if (concurrency < starts) {
   throw new Error("--concurrency must be at least --starts for a single simultaneous-start wave.");
 }
+if (turnstileToken) {
+  throw new Error(
+    "This stress test never accepts a Turnstile token because its start wave and duplicate-session probe require multiple requests. Run it only while Turnstile is intentionally disabled in a documented pilot/test environment.",
+  );
+}
 
 const batchLabel = `stress_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const payloads = Array.from({ length: starts }, (_, index) =>
@@ -714,7 +726,7 @@ const duplicate = skipDuplicateCheck
   : await duplicateParticipantCheck(baseUrl, batchLabel, timeoutMs, turnstileToken);
 if (duplicate && !duplicate.ok) {
   problems.push(
-    "duplicate participant start did not resume the same D1 session with matching bundle metadata and four-item practice replay before main trial 1",
+    `duplicate participant start did not resume the same D1 session with matching bundle metadata and ${PRACTICE_ITEMS.length}-item practice replay before main trial 1`,
   );
 }
 

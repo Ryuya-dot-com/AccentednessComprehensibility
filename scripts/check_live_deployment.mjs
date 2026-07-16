@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 const DEFAULT_BASE_URL = "https://accentednesscomprehensibility.pages.dev";
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
 const ALLOCATION_STRATEGY_VERSION = "speaker_bundle_latin_v1";
+const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
 const PRACTICE_ITEMS = Object.freeze([
   Object.freeze({
+    practice_set_id: PRACTICE_SET_ID,
     trial_index: 1,
     target_word: "appreciation",
     file_name: "ENG_Female_appreciation_Practice.wav",
@@ -18,10 +21,14 @@ const PRACTICE_ITEMS = Object.freeze([
     talker: "practice_eng_female",
     spoken_form: "appreciation",
     source_format: "researcher_provided_calibration_wav",
-    practice_group: "accent_band_1_3",
-    expert_accentedness_range: "1–3",
+    practice_group: "reference_acc_1_2_comp_1_2",
+    expert_comprehensibility_range: "1–2",
+    expert_accentedness_range: "1–2",
+    size_bytes: 203920,
+    sha256: "69aee95815630ec2e5563473eb3e7c4b4e1606134beb44910676e2f1e901c1bd",
   }),
   Object.freeze({
+    practice_set_id: PRACTICE_SET_ID,
     trial_index: 2,
     target_word: "pesticide",
     file_name: "JPN_Male_pesticide.wav",
@@ -31,10 +38,14 @@ const PRACTICE_ITEMS = Object.freeze([
     talker: "practice_jpn_male",
     spoken_form: "pesticide",
     source_format: "researcher_provided_calibration_wav",
-    practice_group: "accent_band_3_5",
-    expert_accentedness_range: "3–5",
+    practice_group: "reference_acc_2_3_comp_1_2",
+    expert_comprehensibility_range: "1–2",
+    expert_accentedness_range: "2–3",
+    size_bytes: 154808,
+    sha256: "3ef097d287d04a8f5e300917727abd5f28f55e8e1f2abcb66fc0f210ec6c30d4",
   }),
   Object.freeze({
+    practice_set_id: PRACTICE_SET_ID,
     trial_index: 3,
     target_word: "quality",
     file_name: "JPN_Female_quality_Practice.wav",
@@ -44,21 +55,45 @@ const PRACTICE_ITEMS = Object.freeze([
     talker: "practice_jpn_female",
     spoken_form: "quality",
     source_format: "researcher_provided_calibration_wav",
-    practice_group: "accent_band_5_7",
-    expert_accentedness_range: "5–7",
+    practice_group: "reference_acc_4_5_comp_2_3",
+    expert_comprehensibility_range: "2–3",
+    expert_accentedness_range: "4–5",
+    size_bytes: 164088,
+    sha256: "8b01e13b47f45f8efda480339c15876a2d4594000b07454a177a1d4b78ea9763",
   }),
   Object.freeze({
+    practice_set_id: PRACTICE_SET_ID,
     trial_index: 4,
-    target_word: "pizza",
-    file_name: "chn_female_pizza_practice.wav",
-    audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+    target_word: "organizer",
+    file_name: "CHN_Female_Organizer_Practice.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_organizer_practice.wav`,
     l1_condition: "CHN",
     pronunciation_condition: "accented",
-    talker: "macos_tts_tingting",
-    spoken_form: "披萨",
-    source_format: "macos_say_tingting_tts_wav",
-    practice_group: "accent_band_7_9",
-    expert_accentedness_range: "7–9",
+    talker: "practice_chn_female",
+    spoken_form: "organizer",
+    source_format: "researcher_provided_calibration_wav",
+    practice_group: "reference_acc_4_6_comp_5_7",
+    expert_comprehensibility_range: "5–7",
+    expert_accentedness_range: "4–6",
+    size_bytes: 184152,
+    sha256: "1336b859808f091e6cc31a3247695f56e197bacedd9d4ca9b48f4b4cef859ac1",
+  }),
+  Object.freeze({
+    practice_set_id: PRACTICE_SET_ID,
+    trial_index: 5,
+    target_word: "balloon",
+    file_name: "CHN_Male_Balloon_Practice.wav",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/chn_male_balloon_practice.wav`,
+    l1_condition: "CHN",
+    pronunciation_condition: "accented",
+    talker: "practice_chn_male",
+    spoken_form: "balloon",
+    source_format: "researcher_provided_calibration_wav",
+    practice_group: "reference_acc_6_8_comp_4_6",
+    expert_comprehensibility_range: "4–6",
+    expert_accentedness_range: "6–8",
+    size_bytes: 124440,
+    sha256: "5803d3d56eaba60cabfe8aed51570a4905216ae7a1876131709c3fd671586ba4",
   }),
 ]);
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
@@ -147,6 +182,18 @@ async function fetchHead(baseUrl, pathname) {
   return { url: url.toString(), response };
 }
 
+async function fetchBinary(baseUrl, pathname) {
+  const url = new URL(pathname, baseUrl);
+  const response = await fetch(url, { redirect: "manual", cache: "no-store" });
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return {
+    url: url.toString(),
+    response,
+    size_bytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
+}
+
 async function postJson(baseUrl, pathname, payload) {
   const url = new URL(pathname, baseUrl);
   const response = await fetch(url, {
@@ -179,6 +226,7 @@ function checkRequiredAppSnippets(appText) {
     ...PRACTICE_ITEMS.flatMap((item) => [
       item.target_word,
       item.audio_url.split("/").at(-1),
+      item.expert_comprehensibility_range,
       item.expert_accentedness_range,
     ]),
     "response_flow",
@@ -208,7 +256,7 @@ function checkRequiredAppSnippets(appText) {
     "replayPracticeFeedbackAudio",
     "You may replay this practice audio as many times as needed.",
     "Expert raters rated this as:",
-    "Comprehensibility: — (Your rating:",
+    "Comprehensibility: ${expertCompRange} (Your rating:",
     "These reference ratings are only for practice.",
     "practice_feedback_replay_start",
     "practice_feedback_replay_end",
@@ -216,8 +264,7 @@ function checkRequiredAppSnippets(appText) {
   const forbidden = [
     'params.get("completion_code")',
     'params.get("PROLIFIC_CODE")',
-    "elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703",
-    "CHN_Male_shelter_Practice.wav",
+    "Comprehensibility: — (Your rating:",
     "practiceFeedbackReplayCount >=",
   ];
   const problems = [];
@@ -227,6 +274,195 @@ function checkRequiredAppSnippets(appText) {
   for (const snippet of forbidden) {
     if (appText.includes(snippet)) problems.push(`live app.js still contains forbidden snippet: ${snippet}`);
   }
+  return problems;
+}
+
+function matchingDelimiterIndex(text, start, open, close) {
+  if (open === close) {
+    if (text[start] !== open) throw new Error(`expected ${open} at offset ${start}`);
+    let escaped = false;
+    for (let index = start + 1; index < text.length; index += 1) {
+      const character = text[index];
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === close) {
+        return index;
+      }
+    }
+    throw new Error(`unterminated ${open}${close} literal`);
+  }
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = "";
+      }
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+      continue;
+    }
+    if (character === open) depth += 1;
+    if (character === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+      if (depth < 0) break;
+    }
+  }
+  throw new Error(`unterminated ${open}${close} literal`);
+}
+
+function stringConstant(source, name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = source.match(
+    new RegExp(`\\bconst\\s+${escapedName}\\s*=\\s*("(?:\\\\.|[^"\\\\])*")\\s*;`),
+  );
+  if (!match) throw new Error(`could not statically parse ${name}`);
+  return JSON.parse(match[1]);
+}
+
+function parsePracticeObject(objectText, constants) {
+  const item = {};
+  let cursor = 1;
+  const limit = objectText.length - 1;
+  const skipWhitespace = () => {
+    while (cursor < limit && /\s/.test(objectText[cursor])) cursor += 1;
+  };
+  while (cursor < limit) {
+    skipWhitespace();
+    if (objectText[cursor] === ",") {
+      cursor += 1;
+      continue;
+    }
+    if (cursor >= limit) break;
+    const keyMatch = objectText.slice(cursor).match(/^([A-Za-z_$][\w$]*)/);
+    if (!keyMatch) throw new Error(`unexpected practice-object token at offset ${cursor}`);
+    const key = keyMatch[1];
+    if (Object.hasOwn(item, key)) throw new Error(`duplicate practice-object field ${key}`);
+    cursor += key.length;
+    skipWhitespace();
+    if (objectText[cursor] !== ":") throw new Error(`missing colon after practice-object field ${key}`);
+    cursor += 1;
+    skipWhitespace();
+
+    let value;
+    if (objectText[cursor] === '"') {
+      const end = matchingDelimiterIndex(objectText, cursor, '"', '"');
+      const token = objectText.slice(cursor, end + 1);
+      value = JSON.parse(token);
+      cursor = end + 1;
+    } else if (objectText[cursor] === "`") {
+      const end = matchingDelimiterIndex(objectText, cursor, "`", "`");
+      const token = objectText.slice(cursor, end + 1);
+      const templateMatch = token.match(/^`\$\{PRACTICE_AUDIO_ROOT\}(\/[^`$\\]*)`$/);
+      if (!templateMatch) throw new Error(`unsupported template value for practice-object field ${key}`);
+      value = `${constants.PRACTICE_AUDIO_ROOT}${templateMatch[1]}`;
+      cursor = end + 1;
+    } else {
+      const valueMatch = objectText.slice(cursor).match(/^([A-Za-z_$][\w$]*)/);
+      if (!valueMatch || !Object.hasOwn(constants, valueMatch[1])) {
+        throw new Error(`unsupported value for practice-object field ${key}`);
+      }
+      value = constants[valueMatch[1]];
+      cursor += valueMatch[1].length;
+    }
+    item[key] = value;
+    skipWhitespace();
+    if (cursor < limit && objectText[cursor] !== ",") {
+      throw new Error(`missing comma after practice-object field ${key}`);
+    }
+  }
+  return item;
+}
+
+function deployedClientPracticeItems(appText) {
+  const declaration = appText.match(/\bconst\s+PRACTICE_ITEMS\s*=\s*\[/);
+  if (!declaration || declaration.index === undefined) {
+    throw new Error("could not locate the active PRACTICE_ITEMS declaration");
+  }
+  const arrayStart = declaration.index + declaration[0].lastIndexOf("[");
+  const arrayEnd = matchingDelimiterIndex(appText, arrayStart, "[", "]");
+  const arrayBody = appText.slice(arrayStart + 1, arrayEnd);
+  const constants = {
+    PRACTICE_AUDIO_ROOT: stringConstant(appText, "PRACTICE_AUDIO_ROOT"),
+    PRACTICE_SET_ID: stringConstant(appText, "PRACTICE_SET_ID"),
+  };
+  const items = [];
+  let cursor = 0;
+  while (cursor < arrayBody.length) {
+    while (cursor < arrayBody.length && /[\s,]/.test(arrayBody[cursor])) cursor += 1;
+    if (cursor >= arrayBody.length) break;
+    if (arrayBody[cursor] !== "{") {
+      throw new Error(`unexpected PRACTICE_ITEMS token at offset ${cursor}`);
+    }
+    const objectEnd = matchingDelimiterIndex(arrayBody, cursor, "{", "}");
+    items.push(parsePracticeObject(arrayBody.slice(cursor, objectEnd + 1), constants));
+    cursor = objectEnd + 1;
+  }
+  return items;
+}
+
+function expectedClientPracticeItems() {
+  return PRACTICE_ITEMS.map((item) => ({
+    practice_set_id: item.practice_set_id,
+    practice_kind: "combined",
+    practice_group: item.practice_group,
+    word: item.target_word,
+    file_name: item.file_name,
+    audio_url: item.audio_url,
+    l1_condition: item.l1_condition,
+    pronunciation_condition: item.pronunciation_condition,
+    talker: item.talker,
+    voice_variant: item.talker.replace(/^practice_/, ""),
+    spoken_form: item.spoken_form,
+    expert_comprehensibility_range: item.expert_comprehensibility_range,
+    expert_accentedness_range: item.expert_accentedness_range,
+    source_format: item.source_format,
+    practice_note: `Researcher-provided calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}. Expert Comprehensibility reference range: ${item.expert_comprehensibility_range}.`,
+  }));
+}
+
+function checkDeployedClientPracticeContract(appText) {
+  let actualItems;
+  try {
+    actualItems = deployedClientPracticeItems(appText);
+  } catch (error) {
+    return [`live app.js practice contract could not be parsed statically: ${error.message}`];
+  }
+  const expectedItems = expectedClientPracticeItems();
+  if (!Array.isArray(actualItems) || actualItems.length !== expectedItems.length) {
+    return [
+      `live app.js active PRACTICE_ITEMS has ${actualItems?.length ?? "an invalid value"}; expected ${expectedItems.length} items`,
+    ];
+  }
+  const problems = [];
+  actualItems.forEach((actual, index) => {
+    const expected = expectedItems[index];
+    const actualKeys = Object.keys(actual || {}).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+      problems.push(
+        `live app.js practice item ${index + 1} (${expected.word}) has fields [${actualKeys.join(", ")}]; expected [${expectedKeys.join(", ")}]`,
+      );
+    }
+    for (const [field, expectedValue] of Object.entries(expected)) {
+      if (actual?.[field] !== expectedValue) {
+        problems.push(
+          `live app.js practice item ${index + 1} (${expected.word}) ${field} is ${JSON.stringify(actual?.[field])}; expected ${JSON.stringify(expectedValue)}`,
+        );
+      }
+    }
+  });
   return problems;
 }
 
@@ -243,11 +479,13 @@ function checkRequiredAudioLifecycleSnippets(helperText) {
 
 function checkRequiredIndexSnippets(indexText) {
   const required = [
-    'src="audio-lifecycle.js?v=0.10.0"',
-    'src="app.js?v=0.10.0"',
-    "In this practice session, you will transcribe and rate four sample words.",
+    'src="audio-lifecycle.js?v=0.10.1"',
+    'src="app.js?v=0.10.1"',
+    "In this practice session, you will transcribe and rate five sample words.",
     "familiarize you with the task procedure; and",
-    "help you calibrate your Accentedness ratings by comparing them with expert reference ranges.",
+    "help you calibrate your Accentedness and Comprehensibility ratings by comparing them with expert reference ranges.",
+    "rate 5 words. The word played and expert Accentedness and Comprehensibility reference ranges will be shown after each",
+    "compare your response with the expert Accentedness and Comprehensibility reference ranges",
     "listen to the sample again as many times as you like.",
     'id="word-familiarity-panel"',
     'id="word-familiarity-grid"',
@@ -272,6 +510,7 @@ function checkRequiredIndexSnippets(indexText) {
 
 function practiceAssignment() {
   return PRACTICE_ITEMS.map((item) => ({
+    practice_set_id: item.practice_set_id,
     phase: "practice",
     trial_index: item.trial_index,
     source_path: item.audio_url,
@@ -286,12 +525,12 @@ function practiceAssignment() {
     word_number: String(item.trial_index),
     trial_number: String(item.trial_index),
     spoken_form: item.spoken_form,
-    practice_note: item.source_format === "macos_say_tingting_tts_wav"
-      ? `Researcher-selected synthetic macOS say voice Tingting using the Mandarin form 披萨. Expert Accentedness reference range: ${item.expert_accentedness_range}.`
-      : `Researcher-provided calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}.`,
+    practice_note: `Researcher-provided calibration WAV. Expert Accentedness reference range: ${item.expert_accentedness_range}. Expert Comprehensibility reference range: ${item.expert_comprehensibility_range}.`,
     source_format: item.source_format,
     practice_kind: "combined",
     practice_group: item.practice_group,
+    expert_comprehensibility_range: item.expert_comprehensibility_range,
+    expert_accentedness_range: item.expert_accentedness_range,
   }));
 }
 
@@ -319,7 +558,26 @@ function checkSecurityHeaders(response, label) {
   for (const name of ["content-security-policy", "x-content-type-options", "referrer-policy", "permissions-policy"]) {
     if (!header(response, name)) problems.push(`${label} missing ${name}`);
   }
+  const xFrameOptions = header(response, "x-frame-options").trim().toUpperCase();
+  if (xFrameOptions !== "DENY") {
+    problems.push(`${label} x-frame-options is ${xFrameOptions || "(missing)"}; expected DENY`);
+  }
   return problems;
+}
+
+function checkCacheControl(response, label, expectedDirectives) {
+  const cacheControl = header(response, "cache-control");
+  const directives = new Set(
+    cacheControl
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return expectedDirectives
+    .filter((directive) => !directives.has(directive))
+    .map((directive) =>
+      `${label} cache-control is ${cacheControl || "(missing)"}; expected directive ${directive}`
+    );
 }
 
 function summarizeHeaders(response) {
@@ -329,10 +587,11 @@ function summarizeHeaders(response) {
     content_length: header(response, "content-length"),
     cache_control: header(response, "cache-control"),
     csp: header(response, "content-security-policy") ? "present" : "",
+    x_frame_options: header(response, "x-frame-options"),
   };
 }
 
-async function liveApiDryRunStartCheck(baseUrl) {
+async function liveApiDryRunStartCheck(baseUrl, turnstileToken) {
   const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const payload = {
     rater_id: `live_check_${nonce}`,
@@ -355,6 +614,7 @@ async function liveApiDryRunStartCheck(baseUrl) {
     linguistics_knowledge_details: "live check linguistics details",
     japanese_familiarity_1_6: 3,
     chinese_familiarity_1_6: 3,
+    turnstile_token: turnstileToken || "",
     counterbalance: { enabled: true },
     practice_assignment: practiceAssignment(),
   };
@@ -375,8 +635,21 @@ async function liveApiDryRunStartCheck(baseUrl) {
     : [];
   const assignedCounterbalance = result.data.counterbalance || {};
   const savedPractice = [];
+  let savedPracticeEvent = null;
   let savedMain = null;
   if (result.response.status === 200 && result.data.ok === true && result.data.session_token) {
+    savedPracticeEvent = await postJson(baseUrl, "/api/event", {
+      session_id: result.data.session_id,
+      session_token: result.data.session_token,
+      event_type: "practice_audio_play_start",
+      trial_index: 1,
+      event_at: new Date().toISOString(),
+      payload: {
+        phase: "practice",
+        practice_set_id: PRACTICE_SET_ID,
+        target_word: PRACTICE_ITEMS[0].target_word,
+      },
+    });
     for (const practice of practiceAssignment()) {
       savedPractice.push(
         await postJson(
@@ -448,6 +721,14 @@ async function liveApiDryRunStartCheck(baseUrl) {
       assignedCounterbalance.speaker_pattern_indexes.length === 4
       ? []
       : ["counterbalance response is missing the four speaker pattern indexes"]),
+    ...(savedPracticeEvent?.response.status === 200 &&
+      savedPracticeEvent.data.ok === true &&
+      savedPracticeEvent.data.ignored === true &&
+      savedPracticeEvent.data.reason === "practice_not_recorded"
+      ? []
+      : [
+          `practice event was not explicitly ignored: ${savedPracticeEvent?.response.status ?? "not sent"} ${savedPracticeEvent?.data?.error || savedPracticeEvent?.text?.slice(0, 120) || ""}`.trim(),
+        ]),
     ...savedPractice.flatMap((save, index) =>
       save.response.status === 200 &&
       save.data.ok === true &&
@@ -484,15 +765,19 @@ async function liveApiDryRunStartCheck(baseUrl) {
           ...(duplicateResume.practice_replay_required === true ? [] : ["duplicate start did not require all practice items to replay"]),
           ...(duplicateResume.next_phase === "main" ? [] : [`duplicate resume phase must be main, got ${duplicateResume.next_phase || "(missing)"}`]),
           ...(Number(duplicateResume.next_trial_index) === 2 ? [] : [`duplicate resume must preserve progress at main trial 2, got ${duplicateResume.next_trial_index || "(missing)"}`]),
-          ...(duplicatePracticeRows.length === PRACTICE_ITEMS.length ? [] : [`duplicate start returned ${duplicatePracticeRows.length} practice assignments instead of 4`]),
+          ...(duplicatePracticeRows.length === PRACTICE_ITEMS.length ? [] : [`duplicate start returned ${duplicatePracticeRows.length} practice assignments instead of ${PRACTICE_ITEMS.length}`]),
           ...PRACTICE_ITEMS.flatMap((expected, index) => {
             const actual = duplicatePracticeRows[index] || {};
-            return actual.target_word === expected.target_word &&
+            return actual.practice_set_id === expected.practice_set_id &&
+              actual.target_word === expected.target_word &&
               actual.audio_url === expected.audio_url &&
               actual.participant_id === expected.talker &&
               actual.talker === expected.talker &&
               actual.spoken_form === expected.spoken_form &&
               actual.source_format === expected.source_format &&
+              actual.practice_group === expected.practice_group &&
+              actual.expert_comprehensibility_range === expected.expert_comprehensibility_range &&
+              actual.expert_accentedness_range === expected.expert_accentedness_range &&
               actual.accent_condition === expected.pronunciation_condition &&
               actual.condition === `practice_${expected.pronunciation_condition}`
               ? []
@@ -544,6 +829,7 @@ async function liveApiDryRunStartCheck(baseUrl) {
       practice_replay_required: duplicateResume.practice_replay_required === true,
       practice_assignment: duplicatePracticeRows.length,
       practice_recording_required: duplicate?.data?.practice_recording_required === true,
+      practice_event_ignored: savedPracticeEvent?.data?.ignored === true,
       resumed_practice_save_ignored: resumedPracticeSave?.data?.ignored === true,
     }),
   };
@@ -579,16 +865,22 @@ const out = path.resolve(argValue("--out", DEFAULT_OUT));
 const allowDemoStaticManifest = hasFlag("--allow-demo-static-manifest");
 const allowTurnstileOff = hasFlag("--allow-turnstile-off");
 const apiDryRunStart = hasFlag("--api-dry-run-start");
+const turnstileToken = argValue("--turnstile-token", process.env.TURNSTILE_TEST_TOKEN || "");
 
 const index = await fetchText(baseUrl, "/");
+const indexHtml = await fetchText(baseUrl, "/index.html");
 const app = await fetchText(baseUrl, "/app.js");
 const audioLifecycle = await fetchText(baseUrl, "/audio-lifecycle.js");
 const manifest = await fetchText(baseUrl, "/remote_manifest.csv");
 const config = await fetchText(baseUrl, "/api/config");
 const selectedPractice = await Promise.all(
-  PRACTICE_ITEMS.map((item) => fetchHead(baseUrl, item.audio_url)),
+  PRACTICE_ITEMS.map((item) => fetchBinary(baseUrl, item.audio_url)),
 );
 const adminDryRun = await fetchHead(baseUrl, "/admin/dry-run.html");
+const indexHtmlRedirectsHome =
+  indexHtml.response.status >= 300 &&
+  indexHtml.response.status < 400 &&
+  new URL(header(indexHtml.response, "location") || "/index.html", baseUrl).pathname === "/";
 
 let configJson = {};
 try {
@@ -606,15 +898,41 @@ const checks = [
     name: "Index security headers",
     problems: [
       ...checkSecurityHeaders(index.response, "index"),
+      ...checkCacheControl(index.response, "/", ["no-cache", "no-store", "must-revalidate"]),
       ...checkRequiredIndexSnippets(index.text),
     ],
     summary: JSON.stringify(summarizeHeaders(index.response)),
   },
   {
+    name: "Explicit index.html headers",
+    problems: [
+      ...(indexHtml.response.status === 200 || indexHtmlRedirectsHome
+        ? []
+        : [`index.html returned ${indexHtml.response.status} without redirecting to /`]),
+      ...(indexHtml.response.status === 200
+        ? [
+            ...checkSecurityHeaders(indexHtml.response, "index.html"),
+            ...checkCacheControl(indexHtml.response, "/index.html", [
+              "no-cache",
+              "no-store",
+              "must-revalidate",
+            ]),
+          ]
+        : []),
+    ],
+    summary: JSON.stringify({
+      ...summarizeHeaders(indexHtml.response),
+      redirects_home: indexHtmlRedirectsHome,
+    }),
+  },
+  {
     name: "Live app.js version",
     problems: [
       ...(app.response.status === 200 ? [] : [`app.js returned ${app.response.status}`]),
+      ...checkSecurityHeaders(app.response, "app.js"),
+      ...checkCacheControl(app.response, "/app.js", ["no-cache", "must-revalidate"]),
       ...checkRequiredAppSnippets(app.text),
+      ...checkDeployedClientPracticeContract(app.text),
     ],
     summary: `${app.text.length} bytes`,
   },
@@ -646,20 +964,26 @@ const checks = [
   {
     name: "Selected practice audio deployed",
     problems: selectedPractice.flatMap((result, index) =>
-      result.response.status >= 200 &&
-      result.response.status < 300 &&
-      /^audio\//i.test(header(result.response, "content-type"))
-        ? []
-        : [
-            `${PRACTICE_ITEMS[index].target_word} practice WAV returned ${result.response.status} / ` +
-              `${header(result.response, "content-type") || "(no content-type)"}`,
-          ],
+      [
+        ...(result.response.status >= 200 && result.response.status < 300
+          ? []
+          : [`${PRACTICE_ITEMS[index].target_word} practice WAV returned ${result.response.status}`]),
+        ...(/^audio\//i.test(header(result.response, "content-type"))
+          ? []
+          : [`${PRACTICE_ITEMS[index].target_word} practice WAV returned ${header(result.response, "content-type") || "(no content-type)"}`]),
+        ...(result.size_bytes === PRACTICE_ITEMS[index].size_bytes
+          ? []
+          : [`${PRACTICE_ITEMS[index].target_word} practice WAV is ${result.size_bytes} bytes; expected ${PRACTICE_ITEMS[index].size_bytes}`]),
+        ...(result.sha256 === PRACTICE_ITEMS[index].sha256
+          ? []
+          : [`${PRACTICE_ITEMS[index].target_word} practice WAV SHA-256 is ${result.sha256}; expected ${PRACTICE_ITEMS[index].sha256}`]),
+      ],
     ),
     summary: JSON.stringify(
       Object.fromEntries(
         selectedPractice.map((result, index) => [
           PRACTICE_ITEMS[index].target_word,
-          summarizeHeaders(result.response),
+          { ...summarizeHeaders(result.response), size_bytes: result.size_bytes, sha256: result.sha256 },
         ]),
       ),
     ),
@@ -676,7 +1000,7 @@ const checks = [
 if (apiDryRunStart) {
   checks.push({
     name: "Live API dry-run start",
-    ...(await liveApiDryRunStartCheck(baseUrl)),
+    ...(await liveApiDryRunStartCheck(baseUrl, turnstileToken)),
   });
 }
 
