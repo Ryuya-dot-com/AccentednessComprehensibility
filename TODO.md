@@ -1,6 +1,6 @@
 # Project TODO
 
-Updated: 2026-07-15 JST
+Updated: 2026-07-16 JST
 
 This list tracks the remaining work before using
 `https://accentednesscomprehensibility.pages.dev/` for Prolific data collection.
@@ -14,33 +14,51 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 - [x] Local counterbalance verification passes with placeholder materials.
 - [x] Runtime counterbalance label is standardized to `ENG`, with legacy `AME` accepted only as an import alias.
 - [x] `Stimuli/ENG` has been received; local audit found 497 audio files.
-- [x] Three researcher-provided calibration WAVs and the selected synthetic Tingting `pizza.wav` exist in `Stimuli/Practice&Calibration`.
+- [x] Five researcher-provided calibration WAVs exist in `Stimuli/Practice&Calibration`; all five reviewed files have pinned size and SHA-256 metadata.
 - [x] OSF rename crosswalks are generated for files, folders, and 30 speakers.
 - [x] Draft production manifests are generated from the OSF crosswalk and validate against the app's counterbalance code for all 20 cells.
 - [x] OSF-ready standardized stimulus package is generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`.
-- [x] The v0.10 repository candidate keeps the four-item practice/calibration UI while limiting new persisted sessions to 100 main assignments/trials and no practice assignments, trials, events, or local rating CSV rows.
+- [x] The v0.10.1 hotfix candidate uses a five-item practice/calibration UI while limiting new persisted sessions to 100 main assignments/trials and no practice assignments, trials, events, or local rating CSV rows.
 - [x] Production main audio is hosted in R2 and `COUNTERBALANCE_MANIFEST_URL`/`COUNTERBALANCE_ALLOWED_HOSTS` are configured as encrypted Pages secrets; the checked-in 12-row manifest remains an intentional demo fallback.
-- [x] Placeholder practice tones and the retired ElevenLabs set are removed from the active flow; `app.js` now uses `appreciation` (1–3), `pesticide` (3–5), `quality` (5–7), and `pizza` (7–9).
+- [x] Placeholder, ElevenLabs, and Tingting `pizza` items are removed from the active flow; `app.js` now uses `appreciation`, `pesticide`, `quality`, `organizer`, and `balloon` with both reviewed reference ranges.
 - [x] Top-level `practice_manifest.csv` and dry-run placeholder audio point to the same direct production R2 WAV URLs.
-- [x] Scalar expert Accentedness and Comprehensibility fields remain blank; only the documented `expert_accentedness_range` is presented.
+- [x] Scalar expert fields remain blank; the documented `expert_accentedness_range` and `expert_comprehensibility_range` are both presented.
 - [x] Dictation and rating are separated into staged pages within each combined trial.
 - [x] Practice and main response pages disable replay after successful playback; unlimited replay is available only on the post-response practice-feedback screen.
 - [x] The Sheet2 talker-pattern constraints are explicitly enforced and exported.
-- [x] Reloading a started session repeats all four browser-only practice items before continuing at the first unsaved main trial or later saved-session state without changing v0.10 server progress.
+- [x] Reloading a current started session repeats all five browser-only practice items before continuing at the first unsaved main trial or later saved-session state without changing server progress; persisted legacy four-item sessions replay their saved set.
 - [x] All background fields remain stored once on `sessions`; the questionnaire columns stay nullable so pre-questionnaire sessions remain readable/resumable.
 - [x] Historical practice rows remain readable/resumable. The v0.10 behavior change requires no new D1 migration and does not delete or backfill legacy data.
 
 ## P0: Must Finish Before Any Participant Launch
 
+- [x] Prepare the v0.10.1 five-item practice/reference hotfix from the latest production `main` in an isolated branch.
+  - Runtime, server canonical metadata, repository manifest, OSF materializer, preflight, live checker, stress tools, smoke generator, and local integration tests use the same five-item contract.
+  - `practice_set_id=practice_calibration_v0.10.1`; both ranges, byte sizes, and SHA-256 values are pinned.
+  - Local Pages + D1 integration passes, including ignored browser-only practice writes and seeded legacy four-item resume.
+  - Browser-only practice is selected by the stored session platform version, so a v0.10.0 resume retains its historical four-item calibration instead of silently switching to v0.10.1.
+  - The 2026-07-16 audio-QC regeneration audited 2,547 package rows with exactly five current-practice assets and zero failure rows. The regenerated duration tables use `practice_trial_count=5` and 4.329 s of exact reviewed practice audio.
+  - A non-writing stable-host check on 2026-07-16 confirmed all five R2 objects match the reviewed byte sizes and SHA-256 values. The Pages portion correctly remains FAIL until this PR is merged because the stable host still serves v0.10.0, Tingting `pizza`, and `Comprehensibility: —`.
+  - No D1 migration is required.
+
+- [ ] Merge and deploy the v0.10.1 hotfix, then pass the stable-host gate before recruitment.
+  - Confirm GitHub PR checks/manual evidence and merge only after review.
+  - Confirm Cloudflare Pages production points to the merged `main` commit.
+  - Run the non-writing live check first; confirm all five R2 GETs match exact size and SHA-256.
+  - Run `--api-dry-run-start` only as the authorized final gate because it writes one synthetic D1 session.
+  - Confirm the live UI shows no `Comprehensibility: —` placeholder and presents `organizer` and `balloon`.
+  - Finalize/archive pre-hotfix test sessions before recruitment so the production cohort starts cleanly on v0.10.1.
+  - Keep the regenerated audio-QC and duration outputs with the release evidence; verify the five reviewed package WAVs remain the only inputs to the practice-duration total.
+
 - [x] Host production audio in Cloudflare R2 and provide the authoritative manifest through `COUNTERBALANCE_MANIFEST_URL`.
   - Option A: public static files committed/deployed with the Pages project.
   - Option B: private Cloudflare R2 or another approved host, referenced through `COUNTERBALANCE_MANIFEST_URL`.
-  - Selected path: Option B, Cloudflare R2 for the 2,497 main stimuli and four active practice objects.
+  - Selected path: Option B, Cloudflare R2 for the 2,497 main stimuli and five active practice objects.
   - Deployment guide: `DEPLOY_CLOUDFLARE.md` section "Host Production Audio".
   - R2 upload plan generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/r2_upload_plan.csv`.
   - R2 upload command script generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/upload_to_r2_accentedness_production_stimuli.sh`.
   - Hosted manifest builder: `scripts/build_hosted_manifest.mjs` fills HTTPS `audio_url` values from the validated OSF package manifest after the R2/custom-domain base URL is known.
-  - The historical upload plan contains 2,545 objects; the newly selected Tingting `pizza.wav` was uploaded separately as `practice/calibration/chn_female_pizza_practice.wav` and must be added to the next regenerated OSF/R2 plan.
+  - Regenerate the upload plan after every selected-practice change. The current plan contains the reviewed `organizer` and `balloon` objects and does not describe Tingting `pizza` as an active selection.
   - `npx wrangler whoami` confirms the Cloudflare account is authenticated; refresh login only if a future scope check requires it.
   - Completion: document the chosen approach and confirm audio URLs are accessible from the live Pages app.
   - Verification command after HTTPS URLs are generated: `node scripts/validate_audio_hosting.mjs --sample 80`.
@@ -60,8 +78,8 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Run after every deployment:
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off` after Wrangler authentication is available.
     - `node scripts/check_live_deployment.mjs --allow-turnstile-off --api-dry-run-start` during pilot/no-Turnstile checks.
-    - `node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required.
-    - `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes.
+    - `TURNSTILE_TEST_TOKEN=<fresh-token> node scripts/check_live_deployment.mjs --api-dry-run-start` before production if Turnstile is required; never commit or print the token.
+    - `node scripts/stress_live_counterbalance_concurrency.mjs --participants 40` after the live API dry-run passes, only while Turnstile is intentionally disabled for the documented pilot/test gate.
     - `node scripts/audit_cloudflare_readiness.mjs --allow-turnstile-off --live-concurrency-stress` for the final no-Turnstile pilot gate.
     - If `COUNTERBALANCE_MANIFEST_URL` is configured and static `remote_manifest.csv` intentionally remains demo-only, add `--allow-demo-static-manifest` and rely on `--api-dry-run-start` to verify the server-side manifest path.
   - Completion: the live report passes, or any intentionally disabled Turnstile state is documented for the pilot phase only.
@@ -71,7 +89,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - The stable-host live check passed with `--allow-turnstile-off --allow-demo-static-manifest --api-dry-run-start` and observed `platform_version=pronunciation_rating_v0.10.0`, `sessions.trial_count=100`, exactly 100 main assignments, four canonical browser practice items, and `practice_recording_required=false`.
   - A direct remote-D1 read of the synthetic session confirmed 100 main assignments, zero practice assignments/trials/events, and all 11 background values on `sessions`.
   - Local integration fixtures confirm seeded pre-v0.10 practice rows remain readable/resumable and nullable historical questionnaire values do not block resume.
-  - The served app retains all four practice items, feedback, and unlimited feedback-stage replay while omitting practice from the local rating CSV.
+  - At the time of that v0.10.0 deployment, the served app retained all four historical practice items, feedback, and unlimited feedback-stage replay while omitting practice from the local rating CSV.
   - Turnstile was intentionally disabled for this deployment check. Complete the separate security review, full live-stress gate, and end-to-end pilot below before recruitment.
 
 - [x] Verify ENG/native English production stimulus coverage.
@@ -98,7 +116,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Package root: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`.
   - Includes `main/`, `practice/`, `metadata/`, `README.md`, and app-ready `remote_manifest.csv`.
   - Includes `metadata/osf_package_checksums_sha256.csv` and `metadata/osf_package_copy_log.csv`.
-  - Copied audio counts: 2497 main, 4 practice/calibration, 44 ElevenLabs practice candidates.
+  - Current package counts: 2,497 main, 6 practice/calibration files (5 active reviewed WAVs plus 1 retained legacy `shelter` calibration WAV), and 44 ElevenLabs practice candidates.
   - Verified package manifest:
     - `node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/remote_manifest.csv --audio-root /Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703`
 
@@ -115,20 +133,19 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - `node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_osf_20260703.csv`
     - `node scripts/validate_production_manifest.mjs --manifest /Users/tohokusla/Dropbox/Accentedness/Stimuli/remote_manifest_production_current_paths_20260703.csv --audio-root /Users/tohokusla/Dropbox/Accentedness/Stimuli`
 
-- [x] Replace placeholder/ElevenLabs practice trials with the requested 4 calibration WAVs.
+- [x] Archive: the former four-item v0.10.0 practice set was deployed and verified before the v0.10.1 replacement.
   - Direct R2 base: `https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/`.
   - Selected app trials in fixed low-to-high reference order:
     - `eng_female_appreciation_practice.wav`: `ENG` female, Accentedness range 1–3.
     - `jpn_male_pesticide_practice.wav`: `JPN` male, Accentedness range 3–5.
     - `jpn_female_quality_practice.wav`: `JPN` female, Accentedness range 5–7.
     - `chn_female_pizza_practice.wav`: synthetic macOS Tingting Mandarin `披萨`, researcher-assigned Accentedness range 7–9.
-  - `practice_manifest.csv` points to these direct URLs and leaves `expert_comprehensibility_1_9` and `expert_accentedness_1_9` blank.
-  - Completion: live practice uses these four WAVs and shows ranges without inventing scalar expert ratings.
+  - The explicit v0.10.0 browser-practice registry preserves these historical direct URLs and ranges for safe resume compatibility. The current top-level `practice_manifest.csv` instead defines the reviewed v0.10.1 five-item set with both reference ranges.
+  - This section is retained only as deployment history; these four items are no longer the active v0.10.1 set.
 
-- [x] Explicit methodological acceptance for the selected Tingting `pizza.wav` was received on 2026-07-13.
+- [x] Archive: explicit methodological acceptance for the then-selected Tingting `pizza.wav` was received on 2026-07-13.
   - The file is byte-identical to the legacy macOS `say -v Tingting` output generated from Mandarin `披萨`; it is not a human CHN-female production of English `pizza`.
-  - If retained, document that the fourth practice item calibrates an intentionally synthetic/native-language-shaped endpoint rather than ordinary L2 English speech.
-  - If rejected, provide a genuine CHN-female English `pizza` WAV and update R2, the canonical server assignment, client metadata, manifest, OSF package, and tests together.
+  - This was a historical v0.10.0 decision. The active v0.10.1 set replaces it with the researcher-provided English `organizer` and `balloon` WAVs; no current launch decision depends on retaining Tingting `pizza`.
 
 - [x] Archive: generate alternative practice words with ElevenLabs candidates. These files are retained for reproducibility but are not the active practice set.
   - Current `.env` has ElevenLabs API credentials and voice IDs.
@@ -156,15 +173,15 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Save audio plus `generation_manifest.csv` and `generation_metadata.json`.
   - Completion for generation: candidate audio is generated, normalized, packaged, and a selected app set is connected.
 
-- [ ] Confirm the selected calibration WAV ranges with collaborators.
-  - Confirm the four documented Accentedness bands and whether exact scalar ratings should ever replace them.
-  - Keep scalar fields blank unless exact expert Accentedness and Comprehensibility ratings are formally established.
-  - Review packet generated at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`.
+- [x] Record the collaborator-reviewed ranges for the five selected calibration WAVs.
+  - Current ranges are: `appreciation` Acc 1–2 / Comp 1–2; `pesticide` Acc 2–3 / Comp 1–2; `quality` Acc 4–5 / Comp 2–3; `organizer` Acc 4–6 / Comp 5–7; `balloon` Acc 6–8 / Comp 4–6.
+  - Scalar fields remain intentionally blank because the supplied references are ranges, not exact scalar ratings.
+  - The older v0.10.0 review packet is retained only as provenance at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/stimulus_review_packet.html`.
   - Review templates:
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/practice_reference_rating_review_template.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/review_packet_20260703/audio_repair_review_template.csv`.
   - The older review/apply scripts target the retired ElevenLabs manifest and must not be run against the active range-only practice set without first being updated for `expert_accentedness_range`.
-  - Completion: the four current WAVs and documented ranges are reviewed and accepted as practice material.
+  - Completion: all five active WAVs and both documented reference ranges are reviewed and accepted as practice material.
 
 - [x] Implement one-play-only behavior.
   - Current UI changes `Play audio` to `Audio played` after successful playback and disables the playback button.
@@ -189,7 +206,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 
 - [x] Stress-test simultaneous counterbalance allocation.
   - Script: `scripts/stress_counterbalance_concurrency.py`.
-  - Live script: `scripts/stress_live_counterbalance_concurrency.mjs`.
+  - Live script: `scripts/stress_live_counterbalance_concurrency.mjs`; use it only in a documented Turnstile-disabled pilot/test window because concurrent starts cannot reuse one single-use token.
   - Current report: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/COUNTERBALANCE_CONCURRENCY_STRESS_20260703.md`.
   - Current result: 200 simultaneous starts produced exactly 10 assignments per cell; duplicate `participant_key` insertion was rejected.
   - Same-count cell ties now use a session-derived offset rather than fixed `cell_id` order.
@@ -218,12 +235,12 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_summary.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_qc_issues.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/AUDIO_QC_REPORT_20260703.md`.
-  - Current result: 2549 audited rows; no missing/unreadable files; 0 launch-blocking audio failure rows.
+  - Current result: 2,547 audited rows; exactly five `current_practice_package_asset` rows; no missing/unreadable files; 0 launch-blocking audio failure rows.
   - Repaired file: `main/jpn/natural/jpn_s06/jpn_s06_natural_pass01_word018_capelin_take04_trial0018.wav`.
   - Repair applied from `scripts/repair_clipped_audio.py` candidate at `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_candidates/jpn_s06_natural_pass01_word018_capelin_take04_trial0018__linear_declip_candidate.wav`.
   - Original package copy backup: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/audio_repair_applied_20260703/original_backup/`.
   - Review before launch: decide whether peak amplitude 0.99 is still required, whether JPN sample-rate variation is acceptable, and whether ENG `eng_s01`/`eng_s04` intensity should be normalized.
-  - The first three selected calibration WAVs have RMS about -23.98 dBFS; the selected synthetic Tingting `pizza.wav` is 44.1 kHz mono, 0.570794 s, with mean -19.2 dBFS and peak -2.8 dBFS. Confirm that this level difference is acceptable before launch.
+  - The current QC tables include the reviewed `appreciation`, `pesticide`, `quality`, `organizer`, and `balloon` package WAVs as the only five active practice assets. Retired calibration/candidate files remain distinguishable and are excluded from the current duration total.
   - Completion: all launch-blocking audio QC flags are resolved or explicitly accepted by the research team.
 
 - [ ] Confirm main-task duration with real audio.
@@ -233,7 +250,7 @@ The Prolific Study URL must use this stable project hostname, never a deployment
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/duration_estimate_by_cell_seed.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/duration_estimate_summary.csv`.
     - `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/DURATION_ESTIMATE_REPORT_20260703.md`.
-  - Current result: required audio playback lower bound is about 161 s on average across 1000 sampled cell/seed assignments, range 155-165 s.
+  - Current result: required audio playback lower bound is 161.476 s on average across 1,000 sampled cell/seed assignments, range 157.962–165.881 s; the exact five-item practice contribution is 4.329 s of unique audio.
   - This does not include instructions, typing, rating decisions, distractors, questionnaires, pauses, or network latency.
   - Completion: dry-run timing with real audio supports the Prolific time estimate and compensation.
 
@@ -247,14 +264,14 @@ The Prolific Study URL must use this stable project hostname, never a deployment
 
 - [ ] Run Cloudflare dry run with the production manifest.
   - Use `/admin/dry-run.html`.
-  - Confirm session start, four-item browser-only practice, four main blocks, distractors, main-trial save calls, completion, and admin exports.
+  - Confirm session start, five-item browser-only practice, four main blocks, distractors, main-trial save calls, completion, and admin exports.
   - Production preflight script: `scripts/preflight_production.mjs`.
   - Live deployment check script: `scripts/check_live_deployment.mjs`.
   - Standard persistent preflight report path: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/PREFLIGHT_REPORT_20260703.md`.
   - Standard persistent live report path: `/Users/tohokusla/Dropbox/Accentedness/Stimuli_OSF_Release_20260703/metadata/LIVE_DEPLOYMENT_CHECK_20260703.md`.
   - The v0.10 preflight and stable-host live API deployment check passed on 2026-07-15 with the external production manifest assumptions documented above.
   - Source-level Prolific guards pass locally: server-issued completion redirect, assignment-level completion coverage, per-trial saves, duplicate starts, active-or-completed counterbalance allocation with distributed same-count tie-breaks, and stale/dropout finalization.
-  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all four browser-only practice items repeat without creating v0.10 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
+  - Started-session resume guards must confirm that duplicate starts return the saved continuation state, all five browser-only practice items repeat without creating v0.10.1 practice rows, pending block distractors are preserved, familiarity covariates stay fixed, and the browser then continues at the first unsaved main item or later state.
   - The current stable application contract is v0.10; its application changes were introduced by merge commit `d58a81a`. The 2026-07-13 live API gate and its persisted practice metadata remain historical compatibility evidence.
   - Completion: a v0.10 dry run produces valid exports with 100 main assignments, zero current-version practice rows/events/local rating CSV rows, session-level background fields, and readable historical practice rows.
 
@@ -275,6 +292,8 @@ The Prolific Study URL must use this stable project hostname, never a deployment
   - Completion: final completed count per counterbalance cell is acceptable.
 
 ## Reference Commands
+
+The live stress and aggregate `--live-concurrency-stress` commands below are only for an explicitly documented Turnstile-disabled pilot/test window. The Turnstile-required production gate uses one fresh token for one live dry-run start.
 
 ```sh
 node scripts/verify_counterbalance.mjs

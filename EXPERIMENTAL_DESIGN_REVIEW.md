@@ -27,14 +27,14 @@ Main measures:
 Each participant completes:
 
 1. The required background questionnaire and familiarity ratings.
-2. Four browser-based practice/calibration trials.
+2. Five browser-based practice/calibration trials.
 3. Four main stimulus-list blocks.
 4. A short arithmetic distractor task between Blocks 1-3.
 5. Completion and D1 persistence checks.
 
 The main task is fixed to a combined-trial format: the participant hears one audio token and then provides intelligibility, accentedness, and comprehensibility responses for that token. On the rating page, accentedness is displayed above comprehensibility. If the word cannot be identified, the participant can explicitly mark `I could not identify the word` rather than entering a forced guess.
 
-The v0.10 data contract distinguishes participant experience from persisted research data. Participants still complete all four practice items and receive the same feedback/replay UI, but a new session stores exactly 100 main assignments with `sessions.trial_count=100`. Practice assignments, responses, and events are not written to D1 or the local rating CSV, and completion covers only the 100 main trials plus the required final checklist. All background responses are stored once on the `sessions` row rather than copied into trial records. The questionnaire columns remain nullable for sessions created before the questionnaire; new sessions must provide the required values.
+The v0.10 data contract distinguishes participant experience from persisted research data. v0.10.1 participants complete five practice items and receive feedback/replay UI, but a new session stores exactly 100 main assignments with `sessions.trial_count=100`. Practice assignments, responses, and events are not written to D1 or the local rating CSV, and completion covers only the 100 main trials plus the required final checklist. All background responses are stored once on the `sessions` row rather than copied into trial records. The questionnaire columns remain nullable for sessions created before the questionnaire; new sessions must provide the required values.
 
 ## Placeholder Stimulus Universe
 
@@ -304,25 +304,26 @@ If the final design intentionally uses a small number of speakers, the manuscrip
 
 ## Practice Trials
 
-Practice trials use four researcher-selected calibration WAVs in ascending documented Accentedness-reference bands:
+Practice trials use five researcher-provided calibration WAVs in ascending documented Accentedness-reference bands:
 
-1. `appreciation`, `ENG` female, 1–3.
-2. `pesticide`, `JPN` male, 3–5.
-3. `quality`, `JPN` female, 5–7.
-4. `pizza`, synthetic macOS `say` voice `Tingting` using Mandarin `披萨`, 7–9.
+1. `appreciation`, `ENG` female, Accentedness 1–2 and Comprehensibility 1–2.
+2. `pesticide`, `JPN` male, Accentedness 2–3 and Comprehensibility 1–2.
+3. `quality`, `JPN` female, Accentedness 4–5 and Comprehensibility 2–3.
+4. `organizer`, `CHN` female, Accentedness 4–6 and Comprehensibility 5–7.
+5. `balloon`, `CHN` male, Accentedness 6–8 and Comprehensibility 4–6.
 
-These are reference ranges rather than exact scalar ratings. No scalar expert Comprehensibility value has been established for these items. Before production launch:
+These are collaborator-reviewed reference ranges rather than exact scalar ratings. Before production launch:
 
-- Present a pre-practice explanation stating that the four samples familiarize participants with the task procedure and calibrate Accentedness ratings against expert reference ranges.
+- Present a pre-practice explanation stating that the five samples familiarize participants with the task procedure and calibrate Accentedness and Comprehensibility ratings against expert reference ranges.
 - Confirm the selected practice audio by collaborator listening review.
-- The Mandarin TTS lexical form was explicitly accepted for this practice endpoint on 2026-07-13. Preserve its synthetic Tingting/`披萨` provenance in `practice_manifest.csv`, client metadata, and reporting; historical raw exports retain it when legacy practice rows exist.
-- Confirm the documented Accentedness ranges; leave scalar expert fields blank unless exact ratings are formally established.
+- Preserve historical Tingting/`披萨` provenance only in the explicit v0.10.0 browser-practice registry and legacy persisted practice rows; it is not part of the current five-item set.
+- Confirm both documented reference ranges; leave scalar expert fields blank because the reviewed values are ranges.
 - Ensure practice words are not part of the main 50-word set.
 - Ensure practice does not reveal the main experimental manipulation.
 - Keep practice feedback client-only and absent from new-session assignments, trials, events, and local rating CSV rows.
 - Keep practice short and main-task-like: each practice item should require word typing plus both ratings.
 - Permit unlimited replay only while the post-response practice feedback is visible. Practice response pages and all main-task pages retain one playback per page.
-- On reload, repeat all four practice items before continuing to the saved main-trial/checklist/completion position. A v0.10 replay creates no practice persistence; historical practice rows from an earlier session contract remain unchanged and resumable.
+- On reload, repeat the practice set associated with the stored session version before continuing to the saved main-trial/checklist/completion position. v0.10.1 repeats the current five items, v0.10.0 retains its historical four, and earlier persisted-practice sessions replay their saved rows. Browser-only practice creates no new persistence.
 - Avoid free-text explanations during practice unless they are theoretically necessary and preregistered.
 
 Reviewer concern:
@@ -445,7 +446,7 @@ Do not change exclusion thresholds after looking at condition effects.
 | Fatigue or repeated listening changes rating behavior | Medium | Main-trial order, response order, rating RTs, and replay count are exported | Model process covariates and inspect late-trial sensitivity |
 | Dropout-induced cell imbalance | Medium | Completion-balanced allocation | Use rolling recruitment to completed target; report assigned/completed/excluded by cell |
 | Unidentified words conflated with missing data | Medium | Explicit unidentified response and export fields | Report unidentified rates by condition |
-| Practice feedback biases main ratings | Medium | Practice is client-only and absent from new persisted data | Replace placeholders and avoid condition training |
+| Practice feedback biases main ratings | Medium | Practice is client-only and absent from new persisted data | Keep the reviewed anchors distinct from main items and avoid condition training |
 
 ## Verification Commands
 
@@ -483,8 +484,7 @@ Before launch, replace or complete:
 - `[PLACEHOLDER_SPEAKER_ID]` and `[PLACEHOLDER_TALKER_ID]`.
 - `[PLACEHOLDER_LEXICAL_METADATA]`.
 - `[PLACEHOLDER_ACOUSTIC_METADATA]`.
-- `[PLACEHOLDER_PRACTICE_AUDIO]`.
-- `[PLACEHOLDER_EXPERT_RATINGS]`.
+- Practice audio and reference ranges are resolved in v0.10.1: five reviewed WAVs with both Accentedness and Comprehensibility ranges.
 - `[PLACEHOLDER_EXCLUSION_THRESHOLDS]`.
 - `[PLACEHOLDER_TARGET_SAMPLE_SIZE]`.
 

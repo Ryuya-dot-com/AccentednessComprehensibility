@@ -14,7 +14,15 @@ import {
 } from "../functions/api/_counterbalance.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
+const EXPECTED_PRACTICE = Object.freeze([
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", comp: "1–2", accent: "1–2" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", comp: "1–2", accent: "2–3" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", comp: "2–3", accent: "4–5" }),
+  Object.freeze({ word: "organizer", file: "chn_female_organizer_practice.wav", comp: "5–7", accent: "4–6" }),
+  Object.freeze({ word: "balloon", file: "chn_male_balloon_practice.wav", comp: "4–6", accent: "6–8" }),
+]);
 const ALLOWED_STUDY = "STUDY_ALLOWED";
 const ALLOCATION_COHORT = "pilot_bundle_v1";
 const TEST_ORIGIN = "https://bundle-test.invalid";
@@ -353,16 +361,26 @@ function assertParticipantSpeakerBalance(mainAssignment) {
 
 function assertCanonicalPracticeResponse(practiceAssignment) {
   assert(
+    CANONICAL_PRACTICE_ASSIGNMENT.length === EXPECTED_PRACTICE.length,
+    `server canonical practice count is ${CANONICAL_PRACTICE_ASSIGNMENT.length}; expected ${EXPECTED_PRACTICE.length}`,
+  );
+  assert(
     Array.isArray(practiceAssignment) &&
       practiceAssignment.length === CANONICAL_PRACTICE_ASSIGNMENT.length,
     `expected ${CANONICAL_PRACTICE_ASSIGNMENT.length} canonical practice rows; got ${practiceAssignment?.length}`,
   );
   CANONICAL_PRACTICE_ASSIGNMENT.forEach((expected, index) => {
     const actual = practiceAssignment[index];
+    const independent = EXPECTED_PRACTICE[index];
     assert(actual.phase === expected.phase, `practice ${index + 1} phase mismatch`);
     assert(actual.trial_index === expected.trial_index, `practice ${index + 1} trial index mismatch`);
     assert(actual.target_word === expected.target_word, `practice ${index + 1} target word mismatch`);
     assert(actual.audio_url === expected.audio_url, `practice ${index + 1} audio URL mismatch`);
+    assert(actual.practice_set_id === PRACTICE_SET_ID, `practice ${index + 1} set ID mismatch`);
+    assert(actual.target_word === independent.word, `practice ${index + 1} independent word mismatch`);
+    assert(actual.audio_url.endsWith(`/${independent.file}`), `practice ${index + 1} independent file mismatch`);
+    assert(actual.expert_comprehensibility_range === independent.comp, `practice ${index + 1} Comprehensibility range mismatch`);
+    assert(actual.expert_accentedness_range === independent.accent, `practice ${index + 1} Accentedness range mismatch`);
   });
 }
 

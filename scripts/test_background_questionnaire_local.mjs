@@ -13,16 +13,58 @@ import { CANONICAL_PRACTICE_ASSIGNMENT } from "../functions/api/_counterbalance.
 import { TARGET_WORDS } from "../functions/api/_word-familiarity.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
 const LEGACY_PLATFORM_VERSION = "pronunciation_rating_v0.6.0";
+const PRACTICE_SET_ID = "practice_calibration_v0.10.1";
+const LEGACY_BROWSER_PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const LEGACY_BROWSER_PRACTICE_SET_ID = "practice_calibration_v0.10.0";
 const LEGACY_FIXTURE_ORIGIN = "https://legacy-background-fixture.invalid";
 const PRACTICE_AUDIO_ROOT =
   "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration";
+const LEGACY_BROWSER_PRACTICE_ITEMS = Object.freeze([
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    trial_index: 1,
+    target_word: "appreciation",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/eng_female_appreciation_practice.wav`,
+    file_name: "ENG_Female_appreciation_Practice.wav",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "1–3",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    trial_index: 2,
+    target_word: "pesticide",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_male_pesticide_practice.wav`,
+    file_name: "JPN_Male_pesticide.wav",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "3–5",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    trial_index: 3,
+    target_word: "quality",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/jpn_female_quality_practice.wav`,
+    file_name: "JPN_Female_quality_Practice.wav",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "5–7",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    trial_index: 4,
+    target_word: "pizza",
+    audio_url: `${PRACTICE_AUDIO_ROOT}/chn_female_pizza_practice.wav`,
+    file_name: "chn_female_pizza_practice.wav",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "7–9",
+  }),
+]);
 const PRACTICE_ITEMS = Object.freeze([
-  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", range: "1–3" }),
-  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", range: "3–5" }),
-  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", range: "5–7" }),
-  Object.freeze({ word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", range: "7–9" }),
+  Object.freeze({ word: "appreciation", file: "eng_female_appreciation_practice.wav", fileName: "ENG_Female_appreciation_Practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_1_2_comp_1_2", compRange: "1–2", accentRange: "1–2" }),
+  Object.freeze({ word: "pesticide", file: "jpn_male_pesticide_practice.wav", fileName: "JPN_Male_pesticide.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_2_3_comp_1_2", compRange: "1–2", accentRange: "2–3" }),
+  Object.freeze({ word: "quality", file: "jpn_female_quality_practice.wav", fileName: "JPN_Female_quality_Practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_4_5_comp_2_3", compRange: "2–3", accentRange: "4–5" }),
+  Object.freeze({ word: "organizer", file: "chn_female_organizer_practice.wav", fileName: "CHN_Female_Organizer_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_female", spokenForm: "organizer", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_4_6_comp_5_7", compRange: "5–7", accentRange: "4–6" }),
+  Object.freeze({ word: "balloon", file: "chn_male_balloon_practice.wav", fileName: "CHN_Male_Balloon_Practice.wav", l1: "CHN", pronunciation: "accented", talker: "practice_chn_male", spokenForm: "balloon", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "reference_acc_6_8_comp_4_6", compRange: "4–6", accentRange: "6–8" }),
 ]);
 
 function argValue(name, fallback = "") {
@@ -204,11 +246,12 @@ async function invokeLocalHandler(handler, env, pathname, payload, sessionToken 
 
 function practiceAssignment() {
   return PRACTICE_ITEMS.map((item, index) => ({
+    practice_set_id: PRACTICE_SET_ID,
     phase: "practice",
     trial_index: index + 1,
     source_path: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
     audio_url: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
-    file_name: item.file,
+    file_name: item.fileName,
     target_word: item.word,
     participant_id: item.talker,
     native_language: item.l1,
@@ -218,14 +261,14 @@ function practiceAssignment() {
     word_number: String(index + 1),
     trial_number: String(index + 1),
     spoken_form: item.spokenForm,
-    practice_note: item.sourceFormat === "macos_say_tingting_tts_wav"
-      ? `Synthetic macOS say Tingting Mandarin form 披萨; expert Accentedness reference range: ${item.range}.`
-      : `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.range}.`,
+    practice_note: `Researcher-provided calibration WAV; expert Accentedness reference range: ${item.accentRange}; expert Comprehensibility reference range: ${item.compRange}.`,
     source_format: item.sourceFormat,
     practice_kind: "combined",
-    practice_group: `accent_band_${item.range.replace("–", "_")}`,
+    practice_group: item.practiceGroup,
     l1_condition: item.l1,
     pronunciation_condition: item.pronunciation,
+    expert_comprehensibility_range: item.compRange,
+    expert_accentedness_range: item.accentRange,
   }));
 }
 
@@ -256,17 +299,53 @@ function assignment() {
   return [...practiceAssignment(), mainAssignment()];
 }
 
+function legacyPracticeAssignment() {
+  const items = [
+    { word: "appreciation", file: "eng_female_appreciation_practice.wav", l1: "ENG", pronunciation: "natural", talker: "practice_eng_female", spokenForm: "appreciation", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "accent_band_1_3" },
+    { word: "pesticide", file: "jpn_male_pesticide_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_male", spokenForm: "pesticide", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "accent_band_3_5" },
+    { word: "quality", file: "jpn_female_quality_practice.wav", l1: "JPN", pronunciation: "accented", talker: "practice_jpn_female", spokenForm: "quality", sourceFormat: "researcher_provided_calibration_wav", practiceGroup: "accent_band_5_7" },
+    { word: "pizza", file: "chn_female_pizza_practice.wav", l1: "CHN", pronunciation: "accented", talker: "macos_tts_tingting", spokenForm: "披萨", sourceFormat: "macos_say_tingting_tts_wav", practiceGroup: "accent_band_7_9" },
+  ];
+  return items.map((item, index) => ({
+    phase: "practice",
+    trial_index: index + 1,
+    source_path: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
+    audio_url: `${PRACTICE_AUDIO_ROOT}/${item.file}`,
+    file_name: item.file,
+    target_word: item.word,
+    participant_id: item.talker,
+    native_language: item.l1,
+    accent_condition: item.pronunciation,
+    condition: `practice_${item.pronunciation}`,
+    talker: item.talker,
+    word_number: String(index + 1),
+    trial_number: String(index + 1),
+    spoken_form: item.spokenForm,
+    practice_note: "Persisted legacy four-item practice fixture.",
+    source_format: item.sourceFormat,
+    practice_kind: "combined",
+    practice_group: item.practiceGroup,
+    stimulus_list: "practice",
+    l1_condition: item.l1,
+    pronunciation_condition: item.pronunciation,
+  }));
+}
+
+function legacyAssignment() {
+  return [...legacyPracticeAssignment(), mainAssignment()];
+}
+
 function trialRow(item, overrides = {}) {
   const practice = item.phase === "practice";
   return {
     phase: item.phase,
     trial_index: item.trial_index,
-    trial_total: practice ? PRACTICE_ITEMS.length : 100,
+    trial_total: practice ? Math.max(PRACTICE_ITEMS.length, item.trial_index) : 100,
     completed_at: new Date().toISOString(),
     typed_response: item.target_word,
     intelligibility_response_status: "typed",
     comprehensibility_1_9: 4,
-    accentedness_1_9: practice ? item.trial_index * 2 : 3,
+    accentedness_1_9: practice ? Math.min(item.trial_index * 2, 9) : 3,
     response_flow: "staged_dictation_then_ratings",
     ...overrides,
   };
@@ -334,10 +413,11 @@ function assertSavedDemographics(actual, expected, label) {
 function assertCanonicalPracticeUiRows(rows, label) {
   assert(
     Array.isArray(rows) && rows.length === CANONICAL_PRACTICE_ASSIGNMENT.length,
-    `${label} did not return all four canonical practice rows.`,
+    `${label} did not return all ${CANONICAL_PRACTICE_ASSIGNMENT.length} canonical practice rows.`,
   );
   const fields = [
     "phase",
+    "practice_set_id",
     "trial_index",
     "target_word",
     "audio_url",
@@ -355,6 +435,8 @@ function assertCanonicalPracticeUiRows(rows, label) {
     "practice_group",
     "l1_condition",
     "pronunciation_condition",
+    "expert_comprehensibility_range",
+    "expert_accentedness_range",
   ];
   CANONICAL_PRACTICE_ASSIGNMENT.forEach((expected, index) => {
     const actual = rows[index] || {};
@@ -369,6 +451,45 @@ function assertCanonicalPracticeUiRows(rows, label) {
       `${label} practice ${index + 1} has the wrong source_path.`,
     );
   });
+}
+
+function assertLegacyBrowserPracticeUiRows(rows, label) {
+  assert(
+    Array.isArray(rows) && rows.length === LEGACY_BROWSER_PRACTICE_ITEMS.length,
+    `${label} did not return the historical ${LEGACY_BROWSER_PRACTICE_ITEMS.length}-item practice set.`,
+  );
+  const fields = [
+    "practice_set_id",
+    "trial_index",
+    "target_word",
+    "audio_url",
+    "file_name",
+    "expert_comprehensibility_range",
+    "expert_accentedness_range",
+  ];
+  LEGACY_BROWSER_PRACTICE_ITEMS.forEach((expected, index) => {
+    const actual = rows[index] || {};
+    for (const field of fields) {
+      assert(
+        actual[field] === expected[field],
+        `${label} historical practice ${index + 1} has the wrong ${field}.`,
+      );
+    }
+    assert(actual.phase === "practice", `${label} historical practice ${index + 1} has the wrong phase.`);
+    assert(
+      actual.source_path === expected.audio_url,
+      `${label} historical practice ${index + 1} has the wrong source_path.`,
+    );
+  });
+  assert(
+    !rows.some(
+      (row) =>
+        row.practice_set_id === PRACTICE_SET_ID ||
+        row.target_word === "organizer" ||
+        row.target_word === "balloon",
+    ),
+    `${label} mixed the current five-item practice set into the historical response.`,
+  );
 }
 
 async function expectRejectedStart(baseUrl, payload, expectedMessage) {
@@ -395,6 +516,130 @@ async function expectRejectedWordFamiliarity(baseUrl, sessionId, sessionToken, r
 
 function allUnknownWordFamiliarity() {
   return TARGET_WORDS.map((word) => ({ ...word, known: false }));
+}
+
+async function exerciseBrowserOnlyV0100ResumeFixture(suffix) {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("PRAGMA foreign_keys = ON");
+  sqlite.exec(fs.readFileSync(path.join(ROOT, "db/schema.sql"), "utf8"));
+  const db = new LocalD1(sqlite);
+  const env = {
+    DB: db,
+    ENVIRONMENT: "development",
+    REQUIRE_TURNSTILE: "0",
+    PROLIFIC_COMPLETION_CODE: "LOCAL-V0100-COMPLETE",
+  };
+  const fixtureIdentity = identity(suffix);
+  const sessionId = `browser-v0100-fixture-${suffix}`;
+  const participantKey = `prolific:${fixtureIdentity.prolific_study_id.toLowerCase()}:${fixtureIdentity.prolific_pid.toLowerCase()}`;
+  const startedAtMs = Date.now() - 60_000;
+  const startedAt = new Date(startedAtMs).toISOString();
+  const persistedMain = mainAssignment();
+
+  try {
+    sqlite.prepare(
+      `INSERT INTO sessions (
+        id, rater_id, session_label, task_mode, platform_version,
+        prolific_pid, prolific_study_id, prolific_session_id, participant_key,
+        participant_age_years, english_variety, english_variety_other,
+        gender, gender_other,
+        english_teaching_experience, english_teaching_experience_details,
+        linguistics_knowledge, linguistics_knowledge_details,
+        japanese_familiarity_1_6, chinese_familiarity_1_6,
+        word_familiarity_required, screen_json,
+        started_at, started_at_ms, last_seen_at, last_seen_at_ms,
+        status, trial_count, completed_trial_count
+      ) VALUES (
+        ?, ?, ?, 'combined', ?, ?, ?, ?, ?,
+        34, 'other', 'Irish English', 'other', 'Test response',
+        'yes', '5 years, adults', 'yes', 'English phonetics',
+        3, 4, 1, '{}', ?, ?, ?, ?, 'started', 1, 0
+      )`,
+    ).run(
+      sessionId,
+      fixtureIdentity.rater_id,
+      fixtureIdentity.session_label,
+      LEGACY_BROWSER_PLATFORM_VERSION,
+      fixtureIdentity.prolific_pid,
+      fixtureIdentity.prolific_study_id,
+      fixtureIdentity.prolific_session_id,
+      participantKey,
+      startedAt,
+      startedAtMs,
+      startedAt,
+      startedAtMs,
+    );
+
+    sqlite.prepare(
+      `INSERT INTO rating_assignments (
+        id, session_id, phase, trial_index, source_path, audio_url, file_name,
+        target_word, participant_id, native_language, accent_condition,
+        condition, talker, word_number, trial_number, spoken_form,
+        source_format, stimulus_list, l1_condition, pronunciation_condition, created_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )`,
+    ).run(
+      `${sessionId}:main:1`,
+      sessionId,
+      persistedMain.phase,
+      persistedMain.trial_index,
+      persistedMain.source_path,
+      persistedMain.audio_url,
+      persistedMain.file_name,
+      persistedMain.target_word,
+      persistedMain.participant_id,
+      persistedMain.native_language,
+      persistedMain.accent_condition,
+      persistedMain.condition,
+      persistedMain.talker,
+      persistedMain.word_number,
+      persistedMain.trial_number,
+      persistedMain.spoken_form,
+      persistedMain.source_format,
+      persistedMain.stimulus_list,
+      persistedMain.l1_condition,
+      persistedMain.pronunciation_condition,
+      startedAt,
+    );
+
+    const persistedAssignments = sqlite.prepare(
+      `SELECT phase, COUNT(*) AS count
+       FROM rating_assignments WHERE session_id = ? GROUP BY phase`,
+    ).all(sessionId);
+    assert(
+      !persistedAssignments.some((row) => row.phase === "practice") &&
+        persistedAssignments.find((row) => row.phase === "main")?.count === 1,
+      "The v0.10.0 browser-only fixture must contain zero practice assignments and one main assignment.",
+    );
+
+    const resumed = await invokeLocalHandler(startSessionHandler, env, "/api/session/start", {
+      ...fixtureIdentity,
+      task_mode: "combined",
+      platform_version: PLATFORM_VERSION,
+      resume_only: true,
+    });
+    assert(resumed.response.status === 200, `v0.10.0 browser-only fixture resume failed: ${resumed.text}`);
+    assert(
+      resumed.json?.existing_session === true &&
+        resumed.json?.session_id === sessionId &&
+        resumed.json?.platform_version === LEGACY_BROWSER_PLATFORM_VERSION &&
+        resumed.json?.practice_set_id === LEGACY_BROWSER_PRACTICE_SET_ID &&
+        resumed.json?.practice_recording_required === false &&
+        resumed.json?.main_assignment?.length === 1 &&
+        resumed.json?.saved_trials?.length === 0 &&
+        resumed.json?.resume?.next_phase === "main" &&
+        Number(resumed.json?.resume?.next_trial_index) === 1 &&
+        resumed.json?.resume?.practice_replay_required === true,
+      `The v0.10.0 browser-only fixture did not retain its historical resume contract: ${resumed.text}`,
+    );
+    assertLegacyBrowserPracticeUiRows(
+      resumed.json?.practice_assignment,
+      "v0.10.0 browser-only resume",
+    );
+  } finally {
+    sqlite.close();
+  }
 }
 
 async function exercisePersistedPracticeLegacyFixture(suffix) {
@@ -459,33 +704,34 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )`,
     );
-    for (const item of assignment()) {
-      insertAssignment.run(
-        `${sessionId}:${item.phase}:${item.trial_index}`,
-        sessionId,
-        item.phase,
-        item.trial_index,
-        item.source_path || null,
-        item.audio_url || null,
-        item.file_name || null,
-        item.target_word || null,
-        item.participant_id || null,
-        item.native_language || null,
-        item.accent_condition || null,
-        item.condition || null,
-        item.talker || null,
-        item.word_number || null,
-        item.trial_number || null,
-        item.spoken_form || null,
-        item.practice_note || null,
-        item.source_format || null,
-        item.practice_kind || null,
-        item.practice_group || null,
-        item.stimulus_list || null,
-        item.l1_condition || null,
-        item.pronunciation_condition || null,
-        startedAt,
-      );
+    const persistLegacyAssignment = (item) => insertAssignment.run(
+      `${sessionId}:${item.phase}:${item.trial_index}`,
+      sessionId,
+      item.phase,
+      item.trial_index,
+      item.source_path || null,
+      item.audio_url || null,
+      item.file_name || null,
+      item.target_word || null,
+      item.participant_id || null,
+      item.native_language || null,
+      item.accent_condition || null,
+      item.condition || null,
+      item.talker || null,
+      item.word_number || null,
+      item.trial_number || null,
+      item.spoken_form || null,
+      item.practice_note || null,
+      item.source_format || null,
+      item.practice_kind || null,
+      item.practice_group || null,
+      item.stimulus_list || null,
+      item.l1_condition || null,
+      item.pronunciation_condition || null,
+      startedAt,
+    );
+    for (const item of legacyAssignment()) {
+      persistLegacyAssignment(item);
     }
 
     const persistedAssignments = sqlite.prepare(
@@ -517,8 +763,33 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
         resumed.json?.word_familiarity_required === false,
       `The persisted-practice legacy fixture did not retain its resume contract: ${resumed.text}`,
     );
+    assert(
+      resumed.json.practice_assignment
+        .map((row) => row.expert_accentedness_range)
+        .join(",") === "1–3,3–5,5–7,7–9",
+      `The persisted-practice legacy fixture lost its historical Accentedness ranges: ${resumed.text}`,
+    );
     const sessionToken = resumed.json.session_token;
     assert(sessionToken, "Legacy fixture resume did not issue a session token.");
+
+    // v0.5-era fixtures could have six persisted practice assignments. Keep a
+    // non-current index to prove that the API bounds historical rows by the
+    // saved assignment, not by the current five-item canonical set.
+    const legacyPracticeSix = {
+      ...legacyPracticeAssignment()[3],
+      trial_index: 6,
+      target_word: "legacy-sixth-practice",
+      file_name: "legacy_sixth_practice.wav",
+      source_path: `${PRACTICE_AUDIO_ROOT}/legacy_sixth_practice.wav`,
+      audio_url: `${PRACTICE_AUDIO_ROOT}/legacy_sixth_practice.wav`,
+      word_number: "6",
+      trial_number: "6",
+      spoken_form: "legacy sixth practice",
+      practice_note: "Persisted six-item legacy compatibility fixture.",
+      practice_group: "legacy_six_item_set",
+    };
+    persistLegacyAssignment(legacyPracticeSix);
+    sqlite.prepare("UPDATE sessions SET trial_count = 6 WHERE id = ?").run(sessionId);
 
     const legacyPracticeEvent = await invokeLocalHandler(
       saveEventHandler,
@@ -541,7 +812,7 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
       `A persisted-practice legacy event was not recorded: ${legacyPracticeEvent.text}`,
     );
 
-    for (const practice of practiceAssignment()) {
+    for (const practice of [...legacyPracticeAssignment(), legacyPracticeSix]) {
       const saved = await invokeLocalHandler(
         saveTrialHandler,
         env,
@@ -561,7 +832,7 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
       "/api/trial",
       {
         session_id: sessionId,
-        row: trialRow(practiceAssignment()[0], {
+        row: trialRow(legacyPracticeAssignment()[0], {
           typed_response: "must-not-overwrite-legacy",
           comprehensibility_1_9: 9,
           accentedness_1_9: 9,
@@ -594,8 +865,8 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
        ORDER BY CASE phase WHEN 'practice' THEN 0 ELSE 1 END, trial_index`,
     ).all(sessionId);
     assert(
-      savedState.length === 5 && savedState.filter((row) => row.phase === "practice").length === 4,
-      "The legacy fixture did not persist all four practice ratings and its main rating.",
+      savedState.length === 6 && savedState.filter((row) => row.phase === "practice").length === 5,
+      "The legacy fixture did not persist its four-item set, non-current sixth practice index, and main rating.",
     );
     const savedPracticeOne = savedState.find(
       (row) => row.phase === "practice" && row.trial_index === 1,
@@ -615,8 +886,8 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
       return row.event_type.startsWith("practice_") || payload.phase === "practice";
     });
     assert(
-      persistedPracticeEvents.length === 5,
-      `The legacy fixture persisted ${persistedPracticeEvents.length} practice events instead of 5.`,
+      persistedPracticeEvents.length === 6,
+      `The legacy fixture persisted ${persistedPracticeEvents.length} practice events instead of 6.`,
     );
 
     const resumedAfterSaves = await invokeLocalHandler(startSessionHandler, env, "/api/session/start", {
@@ -628,8 +899,8 @@ async function exercisePersistedPracticeLegacyFixture(suffix) {
     assert(
       resumedAfterSaves.response.status === 200 &&
         resumedAfterSaves.json?.practice_recording_required === true &&
-        resumedAfterSaves.json?.saved_trials?.length === 5 &&
-        resumedAfterSaves.json?.saved_trials?.filter((row) => row.phase === "practice").length === 4 &&
+        resumedAfterSaves.json?.saved_trials?.length === 6 &&
+        resumedAfterSaves.json?.saved_trials?.filter((row) => row.phase === "practice").length === 5 &&
         resumedAfterSaves.json?.resume?.next_phase === "complete",
       `Legacy saved practice progress was not restored: ${resumedAfterSaves.text}`,
     );
@@ -662,12 +933,14 @@ async function main() {
   assert(indexPage.text.includes('id="word-familiarity-panel"'), "Participant page is missing the checklist panel.");
   assert(indexPage.text.includes("Review all 50 words"), "Participant page is missing the 50-word instruction.");
   assert(indexPage.text.includes("If you were unfamiliar with it"), "Participant page has the wrong checklist instruction.");
-  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.10.0"'), "Participant page does not load the audio lifecycle guard.");
-  assert(indexPage.text.includes('src="app.js?v=0.10.0"'), "Participant page does not cache-bust app.js v0.10.0.");
+  assert(indexPage.text.includes('src="audio-lifecycle.js?v=0.10.1"'), "Participant page does not load the versioned audio lifecycle guard.");
+  assert(indexPage.text.includes('src="app.js?v=0.10.1"'), "Participant page does not cache-bust app.js v0.10.1.");
   assert(
-    indexPage.text.includes("In this practice session, you will transcribe and rate four sample words.") &&
+    indexPage.text.includes("In this practice session, you will transcribe and rate five sample words.") &&
       indexPage.text.includes("familiarize you with the task procedure; and") &&
-      indexPage.text.includes("help you calibrate your Accentedness ratings by comparing them with expert reference ranges.") &&
+      indexPage.text.includes("help you calibrate your Accentedness and Comprehensibility ratings by comparing them with expert reference ranges.") &&
+      indexPage.text.includes("rate 5 words. The word played and expert Accentedness and Comprehensibility reference ranges will be shown after each") &&
+      indexPage.text.includes("compare your response with the expert Accentedness and Comprehensibility reference ranges") &&
       indexPage.text.includes("listen to the sample again as many times as you like."),
     "Participant page is missing the pre-practice purpose and replay instructions.",
   );
@@ -709,7 +982,8 @@ async function main() {
   for (const item of PRACTICE_ITEMS) {
     assert(appPage.text.includes(`word: "${item.word}"`), `Participant app is missing practice word ${item.word}.`);
     assert(appPage.text.includes(item.file), `Participant app is missing practice audio ${item.file}.`);
-    assert(appPage.text.includes(`"${item.range}"`), `Participant app is missing practice range ${item.range}.`);
+    assert(appPage.text.includes(`expert_comprehensibility_range: "${item.compRange}"`), `Participant app is missing Comprehensibility range ${item.compRange}.`);
+    assert(appPage.text.includes(`expert_accentedness_range: "${item.accentRange}"`), `Participant app is missing Accentedness range ${item.accentRange}.`);
   }
   for (const snippet of [
     "resumeAfterPractice",
@@ -726,14 +1000,24 @@ async function main() {
     "AUDIO_LIFECYCLE.createFeedbackReplayLifecycle",
     "You may replay this practice audio as many times as needed.",
     "Expert raters rated this as:",
-    "Comprehensibility: — (Your rating:",
+    "Comprehensibility: ${expertCompRange} (Your rating:",
     "These reference ratings are only for practice.",
     "practice_feedback_replay_start",
     "practice_feedback_replay_end",
     "responsePhase !== \"practice\" || state.practiceRecordingRequired",
+    "legacyPersistedPractice",
+    "historicalBrowserPractice",
+    "serverPracticeAssignments.map",
   ]) {
     assert(appPage.text.includes(snippet), `Participant app is missing resume/replay contract: ${snippet}`);
   }
+  assert(
+    appPage.text.includes("LEGACY_BROWSER_PRACTICE_SETS") &&
+      appPage.text.includes(`\"${LEGACY_BROWSER_PRACTICE_SET_ID}\": Object.freeze([`) &&
+      appPage.text.includes("historicalBrowserPracticeExpected") &&
+      appPage.text.includes("practiceAssignmentsMatchExpected(serverPracticeAssignments, historicalBrowserPracticeExpected)"),
+    "Participant app is missing the historical browser-only practice registry or its source guard.",
+  );
   assert(
     !appPage.text.includes("practiceFeedbackReplayCount >="),
     "Practice feedback replay has an unintended hard limit.",
@@ -741,6 +1025,7 @@ async function main() {
   assert(
     !appPage.text.includes("elevenlabs_selected_chocolate_coffee_pizza_sofa_20260703") &&
       !appPage.text.includes("CHN_Male_shelter_Practice.wav") &&
+      !appPage.text.includes("Comprehensibility: — (Your rating:") &&
       !appPage.text.includes("practice_elevenlabs_mp3_norm"),
     "Participant app still contains the superseded practice set.",
   );
@@ -790,13 +1075,13 @@ async function main() {
   assert(started.response.status === 200, `Valid start failed: ${started.response.status} ${started.text}`);
   assert(started.json?.ok === true && started.json?.session_id, `Start response is incomplete: ${started.text}`);
   assert(started.json?.session_token, "Start response did not issue a session token.");
-  assert(started.json?.word_familiarity_required === true, "New v0.10 session did not require the checklist.");
-  assert(started.json?.practice_recording_required === false, "New v0.10 session unexpectedly records practice.");
+  assert(started.json?.word_familiarity_required === true, "New v0.10.1 session did not require the checklist.");
+  assert(started.json?.practice_recording_required === false, "New v0.10.1 session unexpectedly records practice.");
   assert(
     Number(started.json?.trial_count) === 1 &&
-      started.json?.practice_assignment?.length === 4 &&
+      started.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       started.json?.main_assignment?.length === 1,
-    `New v0.10 start did not return four client-only practice items plus one recorded main trial: ${started.text}`,
+    `New v0.10.1 start did not return ${PRACTICE_ITEMS.length} client-only practice items plus one recorded main trial: ${started.text}`,
   );
   const sessionId = started.json.session_id;
 
@@ -831,8 +1116,8 @@ async function main() {
   assert(resumed.json?.existing_session === true, `Resume did not find the session: ${resumed.text}`);
   assert(resumed.json?.session_id === sessionId, "Resume returned a different session ID.");
   assertSavedDemographics(resumed.json, payload, "Fresh resume");
-  assert(resumed.json?.resume?.practice_replay_required === true, "Resume did not require all four practice items to replay.");
-  assert(resumed.json?.practice_recording_required === false, "New v0.10 resume unexpectedly records practice.");
+  assert(resumed.json?.resume?.practice_replay_required === true, "Resume did not require all current practice items to replay.");
+  assert(resumed.json?.practice_recording_required === false, "New v0.10.1 resume unexpectedly records practice.");
   assert(
     resumed.json?.resume?.next_phase === "main" &&
       Number(resumed.json?.resume?.next_trial_index) === 1 &&
@@ -933,7 +1218,7 @@ async function main() {
       resumeBeforeChecklist.json?.resume?.next_phase === "word_familiarity" &&
       resumeBeforeChecklist.json?.resume?.practice_replay_required === true &&
       resumeBeforeChecklist.json?.practice_recording_required === false &&
-      resumeBeforeChecklist.json?.practice_assignment?.length === 4 &&
+      resumeBeforeChecklist.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       resumeBeforeChecklist.json?.saved_trials?.length === 1 &&
       resumeBeforeChecklist.json?.saved_trials?.every(
         (row) => row.phase === "main" && Number(row.trial_index) === 1,
@@ -1020,7 +1305,7 @@ async function main() {
       resumeAfterChecklist.json?.resume?.next_phase === "complete" &&
       resumeAfterChecklist.json?.resume?.practice_replay_required === true &&
       resumeAfterChecklist.json?.practice_recording_required === false &&
-      resumeAfterChecklist.json?.practice_assignment?.length === 4 &&
+      resumeAfterChecklist.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       resumeAfterChecklist.json?.saved_trials?.length === 1 &&
       resumeAfterChecklist.json?.saved_trials?.every((row) => row.phase === "main") &&
       resumeAfterChecklist.json?.word_familiarity?.length === 50,
@@ -1040,6 +1325,7 @@ async function main() {
   assert(completed.response.status === 200 && completed.json?.ok === true, `Completion failed: ${completed.text}`);
   assert(completed.json?.status === "completed", `Expected completed status: ${completed.text}`);
 
+  await exerciseBrowserOnlyV0100ResumeFixture(`${runId}_browser_v0100`);
   await exercisePersistedPracticeLegacyFixture(`${runId}_legacy`);
 
   const progressSuffix = `${runId}_resume_progress`;
@@ -1054,7 +1340,7 @@ async function main() {
   assert(
     progressStarted.json?.practice_recording_required === false &&
       Number(progressStarted.json?.trial_count) === 2 &&
-      progressStarted.json?.practice_assignment?.length === 4 &&
+      progressStarted.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       progressStarted.json?.main_assignment?.length === 2,
     `Progress-contract start persisted practice or returned the wrong trial totals: ${progressStarted.text}`,
   );
@@ -1086,7 +1372,7 @@ async function main() {
       progressResumed.json?.resume?.next_phase === "main" &&
       Number(progressResumed.json?.resume?.next_trial_index) === 2 &&
       progressResumed.json?.practice_recording_required === false &&
-      progressResumed.json?.practice_assignment?.length === 4 &&
+      progressResumed.json?.practice_assignment?.length === PRACTICE_ITEMS.length &&
       progressResumed.json?.saved_trials?.length === 1 &&
       progressResumed.json?.saved_trials?.every(
         (row) => row.phase === "main" && Number(row.trial_index) === 1,
@@ -1306,7 +1592,7 @@ async function main() {
     legacy_v060_compatibility: true,
     legacy_v060_mid_task_resume: true,
     stale_client_reload_handled: true,
-    practice_set_v081_exact: true,
+    practice_set_v0101_exact: true,
     practice_feedback_unlimited_replay_contract: true,
     resume_replays_all_practice: true,
     resume_preserves_first_unsaved_main: true,
@@ -1316,6 +1602,7 @@ async function main() {
     new_v010_practice_trials_0: true,
     new_v010_practice_events_0: true,
     all_demographic_session_columns_roundtrip: true,
+    legacy_v0100_browser_only_resume_exact: true,
     legacy_practice_contract_compatible: true,
   }, null, 2));
 }

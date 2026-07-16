@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import {
   COUNTERBALANCE_CELLS,
+  CANONICAL_PRACTICE_ASSIGNMENT,
   CURRENT_ALLOCATION_STRATEGY_VERSION,
+  CURRENT_PRACTICE_SET_ID,
   buildCounterbalancedAssignment,
 } from "../functions/api/_counterbalance.js";
 
 const PROJECT_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const DEFAULT_PACKAGE_ROOT = path.join(PROJECT_ROOT, "Stimuli_OSF_Release_20260703");
-const DEFAULT_MANIFEST = path.join(DEFAULT_PACKAGE_ROOT, "remote_manifest.csv");
-const DEFAULT_AUDIO_QC = path.join(DEFAULT_PACKAGE_ROOT, "metadata", "audio_qc_by_file.csv");
-const DEFAULT_OUT_DIR = path.join(DEFAULT_PACKAGE_ROOT, "metadata");
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -118,9 +118,135 @@ function durationLookup(audioQcRows) {
   return lookup;
 }
 
-function selectedPracticeDuration(audioQcRows) {
-  const selected = audioQcRows.filter((row) => row.asset_role === "selected_practice_app_asset");
-  return selected.reduce((sum, row) => sum + Number.parseFloat(row.duration_s || "0"), 0);
+function sha256File(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function canonicalPracticePackagePath(item) {
+  return new URL(item.audio_url).pathname.replace(/^\/+/, "");
+}
+
+function selectedPracticeDuration(practiceRows, audioQcRows, packageRoot) {
+  const problems = [];
+  const expectedCount = CANONICAL_PRACTICE_ASSIGNMENT.length;
+  if (practiceRows.length !== expectedCount) {
+    problems.push(`expected ${expectedCount} selected practice rows, found ${practiceRows.length}`);
+  }
+
+  const practiceByTrial = new Map();
+  for (const row of practiceRows) {
+    const trialIndex = Number.parseInt(row.trial_index || "", 10);
+    if (!Number.isInteger(trialIndex)) {
+      problems.push(`invalid selected-practice trial_index: ${row.trial_index || "(blank)"}`);
+      continue;
+    }
+    if (practiceByTrial.has(trialIndex)) {
+      problems.push(`duplicate selected-practice trial_index: ${trialIndex}`);
+      continue;
+    }
+    practiceByTrial.set(trialIndex, row);
+  }
+
+  const qcByPath = new Map();
+  for (const row of audioQcRows) {
+    const relativePath = String(row.relative_path || "").trim();
+    if (!relativePath) continue;
+    if (!qcByPath.has(relativePath)) qcByPath.set(relativePath, []);
+    qcByPath.get(relativePath).push(row);
+  }
+
+  let total = 0;
+  const paths = [];
+  for (const expected of CANONICAL_PRACTICE_ASSIGNMENT) {
+    const trialIndex = Number(expected.trial_index);
+    const label = `practice trial ${trialIndex} (${expected.target_word})`;
+    const row = practiceByTrial.get(trialIndex);
+    if (!row) {
+      problems.push(`${label}: manifest row is missing`);
+      continue;
+    }
+
+    const expectedPath = canonicalPracticePackagePath(expected);
+    const packagePath = String(row.package_relative_path || "").trim();
+    const scalarComp = String(row.expert_comprehensibility_1_9 || "").trim();
+    const scalarAccent = String(row.expert_accentedness_1_9 || "").trim();
+    const expectedFields = [
+      ["practice_set_id", row.practice_set_id, CURRENT_PRACTICE_SET_ID],
+      ["target_word", row.target_word, expected.target_word],
+      ["package_relative_path", packagePath, expectedPath],
+      [
+        "expert_comprehensibility_range",
+        row.expert_comprehensibility_range,
+        expected.expert_comprehensibility_range,
+      ],
+      ["expert_accentedness_range", row.expert_accentedness_range, expected.expert_accentedness_range],
+      ["status", row.status, "selected_reviewed"],
+    ];
+    for (const [field, actual, wanted] of expectedFields) {
+      if (String(actual || "").trim() !== String(wanted)) {
+        problems.push(`${label}: ${field} is ${JSON.stringify(actual || "")}, expected ${JSON.stringify(wanted)}`);
+      }
+    }
+    if (scalarComp || scalarAccent) {
+      problems.push(`${label}: scalar expert ratings must be blank when reviewed ranges are used`);
+    }
+    if (!packagePath) continue;
+    paths.push(packagePath);
+
+    const packageFile = path.resolve(packageRoot, packagePath);
+    if (!packageFile.startsWith(`${path.resolve(packageRoot)}${path.sep}`)) {
+      problems.push(`${label}: package_relative_path escapes package root: ${packagePath}`);
+      continue;
+    }
+    if (!fs.existsSync(packageFile) || !fs.statSync(packageFile).isFile()) {
+      problems.push(`${label}: package audio is missing: ${packageFile}`);
+      continue;
+    }
+
+    const actualSize = fs.statSync(packageFile).size;
+    const actualSha256 = sha256File(packageFile);
+    const manifestSize = Number.parseInt(row.size_bytes || "", 10);
+    const manifestSha256 = String(row.sha256 || "").trim().toLowerCase();
+    if (String(row.package_file_exists || "").trim() !== "1") {
+      problems.push(`${label}: package_file_exists must be 1`);
+    }
+    if (!Number.isInteger(manifestSize) || manifestSize !== actualSize) {
+      problems.push(`${label}: selected-practice size is stale (manifest ${row.size_bytes || "blank"}, file ${actualSize})`);
+    }
+    if (manifestSha256 !== actualSha256) {
+      problems.push(`${label}: selected-practice SHA-256 is stale or missing`);
+    }
+
+    const qcMatches = qcByPath.get(packagePath) || [];
+    if (qcMatches.length !== 1) {
+      problems.push(`${label}: expected one audio-QC row for ${packagePath}, found ${qcMatches.length}`);
+      continue;
+    }
+    const qcRow = qcMatches[0];
+    const duration = Number.parseFloat(qcRow.duration_s || qcRow.decoded_duration_s || "");
+    if (!Number.isFinite(duration) || duration <= 0) {
+      problems.push(`${label}: audio-QC duration is missing or invalid`);
+      continue;
+    }
+    if (String(qcRow.file_exists || "").trim() !== "1" || String(qcRow.decode_ok || "").trim() !== "1") {
+      problems.push(`${label}: audio-QC row does not confirm an existing, decodable file`);
+    }
+    if (Number.parseInt(qcRow.size_bytes || "", 10) !== actualSize) {
+      problems.push(`${label}: audio-QC size is stale`);
+    }
+    if (String(qcRow.sha256 || "").trim().toLowerCase() !== actualSha256) {
+      problems.push(`${label}: audio-QC SHA-256 is stale`);
+    }
+    total += duration;
+  }
+
+  if (new Set(paths).size !== expectedCount) {
+    problems.push(`expected ${expectedCount} unique current practice package paths, found ${new Set(paths).size}`);
+  }
+  if (problems.length) {
+    throw new Error(`Current selected-practice duration inputs are missing or stale:\n- ${problems.join("\n- ")}`);
+  }
+  return { total, paths };
 }
 
 function assignmentAudioDuration(assignment, durations) {
@@ -181,6 +307,10 @@ function reportText(summaryRows, options) {
     "",
     `- Manifest: \`${options.manifest}\`.`,
     `- Audio QC table: \`${options.audioQc}\`.`,
+    `- Selected practice manifest: \`${options.practiceManifest}\`.`,
+    `- Practice package root: \`${options.packageRoot}\`.`,
+    `- Current practice set: \`${CURRENT_PRACTICE_SET_ID}\` (${options.practicePaths.length} exact package paths).`,
+    ...options.practicePaths.map((practicePath) => `  - \`${practicePath}\``),
     `- Seeds per cell: ${options.seedsPerCell}.`,
     "- Speaker-pattern bundles 1-10 cycle across the seed index within every cell.",
     `- Required plays per main trial: ${options.mainPlaysPerTrial}.`,
@@ -212,9 +342,20 @@ function reportText(summaryRows, options) {
   return `${lines.join("\n")}\n`;
 }
 
-const manifest = path.resolve(argValue("--manifest", DEFAULT_MANIFEST));
-const audioQc = path.resolve(argValue("--audio-qc", DEFAULT_AUDIO_QC));
-const outDir = path.resolve(argValue("--out-dir", DEFAULT_OUT_DIR));
+const practiceManifestArg = argValue("--practice-manifest");
+const packageRootArg = argValue("--package-root");
+const packageRoot = path.resolve(
+  packageRootArg
+    || (practiceManifestArg ? path.resolve(path.dirname(practiceManifestArg), "..") : DEFAULT_PACKAGE_ROOT),
+);
+const manifest = path.resolve(argValue("--manifest", path.join(packageRoot, "remote_manifest.csv")));
+const audioQc = path.resolve(
+  argValue("--audio-qc", path.join(packageRoot, "metadata", "audio_qc_by_file.csv")),
+);
+const practiceManifest = path.resolve(
+  practiceManifestArg || path.join(packageRoot, "metadata", "selected_practice_manifest.csv"),
+);
+const outDir = path.resolve(argValue("--out-dir", path.join(packageRoot, "metadata")));
 const seedsPerCell = Number.parseInt(argValue("--seeds-per-cell", "50"), 10);
 const mainPlaysPerTrial = Number.parseFloat(argValue("--main-plays-per-trial", "2"));
 const practicePlaysPerTrial = Number.parseFloat(argValue("--practice-plays-per-trial", "2"));
@@ -223,7 +364,9 @@ const manifestRows = parseCsv(fs.readFileSync(manifest, "utf8"));
 const materials = manifestRows.map(materialFromRow);
 const audioQcRows = parseCsv(fs.readFileSync(audioQc, "utf8"));
 const durations = durationLookup(audioQcRows);
-const practiceAudioDuration = selectedPracticeDuration(audioQcRows);
+const practiceRows = parseCsv(fs.readFileSync(practiceManifest, "utf8"));
+const practiceDuration = selectedPracticeDuration(practiceRows, audioQcRows, packageRoot);
+const practiceAudioDuration = practiceDuration.total;
 const rows = [];
 const missingDurations = new Set();
 
@@ -249,7 +392,7 @@ for (const cell of COUNTERBALANCE_CELLS) {
       speaker_pattern_bundle: String(speakerPatternBundle),
       seed_index: String(seedIndex),
       main_trial_count: String(assignment.length),
-      practice_trial_count: "4",
+      practice_trial_count: String(CANONICAL_PRACTICE_ASSIGNMENT.length),
       main_audio_unique_s: fmt(total),
       practice_audio_unique_s: fmt(practiceAudioDuration),
       main_required_audio_playback_s: fmt(mainRequired),
@@ -312,13 +455,24 @@ writeCsv(path.join(outDir, "duration_estimate_by_cell_seed.csv"), rows, detailCo
 writeCsv(path.join(outDir, "duration_estimate_summary.csv"), summaryRows, summaryColumns);
 fs.writeFileSync(
   path.join(outDir, "DURATION_ESTIMATE_REPORT_20260703.md"),
-  reportText(summaryRows, { manifest, audioQc, seedsPerCell, mainPlaysPerTrial, practicePlaysPerTrial }),
+  reportText(summaryRows, {
+    manifest,
+    audioQc,
+    practiceManifest,
+    packageRoot,
+    practicePaths: practiceDuration.paths,
+    seedsPerCell,
+    mainPlaysPerTrial,
+    practicePlaysPerTrial,
+  }),
 );
 
 const overall = summaryRows.find((row) => row.scope === "overall");
 console.log(`detail: ${path.join(outDir, "duration_estimate_by_cell_seed.csv")}`);
 console.log(`summary: ${path.join(outDir, "duration_estimate_summary.csv")}`);
 console.log(`report: ${path.join(outDir, "DURATION_ESTIMATE_REPORT_20260703.md")}`);
+console.log(`selected practice manifest: ${practiceManifest}`);
+console.log(`current practice paths: ${practiceDuration.paths.length}`);
 console.log(`samples: ${rows.length}`);
 if (overall) {
   console.log(`audio playback mean seconds: ${overall.required_audio_playback_mean_s}`);

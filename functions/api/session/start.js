@@ -42,7 +42,115 @@ const ENGLISH_VARIETIES = [
 ];
 const GENDER_OPTIONS = ["man", "woman", "no_answer", "other"];
 const YES_NO = ["yes", "no"];
-const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.10.0";
+const CURRENT_PLATFORM_VERSION = "pronunciation_rating_v0.10.1";
+const LEGACY_BROWSER_PRACTICE_SET_ID = "practice_calibration_v0.10.0";
+const LEGACY_BROWSER_PRACTICE_ASSIGNMENT_V0100 = Object.freeze([
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    phase: "practice",
+    trial_index: 1,
+    target_word: "appreciation",
+    audio_url: "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/eng_female_appreciation_practice.wav",
+    file_name: "ENG_Female_appreciation_Practice.wav",
+    participant_id: "practice_eng_female",
+    native_language: "ENG",
+    l1_condition: "ENG",
+    accent_condition: "natural",
+    pronunciation_condition: "natural",
+    condition: "practice_natural",
+    talker: "practice_eng_female",
+    word_number: "1",
+    trial_number: "1",
+    spoken_form: "appreciation",
+    practice_note: "Historical v0.10.0 browser-only calibration WAV. Expert Accentedness reference range: 1–3.",
+    source_format: "researcher_provided_calibration_wav",
+    practice_kind: "combined",
+    practice_group: "accent_band_1_3",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "1–3",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    phase: "practice",
+    trial_index: 2,
+    target_word: "pesticide",
+    audio_url: "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_male_pesticide_practice.wav",
+    file_name: "JPN_Male_pesticide.wav",
+    participant_id: "practice_jpn_male",
+    native_language: "JPN",
+    l1_condition: "JPN",
+    accent_condition: "accented",
+    pronunciation_condition: "accented",
+    condition: "practice_accented",
+    talker: "practice_jpn_male",
+    word_number: "2",
+    trial_number: "2",
+    spoken_form: "pesticide",
+    practice_note: "Historical v0.10.0 browser-only calibration WAV. Expert Accentedness reference range: 3–5.",
+    source_format: "researcher_provided_calibration_wav",
+    practice_kind: "combined",
+    practice_group: "accent_band_3_5",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "3–5",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    phase: "practice",
+    trial_index: 3,
+    target_word: "quality",
+    audio_url: "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/jpn_female_quality_practice.wav",
+    file_name: "JPN_Female_quality_Practice.wav",
+    participant_id: "practice_jpn_female",
+    native_language: "JPN",
+    l1_condition: "JPN",
+    accent_condition: "accented",
+    pronunciation_condition: "accented",
+    condition: "practice_accented",
+    talker: "practice_jpn_female",
+    word_number: "3",
+    trial_number: "3",
+    spoken_form: "quality",
+    practice_note: "Historical v0.10.0 browser-only calibration WAV. Expert Accentedness reference range: 5–7.",
+    source_format: "researcher_provided_calibration_wav",
+    practice_kind: "combined",
+    practice_group: "accent_band_5_7",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "5–7",
+  }),
+  Object.freeze({
+    practice_set_id: LEGACY_BROWSER_PRACTICE_SET_ID,
+    phase: "practice",
+    trial_index: 4,
+    target_word: "pizza",
+    audio_url: "https://pub-c26f53c7e40c448db5847c2079933f52.r2.dev/practice/calibration/chn_female_pizza_practice.wav",
+    file_name: "chn_female_pizza_practice.wav",
+    participant_id: "macos_tts_tingting",
+    native_language: "CHN",
+    l1_condition: "CHN",
+    accent_condition: "accented",
+    pronunciation_condition: "accented",
+    condition: "practice_accented",
+    talker: "macos_tts_tingting",
+    word_number: "4",
+    trial_number: "4",
+    spoken_form: "披萨",
+    practice_note: "Historical v0.10.0 browser-only calibration WAV. Expert Accentedness reference range: 7–9.",
+    source_format: "macos_say_tingting_tts_wav",
+    practice_kind: "combined",
+    practice_group: "accent_band_7_9",
+    expert_comprehensibility_range: "",
+    expert_accentedness_range: "7–9",
+  }),
+]);
+
+function browserPracticeAssignmentForPlatformVersion(platformVersion) {
+  const version = cleanText(platformVersion);
+  if (version === CURRENT_PLATFORM_VERSION) return CANONICAL_PRACTICE_ASSIGNMENT;
+  if (version === "pronunciation_rating_v0.10.0") {
+    return LEGACY_BROWSER_PRACTICE_ASSIGNMENT_V0100;
+  }
+  return null;
+}
 
 const ASSIGNMENT_SELECT = `
   SELECT
@@ -60,6 +168,11 @@ const ASSIGNMENT_SELECT = `
   WHERE session_id = ? AND phase = ?
   ORDER BY trial_index
 `;
+
+function legacyAccentRange(practiceGroup) {
+  const match = cleanText(practiceGroup).match(/^accent_band_([1-9])_([1-9])$/);
+  return match ? `${match[1]}–${match[2]}` : "";
+}
 
 function isUniqueConstraintError(error) {
   return /UNIQUE constraint failed/i.test(String(error?.message || error));
@@ -85,13 +198,16 @@ function requireCanonicalPracticeAssignment(rows) {
       const row = rows[index] || {};
       return (
         cleanText(row.phase) === "practice" &&
+        cleanText(row.practice_set_id) === expected.practice_set_id &&
         nullableInt(row.trial_index) === expected.trial_index &&
         canonicalKey(row.target_word) === expected.target_word &&
-        cleanText(row.audio_url) === expected.audio_url
+        cleanText(row.audio_url) === expected.audio_url &&
+        cleanText(row.expert_comprehensibility_range) === expected.expert_comprehensibility_range &&
+        cleanText(row.expert_accentedness_range) === expected.expert_accentedness_range
       );
     });
   if (!valid) {
-    badRequest("practice_assignment must match the current four-item practice set.");
+    badRequest(`practice_assignment must match the current ${CANONICAL_PRACTICE_ASSIGNMENT.length}-item practice set.`);
   }
 }
 
@@ -355,9 +471,22 @@ async function existingSessionResponse(db, session, sessionToken) {
   ]);
   const savedPracticeRows = practiceAssignment.results || [];
   const practiceRecordingRequired = savedPracticeRows.length > 0;
+  const browserPracticeRows = practiceRecordingRequired
+    ? null
+    : browserPracticeAssignmentForPlatformVersion(session.platform_version);
+  if (!practiceRecordingRequired && !browserPracticeRows) {
+    const error = new Error(
+      `The saved session uses an unsupported browser-only practice version (${cleanText(session.platform_version) || "unknown"}). Please contact the researcher.`,
+    );
+    error.status = 409;
+    throw error;
+  }
   const practiceRows = practiceRecordingRequired
-    ? savedPracticeRows
-    : CANONICAL_PRACTICE_ASSIGNMENT.map((item) => ({
+    ? savedPracticeRows.map((row) => ({
+        ...row,
+        expert_accentedness_range: legacyAccentRange(row.practice_group),
+      }))
+    : browserPracticeRows.map((item) => ({
         ...item,
         source_path: item.audio_url,
       }));
@@ -417,6 +546,8 @@ async function existingSessionResponse(db, session, sessionToken) {
     existing_session: true,
     session_id: session.id,
     status: session.status,
+    platform_version: cleanText(session.platform_version),
+    practice_set_id: cleanText(practiceRows[0]?.practice_set_id),
     completed_trial_count: Number(session.completed_trial_count || 0),
     trial_count: Number(session.trial_count || 0),
     japanese_familiarity_1_6: nullableInt(session.japanese_familiarity_1_6),
@@ -849,6 +980,7 @@ export async function onRequestPost(context) {
       payload: {
         task_mode: taskMode,
         platform_version: platformVersion,
+        practice_set_id: CANONICAL_PRACTICE_ASSIGNMENT[0].practice_set_id,
         participant_key: key,
         trial_count: assignment.length,
         practice_persisted: false,
@@ -867,6 +999,8 @@ export async function onRequestPost(context) {
       ok: true,
       session_id: sessionId,
       session_token: sessionToken,
+      platform_version: platformVersion,
+      practice_set_id: CANONICAL_PRACTICE_ASSIGNMENT[0].practice_set_id,
       trial_count: assignment.length,
       dry_run: dryRun,
       word_familiarity_required: wordFamiliarityRequired,
